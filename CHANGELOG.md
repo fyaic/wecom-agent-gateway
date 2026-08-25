@@ -17,6 +17,12 @@ tagged.
 - Pi native select, confirm, input, and editor bridging with same-call live
   resume, scoped plain-text input, and a side-effect-free example extension.
 
+### Fixed
+
+- Preserve complete choice labels, render peer selections vertically without
+  first-option color bias, and omit invalid no-op `card_action` data from
+  result-card updates.
+
 ## [0.1.0] - 2026-08-25
 
 ### Added

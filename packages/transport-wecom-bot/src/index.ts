@@ -691,9 +691,11 @@ export function renderWeComTemplateCard(
       ...base,
       card_type: "text_notice",
       sub_title_text: optionalBounded(presentation.body, 112, "body"),
-      card_action: presentation.action
-        ? linkAction(presentation.action.url, allowedLinkHosts)
-        : { type: 0 },
+      ...(presentation.action
+        ? {
+            card_action: linkAction(presentation.action.url, allowedLinkHosts),
+          }
+        : {}),
     };
   }
   if (presentation.kind === "article") {
@@ -748,7 +750,10 @@ export function renderWeComTemplateCard(
         mode: presentation.multiple ? 1 : 0,
         option_list: presentation.options.map((option) => ({
           id: boundedId(option.id, "option"),
-          text: bounded(option.label, 11, "option label"),
+          // The official SDK describes 11 characters as a recommendation, not
+          // a protocol maximum. Preserve the user's label and let the vertical
+          // vote layout wrap it instead of silently truncating meaning.
+          text: bounded(option.label, 100, "option label"),
         })),
       },
       submit_button: {

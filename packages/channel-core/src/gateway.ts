@@ -2272,6 +2272,13 @@ function validateRuntimeInteractionRequest(
     if (request.cancelLabel !== undefined) {
       boundedRuntimeText(request.cancelLabel, 40, "cancel label");
     }
+    if (
+      request.confirmStyle !== undefined &&
+      request.confirmStyle !== "primary" &&
+      request.confirmStyle !== "danger"
+    ) {
+      throw new Error("Invalid confirm style");
+    }
     return;
   }
   if (request.kind === "actions") {
@@ -2334,6 +2341,15 @@ function validateRuntimeOptions(
     }
     values.add(option.value);
     boundedRuntimeText(option.label, 100, "option label");
+    if (
+      "style" in option &&
+      option.style !== undefined &&
+      option.style !== "default" &&
+      option.style !== "primary" &&
+      option.style !== "danger"
+    ) {
+      throw new Error("Invalid interaction action style");
+    }
   }
 }
 
@@ -2371,7 +2387,7 @@ function interactionPresentation(
         {
           id: "confirm",
           label: cardExcerpt(request.confirmLabel ?? "确认", 10),
-          style: "primary",
+          style: request.confirmStyle ?? "primary",
         },
         {
           id: "cancel",
@@ -2390,20 +2406,7 @@ function interactionPresentation(
       actions: request.actions.map((action, index) => ({
         id: `action_${index}`,
         label: cardExcerpt(action.label, 10),
-        style: index === 0 ? "primary" : "default",
-      })),
-    };
-  }
-  if (request.kind === "single-select" && request.options.length <= 6) {
-    return {
-      kind: "actions",
-      id: interactionId,
-      title,
-      body,
-      actions: request.options.map((option, index) => ({
-        id: `option_${index}`,
-        label: cardExcerpt(option.label, 10),
-        style: index === 0 ? "primary" : "default",
+        style: action.style ?? "default",
       })),
     };
   }
@@ -2416,7 +2419,7 @@ function interactionPresentation(
       questionId: "choice",
       options: request.options.map((option, index) => ({
         id: `option_${index}`,
-        label: cardExcerpt(option.label, 11),
+        label: option.label.trim(),
       })),
       multiple: request.kind === "multi-select",
     };
@@ -2482,15 +2485,13 @@ function runtimeInteractionResult(
     };
   }
   if (request.kind === "single-select") {
-    const selected =
-      request.options.length <= 6
-        ? undefined
-        : selectedSyntheticIndexes(inbound, "choice", request.options);
+    const selected = selectedSyntheticIndexes(
+      inbound,
+      "choice",
+      request.options,
+    );
     if (selected && selected.length !== 1) return undefined;
-    const index =
-      request.options.length <= 6
-        ? syntheticIndex(inbound.actionId, "option_", request.options)
-        : selected?.[0];
+    const index = selected?.[0];
     if (index === undefined) return undefined;
     const option = request.options[index]!;
     return {
