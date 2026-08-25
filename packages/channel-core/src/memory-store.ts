@@ -10,7 +10,10 @@ import type {
   OutboundCommand,
   PendingApproval,
   PendingPresentationInteraction,
+  PendingRuntimeInteraction,
   ResolvedPresentationInteraction,
+  RuntimeInteractionResumeEntry,
+  RuntimeInteractionResult,
 } from "@fyaic/wecom-runtime-contract";
 
 interface MemoryOutboxItem {
@@ -36,6 +39,30 @@ interface MemoryPresentationInteraction extends PendingPresentationInteraction {
   resolvedAt?: string;
 }
 
+interface MemoryRuntimeInteraction extends PendingRuntimeInteraction {
+  status: "pending" | "answered" | "expired" | "cancelled";
+  result?: RuntimeInteractionResult;
+  resolvedAt?: string;
+}
+
+interface MemoryInteractionResume {
+  id: string;
+  interactionId: string;
+  kind: PendingRuntimeInteraction["request"]["kind"];
+  accountId: string;
+  conversationId: string;
+  conversationType: RuntimeInteractionResumeEntry["conversationType"];
+  adapterId: string;
+  sessionId: string;
+  result: RuntimeInteractionResult;
+  status: "pending" | "leased" | "delivered" | "dead";
+  attempts: number;
+  nextAttemptAt: string;
+  leaseOwner?: string;
+  leaseUntil?: string;
+  lastError?: string;
+}
+
 export class MemoryGatewayStore implements GatewayStore {
   readonly deliveries: Array<{
     messageId: string;
@@ -51,7 +78,16 @@ export class MemoryGatewayStore implements GatewayStore {
     string,
     MemoryPresentationInteraction
   >();
+  private readonly runtimeInteractions = new Map<
+    string,
+    MemoryRuntimeInteraction
+  >();
+  private readonly interactionResumes = new Map<
+    string,
+    MemoryInteractionResume
+  >();
   private nextOutboxId = 1;
+  private nextInteractionResumeId = 1;
 
   async acceptInbound(message: InboundMessage): Promise<boolean> {
     const key = `${message.accountId}:${message.id}`;
@@ -302,7 +338,8 @@ export class MemoryGatewayStore implements GatewayStore {
       interaction.status !== "pending" ||
       interaction.accountId !== options.accountId ||
       interaction.conversationId !== options.conversationId ||
-      interaction.senderId !== options.senderId
+      interaction.senderId !== options.senderId ||
+      interaction.expiresAt <= options.now
     ) {
       return undefined;
     }
@@ -317,6 +354,184 @@ export class MemoryGatewayStore implements GatewayStore {
     };
   }
 
+  async createRuntimeInteraction(
+    interaction: PendingRuntimeInteraction,
+  ): Promise<boolean> {
+    if (this.runtimeInteractions.has(interaction.interactionId)) return false;
+    this.runtimeInteractions.set(interaction.interactionId, {
+      ...interaction,
+      status: "pending",
+    });
+    return true;
+  }
+
+  async getPendingRuntimeInteraction(options: {
+    interactionId: string;
+    accountId: string;
+    conversationId: string;
+    senderId: string;
+    now: string;
+  }): Promise<PendingRuntimeInteraction | undefined> {
+    const interaction = this.runtimeInteractions.get(options.interactionId);
+    if (
+      !interaction ||
+      interaction.status !== "pending" ||
+      interaction.accountId !== options.accountId ||
+      interaction.conversationId !== options.conversationId ||
+      interaction.senderId !== options.senderId
+    ) {
+      return undefined;
+    }
+    return runtimeInteractionCopy(interaction);
+  }
+
+  async resolveRuntimeInteractionAndEnqueue(options: {
+    interactionId: string;
+    accountId: string;
+    conversationId: string;
+    senderId: string;
+    result: RuntimeInteractionResult;
+    now: string;
+  }): Promise<string | undefined> {
+    const interaction = this.runtimeInteractions.get(options.interactionId);
+    if (
+      !interaction ||
+      interaction.status !== "pending" ||
+      interaction.accountId !== options.accountId ||
+      interaction.conversationId !== options.conversationId ||
+      interaction.senderId !== options.senderId ||
+      interaction.expiresAt <= options.now
+    ) {
+      return undefined;
+    }
+    interaction.status =
+      options.result.status === "cancelled" ? "cancelled" : "answered";
+    interaction.result = options.result;
+    interaction.resolvedAt = options.now;
+    const id = String(this.nextInteractionResumeId++);
+    this.interactionResumes.set(id, {
+      id,
+      interactionId: interaction.interactionId,
+      kind: interaction.request.kind,
+      accountId: interaction.accountId,
+      conversationId: interaction.conversationId,
+      conversationType: interaction.conversationType,
+      adapterId: interaction.adapterId,
+      sessionId: interaction.sessionId,
+      result: options.result,
+      status: "pending",
+      attempts: 0,
+      nextAttemptAt: options.now,
+    });
+    return id;
+  }
+
+  async cancelRuntimeInteraction(options: {
+    interactionId: string;
+    now: string;
+  }): Promise<boolean> {
+    const interaction = this.runtimeInteractions.get(options.interactionId);
+    if (!interaction || interaction.status !== "pending") return false;
+    interaction.status = "cancelled";
+    interaction.resolvedAt = options.now;
+    return true;
+  }
+
+  async expireRuntimeInteractionsAndEnqueue(options: {
+    now: string;
+    limit: number;
+  }): Promise<number> {
+    const expired = [...this.runtimeInteractions.values()]
+      .filter(
+        (interaction) =>
+          interaction.status === "pending" &&
+          interaction.expiresAt <= options.now,
+      )
+      .sort((left, right) => left.expiresAt.localeCompare(right.expiresAt))
+      .slice(0, Math.max(0, options.limit));
+    for (const interaction of expired) {
+      const result: RuntimeInteractionResult = {
+        interactionId: interaction.interactionId,
+        status: "expired",
+        values: {},
+        submittedAt: options.now,
+      };
+      interaction.status = "expired";
+      interaction.result = result;
+      interaction.resolvedAt = options.now;
+      const id = String(this.nextInteractionResumeId++);
+      this.interactionResumes.set(id, {
+        id,
+        interactionId: interaction.interactionId,
+        kind: interaction.request.kind,
+        accountId: interaction.accountId,
+        conversationId: interaction.conversationId,
+        conversationType: interaction.conversationType,
+        adapterId: interaction.adapterId,
+        sessionId: interaction.sessionId,
+        result,
+        status: "pending",
+        attempts: 0,
+        nextAttemptAt: options.now,
+      });
+    }
+    return expired.length;
+  }
+
+  async claimDueInteractionResumes(options: {
+    owner: string;
+    now: string;
+    leaseUntil: string;
+    limit: number;
+  }): Promise<RuntimeInteractionResumeEntry[]> {
+    return [...this.interactionResumes.values()]
+      .filter((item) => interactionResumeClaimable(item, options.now))
+      .sort((left, right) => Number(left.id) - Number(right.id))
+      .slice(0, options.limit)
+      .map((item) =>
+        leaseInteractionResume(item, options.owner, options.leaseUntil),
+      );
+  }
+
+  async completeInteractionResume(options: {
+    resumeId: string;
+    owner: string;
+    now: string;
+  }): Promise<void> {
+    const item = this.leasedInteractionResume(options.resumeId, options.owner);
+    item.status = "delivered";
+    item.leaseOwner = undefined;
+    item.leaseUntil = undefined;
+  }
+
+  async retryInteractionResume(options: {
+    resumeId: string;
+    owner: string;
+    error: string;
+    nextAttemptAt: string;
+    now: string;
+  }): Promise<void> {
+    const item = this.leasedInteractionResume(options.resumeId, options.owner);
+    item.status = "pending";
+    item.nextAttemptAt = options.nextAttemptAt;
+    item.lastError = options.error;
+    item.leaseOwner = undefined;
+    item.leaseUntil = undefined;
+  }
+
+  async deadLetterInteractionResume(options: {
+    resumeId: string;
+    owner: string;
+    error: string;
+    now: string;
+  }): Promise<void> {
+    const item = this.leasedInteractionResume(options.resumeId, options.owner);
+    item.status = "dead";
+    item.lastError = options.error;
+    item.leaseOwner = undefined;
+    item.leaseUntil = undefined;
+  }
+
   private sessionKey(scope: {
     accountId: string;
     conversationId: string;
@@ -329,6 +544,14 @@ export class MemoryGatewayStore implements GatewayStore {
     const item = this.outbox.get(deliveryId);
     if (!item || item.status !== "leased" || item.leaseOwner !== owner) {
       throw new Error(`Outbox delivery is not leased by owner: ${deliveryId}`);
+    }
+    return item;
+  }
+
+  private leasedInteractionResume(resumeId: string, owner: string) {
+    const item = this.interactionResumes.get(resumeId);
+    if (!item || item.status !== "leased" || item.leaseOwner !== owner) {
+      throw new Error(`Interaction resume is not leased by owner: ${resumeId}`);
     }
     return item;
   }
@@ -371,6 +594,52 @@ function lease(
     id: item.id,
     messageId: item.messageId,
     command: item.command,
+    attempts: item.attempts,
+  };
+}
+
+function runtimeInteractionCopy(
+  interaction: MemoryRuntimeInteraction,
+): PendingRuntimeInteraction {
+  const {
+    status: _status,
+    result: _result,
+    resolvedAt: _resolvedAt,
+    ...copy
+  } = interaction;
+  return copy;
+}
+
+function interactionResumeClaimable(
+  item: MemoryInteractionResume,
+  now: string,
+): boolean {
+  return (
+    (item.status === "pending" && item.nextAttemptAt <= now) ||
+    (item.status === "leased" &&
+      Boolean(item.leaseUntil && item.leaseUntil <= now))
+  );
+}
+
+function leaseInteractionResume(
+  item: MemoryInteractionResume,
+  owner: string,
+  leaseUntil: string,
+): RuntimeInteractionResumeEntry {
+  item.status = "leased";
+  item.leaseOwner = owner;
+  item.leaseUntil = leaseUntil;
+  item.attempts += 1;
+  return {
+    id: item.id,
+    interactionId: item.interactionId,
+    kind: item.kind,
+    accountId: item.accountId,
+    conversationId: item.conversationId,
+    conversationType: item.conversationType,
+    adapterId: item.adapterId,
+    sessionId: item.sessionId,
+    result: item.result,
     attempts: item.attempts,
   };
 }

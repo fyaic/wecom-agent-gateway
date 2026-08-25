@@ -150,6 +150,10 @@ const gateway = new WeComAgentGateway({
     operationalMetrics.recordApproval(event);
     console.log(JSON.stringify({ event: "approval_lifecycle", ...event }));
   },
+  onInteractionLifecycleEvent: (event) => {
+    operationalMetrics.recordInteraction(event);
+    console.log(JSON.stringify({ event: "interaction_lifecycle", ...event }));
+  },
   onInfrastructureError: (event) => {
     operationalMetrics.recordInfrastructureError(event);
     console.error(
@@ -194,6 +198,10 @@ const gateway = new WeComAgentGateway({
   ),
   approvalTimeoutMs: positiveInteger(
     process.env.GATEWAY_APPROVAL_TIMEOUT_MS,
+    5 * 60_000,
+  ),
+  interactionTimeoutMs: positiveInteger(
+    process.env.GATEWAY_INTERACTION_TIMEOUT_MS,
     5 * 60_000,
   ),
   maxProactiveTextBytes: positiveInteger(

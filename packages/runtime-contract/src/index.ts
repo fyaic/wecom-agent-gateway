@@ -234,7 +234,8 @@ export type RuntimeCapability =
   | "tools"
   | "status-events"
   | "multimodal-input"
-  | "multimodal-output";
+  | "multimodal-output"
+  | "interaction-resume";
 
 export type AgentStatusPhase =
   | "accepted"
@@ -250,6 +251,91 @@ export interface AgentRunRequest {
   requestApproval?: (
     request: RuntimeApprovalRequest,
   ) => Promise<RuntimeApprovalDecision>;
+}
+
+export interface RuntimeInteractionOption {
+  value: string;
+  label: string;
+}
+
+export interface RuntimeInteractionField {
+  id: string;
+  label: string;
+  options: RuntimeInteractionOption[];
+}
+
+interface RuntimeInteractionRequestBase {
+  title: string;
+  description?: string;
+  expiresInMs?: number;
+}
+
+export type RuntimeInteractionRequest =
+  | (RuntimeInteractionRequestBase & {
+      kind: "confirm";
+      confirmLabel?: string;
+      cancelLabel?: string;
+    })
+  | (RuntimeInteractionRequestBase & {
+      kind: "single-select";
+      fieldId: string;
+      options: RuntimeInteractionOption[];
+    })
+  | (RuntimeInteractionRequestBase & {
+      kind: "multi-select";
+      fieldId: string;
+      options: RuntimeInteractionOption[];
+      min?: number;
+      max?: number;
+    })
+  | (RuntimeInteractionRequestBase & {
+      kind: "form";
+      fields: RuntimeInteractionField[];
+      submitLabel?: string;
+    })
+  | (RuntimeInteractionRequestBase & {
+      kind: "actions";
+      actions: RuntimeInteractionOption[];
+    });
+
+export interface RuntimeInteractionResult {
+  interactionId: string;
+  status: "submitted" | "cancelled" | "expired";
+  values: Record<string, string[]>;
+  submittedAt: string;
+}
+
+export interface AgentInteractionResumeRequest {
+  sessionId: string;
+  /** Stable across retries; Adapters must use it to suppress duplicate effects. */
+  idempotencyKey: string;
+  result: RuntimeInteractionResult;
+}
+
+export interface PendingRuntimeInteraction {
+  interactionId: string;
+  accountId: string;
+  conversationId: string;
+  conversationType: ConversationType;
+  senderId: string;
+  adapterId: string;
+  sessionId: string;
+  request: RuntimeInteractionRequest;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface RuntimeInteractionResumeEntry {
+  id: string;
+  interactionId: string;
+  kind: RuntimeInteractionRequest["kind"];
+  accountId: string;
+  conversationId: string;
+  conversationType: ConversationType;
+  adapterId: string;
+  sessionId: string;
+  result: RuntimeInteractionResult;
+  attempts: number;
 }
 
 export type RuntimeJsonValue =
@@ -373,6 +459,10 @@ export interface AgentRuntimeAdapter {
   /** Prepare process/connection state without creating a semantic Agent turn. */
   start?(): Promise<void>;
   run(request: AgentRunRequest): AsyncIterable<AgentRunEvent>;
+  /** Resume a suspended semantic interaction without fabricating a user message. */
+  resumeInteraction?(
+    request: AgentInteractionResumeRequest,
+  ): AsyncIterable<AgentRunEvent>;
   cancel?(sessionId: string): Promise<void>;
   respondToApproval?(approvalId: string, approved: boolean): Promise<void>;
   health(): Promise<{ ok: boolean; detail?: string }>;
@@ -491,6 +581,56 @@ export interface GatewayStore {
     actionId: string;
     now: string;
   }): Promise<ResolvedPresentationInteraction | undefined>;
+  createRuntimeInteraction(
+    interaction: PendingRuntimeInteraction,
+  ): Promise<boolean>;
+  getPendingRuntimeInteraction(options: {
+    interactionId: string;
+    accountId: string;
+    conversationId: string;
+    senderId: string;
+    now: string;
+  }): Promise<PendingRuntimeInteraction | undefined>;
+  resolveRuntimeInteractionAndEnqueue(options: {
+    interactionId: string;
+    accountId: string;
+    conversationId: string;
+    senderId: string;
+    result: RuntimeInteractionResult;
+    now: string;
+  }): Promise<string | undefined>;
+  cancelRuntimeInteraction(options: {
+    interactionId: string;
+    now: string;
+  }): Promise<boolean>;
+  expireRuntimeInteractionsAndEnqueue(options: {
+    now: string;
+    limit: number;
+  }): Promise<number>;
+  claimDueInteractionResumes(options: {
+    owner: string;
+    now: string;
+    leaseUntil: string;
+    limit: number;
+  }): Promise<RuntimeInteractionResumeEntry[]>;
+  completeInteractionResume(options: {
+    resumeId: string;
+    owner: string;
+    now: string;
+  }): Promise<void>;
+  retryInteractionResume(options: {
+    resumeId: string;
+    owner: string;
+    error: string;
+    nextAttemptAt: string;
+    now: string;
+  }): Promise<void>;
+  deadLetterInteractionResume(options: {
+    resumeId: string;
+    owner: string;
+    error: string;
+    now: string;
+  }): Promise<void>;
 }
 
 export interface DeliveryOutboxEntry {

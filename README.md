@@ -30,6 +30,7 @@ Agent 如何思考、选择模型、调用工具或理解视频，不属于 Gate
 - **Kernel 中立**：Core 不依赖 Codex、Kimi、OpenClaw、Pi 或任何模型厂商类型。
 - **可变消息 UX**：同一条 Bot 消息可从即时回执更新为 Agent 显式状态、流式增量和最终正文。
 - **结构化卡片**：通用通知、图文、按钮、投票和表单映射官方模板卡片；审批按钮回调持久且可原位更新。
+- **交互协调层**：卡片选择不进入模型解析；Gateway 持久校验、即时更新并按同一 session 恢复 Agent。
 - **可靠投递**：文本与媒体发送前进入 SQLite outbox；租约、重试、死信和媒体 spool 支持崩溃恢复。
 - **精确多模态**：Transport 与 Adapter 声明具体输入/输出类型，不支持时 fail closed，不伪造文字占位。
 - **安全默认值**：单一 Bot 身份、分域白名单、敏感字段脱敏、受保护临时媒体和写工具审批。
@@ -74,6 +75,8 @@ flowchart LR
 Adapter，并通过 `GATEWAY_ADAPTER=external` 加载，无需修改 Gateway Registry。仓库内的
 [`examples/adapter-template`](examples/adapter-template) 是可运行模板。
 
+交互卡片的完整设计和里程碑见 [`docs/interaction-cards.md`](docs/interaction-cards.md)。
+
 ## 企业微信能力
 
 - Bot WebSocket 鉴权、心跳和重连；
@@ -86,6 +89,7 @@ Adapter，并通过 `GATEWAY_ADAPTER=external` 加载，无需修改 Gateway Reg
 - 持久文本/媒体 outbox、重试、死信和恢复；
 - 可选 `wecom-cli` 只读工具和审批后写工具。
 - Channel-neutral 五类模板卡片，以及绑定发送者/会话的审批按钮卡片与文本降级。
+- 耐久 Interaction Broker：确认、单选、多选、表单、TTL 与同 session 异步恢复。
 
 企业微信语音回调目前只提供官方转写文本时，Gateway 不会虚报原始音频输入。媒体能否被 Agent
 进一步理解取决于所选 Kernel 及其工具，而不是传输层。
@@ -181,7 +185,7 @@ allowlist 内。媒体路径还必须位于 `WECOM_MEDIA_OUTPUT_ROOTS` 允许目
 
 ## 成熟度
 
-项目处于 **Public Preview**，尚未承诺稳定的 v1 API。当前已有 141 项 deterministic tests，并完成
+项目处于 **Public Preview**，尚未承诺稳定的 v1 API。当前已有 148 项 deterministic tests，并完成
 真实企业微信私聊、群聊、流式回复、会话恢复、图片/文件/MP4、主动媒体、受管重启及四类 Kernel
 接入验证。真实 OS 子进程 `SIGKILL` 后的 SQLite Outbox 租约恢复、macOS 受管 Gateway 强杀拉起和
 重新鉴权也已通过；隔离 Linux 网络断开/恢复、持久卷只读和受限 tmpfs 容量耗尽均完成真实故障验收。

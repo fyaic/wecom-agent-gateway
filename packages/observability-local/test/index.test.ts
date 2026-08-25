@@ -24,6 +24,12 @@ describe("local operational observability", () => {
       commandType: "proactive",
       attempts: 1,
     });
+    metrics.recordInteraction({
+      phase: "submitted",
+      kind: "multi-select",
+      conversationType: "direct",
+      elapsedMs: 42,
+    });
     const server = new LocalObservabilityServer({
       host: "127.0.0.1",
       port: 0,
@@ -49,6 +55,9 @@ describe("local operational observability", () => {
     expect(rendered.body).toContain("wecom_gateway_ready 1");
     expect(rendered.body).toContain(
       'wecom_gateway_delivery_events_total{command_type="proactive",phase="delivered"} 1',
+    );
+    expect(rendered.body).toContain(
+      'wecom_gateway_interaction_events_total{conversation_type="direct",kind="multi-select",phase="submitted"} 1',
     );
     expect(rendered.body).not.toContain("must-not-be-a-label");
     expect(rendered.body).not.toContain("private-account-id");

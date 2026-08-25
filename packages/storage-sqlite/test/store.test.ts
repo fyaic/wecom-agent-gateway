@@ -674,6 +674,203 @@ describe("SqliteGatewayStore", () => {
     ).resolves.toBeUndefined();
     store.close();
   });
+
+  it("atomically resolves runtime interactions into a recoverable resume lease", async () => {
+    const store = new SqliteGatewayStore(":memory:");
+    expect(
+      await store.createRuntimeInteraction({
+        interactionId: "interaction_1",
+        accountId: "bot",
+        conversationId: "chat",
+        conversationType: "direct",
+        senderId: "user",
+        adapterId: "pi",
+        sessionId: "session-1",
+        request: {
+          kind: "multi-select",
+          title: "选择范围",
+          fieldId: "scope",
+          options: [
+            { value: "docs", label: "文档" },
+            { value: "calendar", label: "日程" },
+          ],
+        },
+        createdAt: "2026-08-25T00:00:00.000Z",
+        expiresAt: "2026-08-25T00:05:00.000Z",
+      }),
+    ).toBe(true);
+    await expect(
+      store.getPendingRuntimeInteraction({
+        interactionId: "interaction_1",
+        accountId: "bot",
+        conversationId: "chat",
+        senderId: "other-user",
+        now: "2026-08-25T00:01:00.000Z",
+      }),
+    ).resolves.toBeUndefined();
+    const result = {
+      interactionId: "interaction_1",
+      status: "submitted" as const,
+      values: { scope: ["docs", "calendar"] },
+      submittedAt: "2026-08-25T00:01:00.000Z",
+    };
+    await expect(
+      store.resolveRuntimeInteractionAndEnqueue({
+        interactionId: "interaction_1",
+        accountId: "bot",
+        conversationId: "chat",
+        senderId: "other-user",
+        result,
+        now: result.submittedAt,
+      }),
+    ).resolves.toBeUndefined();
+    const resumeId = await store.resolveRuntimeInteractionAndEnqueue({
+      interactionId: "interaction_1",
+      accountId: "bot",
+      conversationId: "chat",
+      senderId: "user",
+      result,
+      now: result.submittedAt,
+    });
+    expect(resumeId).toBeDefined();
+    await expect(
+      store.resolveRuntimeInteractionAndEnqueue({
+        interactionId: "interaction_1",
+        accountId: "bot",
+        conversationId: "chat",
+        senderId: "user",
+        result,
+        now: "2026-08-25T00:01:01.000Z",
+      }),
+    ).resolves.toBeUndefined();
+
+    await expect(
+      store.claimDueInteractionResumes({
+        owner: "worker-a",
+        now: "2026-08-25T00:01:00.000Z",
+        leaseUntil: "2026-08-25T00:01:30.000Z",
+        limit: 10,
+      }),
+    ).resolves.toEqual([
+      {
+        id: resumeId,
+        interactionId: "interaction_1",
+        kind: "multi-select",
+        accountId: "bot",
+        conversationId: "chat",
+        conversationType: "direct",
+        adapterId: "pi",
+        sessionId: "session-1",
+        result,
+        attempts: 1,
+      },
+    ]);
+    await expect(
+      store.claimDueInteractionResumes({
+        owner: "worker-b",
+        now: "2026-08-25T00:01:29.000Z",
+        leaseUntil: "2026-08-25T00:02:00.000Z",
+        limit: 10,
+      }),
+    ).resolves.toEqual([]);
+    const recovered = await store.claimDueInteractionResumes({
+      owner: "worker-b",
+      now: "2026-08-25T00:01:30.000Z",
+      leaseUntil: "2026-08-25T00:02:00.000Z",
+      limit: 10,
+    });
+    expect(recovered[0]).toMatchObject({ id: resumeId, attempts: 2 });
+    await store.retryInteractionResume({
+      resumeId: resumeId!,
+      owner: "worker-b",
+      error: "temporary",
+      nextAttemptAt: "2026-08-25T00:02:30.000Z",
+      now: "2026-08-25T00:01:31.000Z",
+    });
+    await expect(
+      store.claimDueInteractionResumes({
+        owner: "worker-c",
+        now: "2026-08-25T00:02:29.000Z",
+        leaseUntil: "2026-08-25T00:03:00.000Z",
+        limit: 10,
+      }),
+    ).resolves.toEqual([]);
+    const retried = await store.claimDueInteractionResumes({
+      owner: "worker-c",
+      now: "2026-08-25T00:02:30.000Z",
+      leaseUntil: "2026-08-25T00:03:00.000Z",
+      limit: 10,
+    });
+    expect(retried[0]).toMatchObject({ id: resumeId, attempts: 3 });
+    await store.completeInteractionResume({
+      resumeId: resumeId!,
+      owner: "worker-c",
+      now: "2026-08-25T00:02:31.000Z",
+    });
+    await expect(
+      store.claimDueInteractionResumes({
+        owner: "worker-d",
+        now: "2026-08-25T01:00:00.000Z",
+        leaseUntil: "2026-08-25T01:01:00.000Z",
+        limit: 10,
+      }),
+    ).resolves.toEqual([]);
+
+    await store.createRuntimeInteraction({
+      interactionId: "interaction_expired",
+      accountId: "bot",
+      conversationId: "chat",
+      conversationType: "direct",
+      senderId: "user",
+      adapterId: "pi",
+      sessionId: "session-2",
+      request: { kind: "confirm", title: "是否继续" },
+      createdAt: "2026-08-25T02:00:00.000Z",
+      expiresAt: "2026-08-25T02:01:00.000Z",
+    });
+    await expect(
+      store.getPendingRuntimeInteraction({
+        interactionId: "interaction_expired",
+        accountId: "bot",
+        conversationId: "chat",
+        senderId: "user",
+        now: "2026-08-25T02:01:00.000Z",
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      store.expireRuntimeInteractionsAndEnqueue({
+        now: "2026-08-25T02:01:00.000Z",
+        limit: 10,
+      }),
+    ).resolves.toBe(1);
+    await expect(
+      store.expireRuntimeInteractionsAndEnqueue({
+        now: "2026-08-25T02:02:00.000Z",
+        limit: 10,
+      }),
+    ).resolves.toBe(0);
+    await expect(
+      store.claimDueInteractionResumes({
+        owner: "worker-expiry",
+        now: "2026-08-25T02:01:00.000Z",
+        leaseUntil: "2026-08-25T02:02:00.000Z",
+        limit: 10,
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        interactionId: "interaction_expired",
+        kind: "confirm",
+        sessionId: "session-2",
+        result: {
+          interactionId: "interaction_expired",
+          status: "expired",
+          values: {},
+          submittedAt: "2026-08-25T02:01:00.000Z",
+        },
+      }),
+    ]);
+    store.close();
+  });
 });
 
 function replyCommand(text: string, final: boolean): DurableOutboundCommand {

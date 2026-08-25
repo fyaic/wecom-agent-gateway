@@ -23,11 +23,13 @@ changes.
 
 ## Next
 
-- Complete real WeCom acceptance for approval-card delivery, callback scoping,
-  in-place update, rejection, expiry, and text fallback.
-- Define the guarded Agent-facing output contract for static structured
-  presentations without accepting vendor JSON or routing control interactions
-  through model reasoning.
+- [x] M2.1: durable Interaction Broker, five-second callback fast lane, and
+      runtime resume queue with deterministic end-to-end tests.
+- [ ] M2.2: connect Agent-native ask-user/elicitation hooks to the completed
+      neutral request/result contract, including text fallback.
+- [ ] M2.3: `replyStreamWithCard` final-answer actions and proactive fallback.
+- [ ] Complete real WeCom acceptance for approval and ask-user cards, including
+      callback scoping, in-place updates, rejection, expiry, and duplicates.
 
 - Exercise host-level physical network loss, native WeCom video callbacks, and
   a real Linux/systemd soak. Cross-process SQLite lease recovery after
@@ -37,6 +39,8 @@ changes.
 
 ## Later
 
+- M2.4 interaction adapters for Codex, Pi, OpenClaw, ACP, and the external SDK.
+- M2.5 multi-field forms, welcome/task cards, and a separate group-poll model.
 - Compatibility certification for additional Agent kernels.
 - Optional distributed outbox and media storage implementations.
 - A documented extension model for additional IM transports without weakening
