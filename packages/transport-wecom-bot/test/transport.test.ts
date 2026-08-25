@@ -398,6 +398,7 @@ describe("WeComBotTransport", () => {
             },
           ],
         },
+        submit_button: { key: "completed", text: "已完成" },
       },
     });
     client.listeners.get("message")?.({

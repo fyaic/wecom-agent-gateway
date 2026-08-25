@@ -821,6 +821,10 @@ function renderWeComInteractionUpdateCard(
       mode: 0,
       option_list: [{ id: "completed", text: "已完成", is_checked: true }],
     },
+    // The real update endpoint requires submit_button even when every choice
+    // is disabled (errcode 42049 when omitted). Repeated callbacks remain
+    // harmless because the durable Broker has already resolved the task.
+    submit_button: { key: "completed", text: "已完成" },
   };
 }
 
