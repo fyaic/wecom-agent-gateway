@@ -12,7 +12,10 @@ import type {
   OutboundCommand,
   PendingApproval,
   PendingPresentationInteraction,
+  PendingRuntimeInteraction,
   ResolvedPresentationInteraction,
+  RuntimeInteractionResumeEntry,
+  RuntimeInteractionResult,
 } from "@fyaic/wecom-runtime-contract";
 
 export class SqliteGatewayStore implements GatewayStore {
@@ -97,6 +100,44 @@ export class SqliteGatewayStore implements GatewayStore {
       );
       CREATE INDEX IF NOT EXISTS presentation_interactions_pending_idx
         ON presentation_interactions(status, expires_at);
+      CREATE TABLE IF NOT EXISTS runtime_interactions (
+        interaction_id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL,
+        conversation_id TEXT NOT NULL,
+        conversation_type TEXT NOT NULL CHECK(conversation_type IN ('direct', 'group')),
+        sender_id TEXT NOT NULL,
+        adapter_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        request_json TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('pending', 'answered', 'expired', 'cancelled')),
+        result_json TEXT,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        resolved_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS runtime_interactions_pending_idx
+        ON runtime_interactions(status, expires_at);
+      CREATE TABLE IF NOT EXISTS runtime_interaction_resumes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        interaction_id TEXT NOT NULL UNIQUE,
+        account_id TEXT NOT NULL,
+        conversation_id TEXT NOT NULL,
+        conversation_type TEXT NOT NULL CHECK(conversation_type IN ('direct', 'group')),
+        adapter_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        result_json TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('pending', 'leased', 'delivered', 'dead')),
+        attempts INTEGER NOT NULL DEFAULT 0,
+        next_attempt_at TEXT NOT NULL,
+        lease_owner TEXT,
+        lease_until TEXT,
+        last_error TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(interaction_id) REFERENCES runtime_interactions(interaction_id)
+      );
+      CREATE INDEX IF NOT EXISTS runtime_interaction_resumes_due_idx
+        ON runtime_interaction_resumes(status, next_attempt_at, lease_until, id);
     `);
   }
 
@@ -626,6 +667,329 @@ export class SqliteGatewayStore implements GatewayStore {
     });
   }
 
+  async createRuntimeInteraction(
+    interaction: PendingRuntimeInteraction,
+  ): Promise<boolean> {
+    const result = this.database
+      .prepare(
+        `
+        INSERT OR IGNORE INTO runtime_interactions
+          (interaction_id, account_id, conversation_id, conversation_type,
+           sender_id, adapter_id, session_id, request_json, status,
+           created_at, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+      `,
+      )
+      .run(
+        interaction.interactionId,
+        interaction.accountId,
+        interaction.conversationId,
+        interaction.conversationType,
+        interaction.senderId,
+        interaction.adapterId,
+        interaction.sessionId,
+        JSON.stringify(interaction.request),
+        interaction.createdAt,
+        interaction.expiresAt,
+      );
+    return result.changes === 1;
+  }
+
+  async getPendingRuntimeInteraction(options: {
+    interactionId: string;
+    accountId: string;
+    conversationId: string;
+    senderId: string;
+    now: string;
+  }): Promise<PendingRuntimeInteraction | undefined> {
+    return this.transaction(() => {
+      const row = this.database
+        .prepare(
+          `
+          SELECT interaction_id, account_id, conversation_id, conversation_type,
+                 sender_id, adapter_id, session_id, request_json, created_at, expires_at
+          FROM runtime_interactions
+          WHERE interaction_id = ? AND account_id = ? AND conversation_id = ?
+            AND sender_id = ? AND status = 'pending' AND expires_at > ?
+        `,
+        )
+        .get(
+          options.interactionId,
+          options.accountId,
+          options.conversationId,
+          options.senderId,
+          options.now,
+        ) as RuntimeInteractionRow | undefined;
+      return row ? runtimeInteraction(row) : undefined;
+    });
+  }
+
+  async resolveRuntimeInteractionAndEnqueue(options: {
+    interactionId: string;
+    accountId: string;
+    conversationId: string;
+    senderId: string;
+    result: RuntimeInteractionResult;
+    now: string;
+  }): Promise<string | undefined> {
+    return this.transaction(() => {
+      const row = this.database
+        .prepare(
+          `
+          SELECT account_id, conversation_id, conversation_type, adapter_id, session_id
+          FROM runtime_interactions
+          WHERE interaction_id = ? AND account_id = ? AND conversation_id = ?
+            AND sender_id = ? AND status = 'pending' AND expires_at > ?
+        `,
+        )
+        .get(
+          options.interactionId,
+          options.accountId,
+          options.conversationId,
+          options.senderId,
+          options.now,
+        ) as RuntimeInteractionScopeRow | undefined;
+      if (!row) return undefined;
+      const resultJson = JSON.stringify(options.result);
+      const updated = this.database
+        .prepare(
+          `
+          UPDATE runtime_interactions
+          SET status = ?, result_json = ?, resolved_at = ?
+          WHERE interaction_id = ? AND status = 'pending' AND expires_at > ?
+        `,
+        )
+        .run(
+          options.result.status === "cancelled" ? "cancelled" : "answered",
+          resultJson,
+          options.now,
+          options.interactionId,
+          options.now,
+        );
+      if (updated.changes !== 1) return undefined;
+      const inserted = this.database
+        .prepare(
+          `
+          INSERT INTO runtime_interaction_resumes
+            (interaction_id, account_id, conversation_id, conversation_type,
+             adapter_id, session_id, result_json, status, attempts,
+             next_attempt_at, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?)
+        `,
+        )
+        .run(
+          options.interactionId,
+          row.account_id,
+          row.conversation_id,
+          row.conversation_type,
+          row.adapter_id,
+          row.session_id,
+          resultJson,
+          options.now,
+          options.now,
+          options.now,
+        );
+      return String(inserted.lastInsertRowid);
+    });
+  }
+
+  async cancelRuntimeInteraction(options: {
+    interactionId: string;
+    now: string;
+  }): Promise<boolean> {
+    const result = this.database
+      .prepare(
+        `
+        UPDATE runtime_interactions
+        SET status = 'cancelled', resolved_at = ?
+        WHERE interaction_id = ? AND status = 'pending'
+      `,
+      )
+      .run(options.now, options.interactionId);
+    return result.changes === 1;
+  }
+
+  async expireRuntimeInteractionsAndEnqueue(options: {
+    now: string;
+    limit: number;
+  }): Promise<number> {
+    if (options.limit < 1) return 0;
+    return this.transaction(() => {
+      const rows = this.database
+        .prepare(
+          `
+          SELECT interaction_id, account_id, conversation_id,
+                 conversation_type, adapter_id, session_id
+          FROM runtime_interactions
+          WHERE status = 'pending' AND expires_at <= ?
+          ORDER BY expires_at, interaction_id
+          LIMIT ?
+        `,
+        )
+        .all(
+          options.now,
+          options.limit,
+        ) as unknown as RuntimeInteractionExpiryRow[];
+      let expired = 0;
+      for (const row of rows) {
+        const result: RuntimeInteractionResult = {
+          interactionId: row.interaction_id,
+          status: "expired",
+          values: {},
+          submittedAt: options.now,
+        };
+        const resultJson = JSON.stringify(result);
+        const updated = this.database
+          .prepare(
+            `
+            UPDATE runtime_interactions
+            SET status = 'expired', result_json = ?, resolved_at = ?
+            WHERE interaction_id = ? AND status = 'pending' AND expires_at <= ?
+          `,
+          )
+          .run(resultJson, options.now, row.interaction_id, options.now);
+        if (updated.changes !== 1) continue;
+        this.database
+          .prepare(
+            `
+            INSERT INTO runtime_interaction_resumes
+              (interaction_id, account_id, conversation_id, conversation_type,
+               adapter_id, session_id, result_json, status, attempts,
+               next_attempt_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?)
+          `,
+          )
+          .run(
+            row.interaction_id,
+            row.account_id,
+            row.conversation_id,
+            row.conversation_type,
+            row.adapter_id,
+            row.session_id,
+            resultJson,
+            options.now,
+            options.now,
+            options.now,
+          );
+        expired += 1;
+      }
+      return expired;
+    });
+  }
+
+  async claimDueInteractionResumes(options: {
+    owner: string;
+    now: string;
+    leaseUntil: string;
+    limit: number;
+  }): Promise<RuntimeInteractionResumeEntry[]> {
+    return this.transaction(() => {
+      const rows = this.database
+        .prepare(
+          `
+          SELECT id FROM runtime_interaction_resumes
+          WHERE (status = 'pending' AND next_attempt_at <= ?)
+             OR (status = 'leased' AND lease_until <= ?)
+          ORDER BY id LIMIT ?
+        `,
+        )
+        .all(options.now, options.now, options.limit) as Array<{ id: number }>;
+      const entries: RuntimeInteractionResumeEntry[] = [];
+      for (const row of rows) {
+        const updated = this.database
+          .prepare(
+            `
+            UPDATE runtime_interaction_resumes
+            SET status = 'leased', lease_owner = ?, lease_until = ?,
+                attempts = attempts + 1, updated_at = ?
+            WHERE id = ? AND (
+              (status = 'pending' AND next_attempt_at <= ?)
+              OR (status = 'leased' AND lease_until <= ?)
+            )
+          `,
+          )
+          .run(
+            options.owner,
+            options.leaseUntil,
+            options.now,
+            row.id,
+            options.now,
+            options.now,
+          );
+        if (updated.changes !== 1) continue;
+        const entry = this.getInteractionResume(String(row.id));
+        if (entry) entries.push(entry);
+      }
+      return entries;
+    });
+  }
+
+  async completeInteractionResume(options: {
+    resumeId: string;
+    owner: string;
+    now: string;
+  }): Promise<void> {
+    const result = this.database
+      .prepare(
+        `
+        UPDATE runtime_interaction_resumes
+        SET status = 'delivered', lease_owner = NULL, lease_until = NULL,
+            updated_at = ?
+        WHERE id = ? AND status = 'leased' AND lease_owner = ?
+      `,
+      )
+      .run(options.now, options.resumeId, options.owner);
+    if (result.changes !== 1)
+      throw new Error("Interaction resume lease was lost");
+  }
+
+  async retryInteractionResume(options: {
+    resumeId: string;
+    owner: string;
+    error: string;
+    nextAttemptAt: string;
+    now: string;
+  }): Promise<void> {
+    const result = this.database
+      .prepare(
+        `
+        UPDATE runtime_interaction_resumes
+        SET status = 'pending', next_attempt_at = ?, lease_owner = NULL,
+            lease_until = NULL, last_error = ?, updated_at = ?
+        WHERE id = ? AND status = 'leased' AND lease_owner = ?
+      `,
+      )
+      .run(
+        options.nextAttemptAt,
+        options.error,
+        options.now,
+        options.resumeId,
+        options.owner,
+      );
+    if (result.changes !== 1)
+      throw new Error("Interaction resume lease was lost");
+  }
+
+  async deadLetterInteractionResume(options: {
+    resumeId: string;
+    owner: string;
+    error: string;
+    now: string;
+  }): Promise<void> {
+    const result = this.database
+      .prepare(
+        `
+        UPDATE runtime_interaction_resumes
+        SET status = 'dead', lease_owner = NULL, lease_until = NULL,
+            last_error = ?, updated_at = ?
+        WHERE id = ? AND status = 'leased' AND lease_owner = ?
+      `,
+      )
+      .run(options.error, options.now, options.resumeId, options.owner);
+    if (result.changes !== 1)
+      throw new Error("Interaction resume lease was lost");
+  }
+
   close(): void {
     this.database.close();
   }
@@ -640,6 +1004,41 @@ export class SqliteGatewayStore implements GatewayStore {
       )
       .get(id) as OutboxRow | undefined;
     return row ? outboxEntry(row) : undefined;
+  }
+
+  private getInteractionResume(
+    id: string,
+  ): RuntimeInteractionResumeEntry | undefined {
+    const row = this.database
+      .prepare(
+        `
+        SELECT resumes.id, resumes.interaction_id, resumes.account_id,
+               resumes.conversation_id, resumes.conversation_type,
+               resumes.adapter_id, resumes.session_id, resumes.result_json,
+               resumes.attempts, interactions.request_json
+        FROM runtime_interaction_resumes AS resumes
+        JOIN runtime_interactions AS interactions
+          ON interactions.interaction_id = resumes.interaction_id
+        WHERE resumes.id = ?
+      `,
+      )
+      .get(id) as RuntimeInteractionResumeRow | undefined;
+    return row
+      ? {
+          id: String(row.id),
+          interactionId: row.interaction_id,
+          kind: (
+            JSON.parse(row.request_json) as PendingRuntimeInteraction["request"]
+          ).kind,
+          accountId: row.account_id,
+          conversationId: row.conversation_id,
+          conversationType: row.conversation_type,
+          adapterId: row.adapter_id,
+          sessionId: row.session_id,
+          result: JSON.parse(row.result_json) as RuntimeInteractionResult,
+          attempts: row.attempts,
+        }
+      : undefined;
   }
 
   private getLeasedOutboxRow(id: string, owner: string): OutboxRow {
@@ -708,6 +1107,63 @@ interface OutboxRow {
   message_id: string;
   command_json: string;
   attempts: number;
+}
+
+interface RuntimeInteractionRow {
+  interaction_id: string;
+  account_id: string;
+  conversation_id: string;
+  conversation_type: PendingRuntimeInteraction["conversationType"];
+  sender_id: string;
+  adapter_id: string;
+  session_id: string;
+  request_json: string;
+  created_at: string;
+  expires_at: string;
+}
+
+interface RuntimeInteractionScopeRow {
+  account_id: string;
+  conversation_id: string;
+  conversation_type: PendingRuntimeInteraction["conversationType"];
+  adapter_id: string;
+  session_id: string;
+}
+
+interface RuntimeInteractionExpiryRow extends RuntimeInteractionScopeRow {
+  interaction_id: string;
+}
+
+interface RuntimeInteractionResumeRow {
+  id: number;
+  interaction_id: string;
+  account_id: string;
+  conversation_id: string;
+  conversation_type: RuntimeInteractionResumeEntry["conversationType"];
+  adapter_id: string;
+  session_id: string;
+  result_json: string;
+  request_json: string;
+  attempts: number;
+}
+
+function runtimeInteraction(
+  row: RuntimeInteractionRow,
+): PendingRuntimeInteraction {
+  return {
+    interactionId: row.interaction_id,
+    accountId: row.account_id,
+    conversationId: row.conversation_id,
+    conversationType: row.conversation_type,
+    senderId: row.sender_id,
+    adapterId: row.adapter_id,
+    sessionId: row.session_id,
+    request: JSON.parse(
+      row.request_json,
+    ) as PendingRuntimeInteraction["request"],
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+  };
 }
 
 function emptyOutboxStats(): DeliveryOutboxStats {

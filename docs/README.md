@@ -2,6 +2,7 @@
 
 - [`architecture.md`](architecture.md)：系统边界、数据流和包职责。
 - [`official-wecom-ecosystem.md`](official-wecom-ecosystem.md)：企业微信官方及周边生态调研。
+- [`interaction-cards.md`](interaction-cards.md)：Agent 交互卡片、Interaction Broker、状态机、UX 与里程碑。
 - [`real-wecom-runbook.md`](real-wecom-runbook.md)：真实 Bot 凭据、白名单与收发联调手册。
 - [`status.md`](status.md)：实际完成项、验证结果、未验证项和下一步。
 - [`adapter-authoring.md`](adapter-authoring.md)：第三方 Kernel Adapter 的 v1 契约、能力语义与兼容矩阵。
@@ -28,6 +29,8 @@
 - [`adr/0017-local-proactive-control-plane.md`](adr/0017-local-proactive-control-plane.md)：无 Bot Secret 的本地主动消息控制面、别名授权与耐久投递。
 - [`adr/0018-external-adapter-sdk.md`](adr/0018-external-adapter-sdk.md)：可信外部 Adapter 模块、公共工厂契约和动态装载边界。
 - [`adr/0019-operational-observability.md`](adr/0019-operational-observability.md)：loopback 健康/就绪端点与无用户数据 Prometheus 指标。
+- [`adr/0020-channel-neutral-structured-cards.md`](adr/0020-channel-neutral-structured-cards.md)：五类通用卡片、官方 SDK 映射和审批按钮闭环。
+- [`adr/0021-durable-interaction-broker.md`](adr/0021-durable-interaction-broker.md)：五秒 fast lane、耐久交互状态与 deferred resume。
 
 原始 `wecom-cli` 功能清单和测试台账仍由
 [`CAPABILITY_TEST_MATRIX_2026-08-19.md`](https://github.com/fyaic/wecom-cli/blob/agent/capability-test-matrix/docs/fyaic/CAPABILITY_TEST_MATRIX_2026-08-19.md)

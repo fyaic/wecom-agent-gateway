@@ -57,6 +57,7 @@
 | 独立持久审批提示                                | 完成并自动化验证          | 主动 Bot 消息不受 Agent 流覆盖；Transport 不支持时 fail closed              |
 | Channel-neutral 五类结构化卡片                  | Phase 1 完成并自动化验证  | 通知/图文/按钮/投票/表单映射官方 SDK；不接收厂商 JSON                       |
 | 审批按钮卡片与 SQLite 交互状态                  | 完成并自动化验证，待实测  | 回调 ACL/幂等/发送者/会话/失效绑定；五秒内原位更新；文本命令降级            |
+| 耐久通用 Interaction Broker                     | M2.1 完成并自动化验证     | 单选/多选/取消/TTL；五秒 fast lane；同 session resume；租约/重试/死信       |
 | SQLite 重启恢复                                 | 完成并自动化验证          | 入站去重、runtime session、待发送文本与投递日志跨 reopen 保留               |
 | SQLite 文件权限                                 | 完成并自动化验证          | Store 每次打开都强制主数据库为 `0600`；本机现有数据库已收紧                 |
 | SQLite 故障因果保留                             | 完成并自动化验证          | 写入/提交失败后即使回滚也失败，仍抛出原始故障而非二次回滚错误               |
@@ -181,7 +182,7 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
 - 同名发布仓库已公开并进入 Public Preview；原仓库已改名并保持 private，发布仓库由审计后的干净
   根提交重新创建。未登录 API、README、SECURITY 和 Git refs 访问均已复核。
 - 项目自有代码采用与企业微信官方核心参考项目一致的 MIT；依赖许可证和来源规则已形成独立审计文档。
-- GitHub Actions 运行格式、TypeScript、141 项 deterministic tests、公开面和依赖许可证检查。
+- GitHub Actions 运行格式、TypeScript、148 项 deterministic tests、公开面和依赖许可证检查。
 - 已完成模式 `0600` 的最终离库 Git bundle 备份、旧仓库全部 refs 与 51 次 Actions 日志审计；旧历史
   确认包含私密名称和非 noreply 作者元数据，只保留在私有归档与离线 bundle。新的同名发布仓库从
   1 个审计后的根提交建立，GitHub CI、全新 clone、141 项测试和私密词扫描均通过；Dependabot 随后
@@ -189,13 +190,30 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
 - Actions 依赖已固定到官方 tag 对应的不可变 commit SHA。Private Vulnerability Reporting 已启用；
   `main` 强制 `verify` CI、线性历史和会话解决，规则适用于管理员，并禁止 force-push 与分支删除。
 - 已生成并目视复核 1280×640 社交预览资产，不使用企业微信官方 Logo 或机器人形象，避免暗示官方
-  背书；当前 private 页面不提供上传入口，转 public 后上传并以未登录视角复核。
+  背书；已由仓库所有者上传为 GitHub Social Preview。
 - squash merge、自动删除分支、Dependabot 漏洞告警和自动安全修复已启用；历史净化、默认分支保护、
   Private Vulnerability Reporting 和未登录视角复核均已完成。`v0.1.0` 已通过 tag-triggered GitHub
-  Actions 发布可复现源码包和 SHA-256，并以 GitHub/Sigstore provenance 通过消费者侧验证；只剩社交
-  预览上传仍按发布清单单独执行。
+  Actions 发布可复现源码包和 SHA-256，并以 GitHub/Sigstore provenance 通过消费者侧验证；Social
+  Preview 已上传。
 
 ## 下一阶段
+
+### M2.1：Interaction Broker
+
+- 已确认卡片不是 Agent 生成的厂商 JSON，而是 Gateway 通用交互协议；SDK 负责呈现与回调，Core
+  负责状态/权限/幂等/TTL/续跑，Adapter 负责 Kernel 翻译，`wecom-cli` 负责选择后的办公动作。
+- 设计已固化在 `docs/interaction-cards.md` 和 ADR 0021：五秒 callback fast lane 不等待 Kernel；
+  默认 deferred suspend/resume；交互结果经带租约的 durable resume queue 恢复。
+- M2.1 已实现 Agent-neutral Request/Result、`interaction-resume` capability、SQLite 原子
+  resolve/enqueue、TTL sweep、租约恢复、退避重试/死信、即时卡片更新和新的主动回复边界。
+- deterministic adapter 已覆盖单选、多选、取消、过期、重复点击、跨发送者 ACL 和同 session 恢复；
+  SQLite 测试覆盖租约过期接管。真实企业微信 choice/form 验收仍明确列为下一步，尚未冒充实测完成。
+
+### M2.2：Agent ask-user 接入
+
+- 下一主线是把 Pi、OpenClaw、ACP/Codex 中至少一个原生 ask-user/elicitation hook 翻译为现有中立请求，
+  不再改动 WeCom Transport 协议。
+- 增加文本降级和“每会话一个活跃 elicitation”策略，再完成授权私聊与测试群的真实卡片验收。
 
 ### M5：生产运行与韧性
 
@@ -222,7 +240,7 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
 
 - 已复用 SDK `downloadFile` 完成入站媒体下载/AES 解密、MIME 探测、大小限制、受保护临时物化、运行后清理和持久化脱敏。
 - 真实图片输入与输出上传/发送均已通过；Gateway 自管耐久 spool、媒体 outbox、完整性、配额、孤儿回收和重启恢复已完成自动化。下一步执行授权会话的真实媒体失败恢复；恶意内容扫描仍待部署策略。
-- 文本/媒体 outbox、Adapter、流式、session、工具、审批、结构化卡片与主动控制面已完成 146 项自动化验证；
+- 文本/媒体 outbox、Adapter、流式、session、工具、审批、结构化卡片与主动控制面已完成 148 项自动化验证；
   OS 子进程强杀和 SQLite 原始故障保留已纳入 CI。宿主机网络故障、告警接入和多实例顺序保留为
   部署硬化，不把 Agent 推理或模型效果混入 Gateway 主线。
 - Codex App Server 与 Kimi ACP 均在不产生虚假 turn、不注入 Prompt 的前提下完成真实分层测量；同一口径继续用于后续 Kernel。

@@ -38,6 +38,8 @@ model selection, tool policy, and media understanding stay in the Kernel.
 - **Structured cards** — neutral notices, articles, actions, choices, and forms
   map to official template cards; approval callbacks are durable and update in
   place.
+- **Interaction broker** — card choices bypass text interpretation; the Gateway
+  persists, validates, updates, and resumes the same Agent session.
 - **Durable delivery** — SQLite outbox leases, retries, dead letters, and a
   protected media spool survive process failure.
 - **Exact modalities** — transports and adapters declare concrete media types
@@ -86,6 +88,9 @@ One Gateway process hosts one explicitly selected Kernel. See the
 [Adapter template](examples/adapter-template) to add another Kernel through
 `@fyaic/wecom-adapter-sdk` and `GATEWAY_ADAPTER=external`, without changing the
 Gateway registry.
+
+See the [interaction-card architecture](docs/interaction-cards.md) for the
+implemented durable callback, TTL, scoped interaction, and Agent-resume design.
 
 ## Quick start
 
@@ -159,7 +164,7 @@ and [ADRs](docs/README.md) for the complete contract.
 ## Maturity
 
 The project is in **Public Preview**; a stable v1 API is not promised yet. The
-current baseline has 141 deterministic tests and real acceptance evidence for
+current baseline has 148 deterministic tests and real acceptance evidence for
 direct and group conversations, mutable streaming, session recovery,
 image/file/MP4 transfer, proactive media, managed restarts, and four Kernel
 families. Cross-process SQLite outbox lease recovery after `SIGKILL` and a

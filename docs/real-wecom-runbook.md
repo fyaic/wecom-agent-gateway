@@ -146,6 +146,7 @@ GLM 首文本 23.05 秒，端到端 25.20 秒，多次可变回复投递成功�
    GATEWAY_MAX_PENDING_INBOUND_PER_CONVERSATION=10
    GATEWAY_MAX_CONCURRENT_RUNS=8
    GATEWAY_APPROVAL_TIMEOUT_MS=300000
+   GATEWAY_INTERACTION_TIMEOUT_MS=300000
    CODEX_APPROVAL_WAIT_TIMEOUT_MS=90000
    GATEWAY_MEDIA_SPOOL_ROOT=data/media-spool
    GATEWAY_MEDIA_SPOOL_MAX_TOTAL_BYTES=524288000
@@ -412,6 +413,17 @@ pnpm smoke:codex-tool --confirm-readonly-contact-search
 批准；`wecom_todo_create` 仅出现一次 `started` 并在 1.4 秒后 `succeeded`，整轮从入队到完成为
 29.9 秒，Outbox 无待处理或死信。随后通过唯一测试标题确认恰好一条待办，删除成功并复查为零。
 该记录证明批准路径、恰好一次观察结果和清理已通过；拒绝与进程重启中断仍需分别做真实验收。
+
+### 通用交互卡片
+
+通用交互卡片与审批共用 ACL、入站去重、SQLite 和官方 SDK，但不共享授权语义。普通确认、单选、
+多选和表单只向 Agent 返回结构化答案，不能批准写工具。callback 到卡片更新的五秒路径不得启动或
+等待 Kernel；卡片应先显示“已选择/正在继续”，Agent 续跑输出通过新的主动可变消息发送。
+
+TTL 到期且没有 callback frame 时无法原位修改旧卡；Gateway 会把 `expired` 结果耐久恢复给 Adapter，
+由后续主动消息决定是否提示用户。重复点击、跨会话、跨发送者和旧卡回调不得再次恢复 Agent。
+详细验收矩阵见 `interaction-cards.md`；M2.1 已完成确定性闭环，但在真实企业微信完成 choice/form
+验收前不宣称其已实测通过。
 
 当前网络中 Codex Responses WebSocket 首轮会耗尽重试预算后才回退 HTTP，因此默认
 `CODEX_RESPONSES_WEBSOCKET=false`：adapter 使用 ChatGPT 登录兼容的 HTTP-only provider。

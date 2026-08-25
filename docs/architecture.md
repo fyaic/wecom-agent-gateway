@@ -93,8 +93,13 @@ App Server 当前为 90 秒。停机和启动都会把遗留 `pending` 标成 `i
 
 Core 只认识通用 `Presentation`：notice、article、actions、choice、form。WeCom Transport 负责映射为
 官方五种 template card、约束长度/数量/唯一 ID、校验 HTTPS 链接和可选 hostname allowlist，并把
-`template_card_event` 归一化为通用交互。卡片不是 Agent 推理接口；当前 Phase 1 仅由 Gateway 控制面
-生成审批卡片。不会扫描 Agent 文本中的 JSON，也不会把企业微信私有结构扩散到 Adapter。
+`template_card_event` 归一化为通用交互。卡片不是 Agent 推理接口；不会扫描 Agent 文本中的 JSON，
+也不会把企业微信私有结构扩散到 Adapter。
+
+完整的 Agent 交互卡架构、SDK/CLI 分工、状态机和里程碑见
+[`interaction-cards.md`](interaction-cards.md)。Core 的 Interaction Broker 已实现五秒 callback fast
+lane、TTL、发送者/会话绑定和 durable deferred resume；Kernel continuation 不进入 WeCom
+Transport。下一阶段只在 Adapter 侧接入各 Kernel 的原生 ask-user/elicitation hook。
 
 ## Gateway Core 与 Adapter Host
 

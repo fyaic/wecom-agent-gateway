@@ -957,6 +957,234 @@ describe("WeComAgentGateway", () => {
     );
   });
 
+  it("acknowledges a durable interaction before resuming the same Agent session", async () => {
+    class InteractiveTransport extends FakeTransport {
+      override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
+        "stream-reply-update",
+        "proactive-message",
+        "structured-presentation",
+        "interactive-presentation",
+      ]);
+    }
+    const transport = new InteractiveTransport();
+    const resumes: Array<{
+      sessionId: string;
+      idempotencyKey: string;
+      status: "submitted" | "cancelled" | "expired";
+      values: Record<string, string[]>;
+    }> = [];
+    let callbackWasAcknowledged = false;
+    const runtime: AgentRuntimeAdapter = {
+      id: "interaction-runtime",
+      contractVersion: 1,
+      capabilities: new Set(["interaction-resume"]),
+      async *run() {
+        yield { type: "message-completed", text: "unused" };
+      },
+      async *resumeInteraction(request) {
+        callbackWasAcknowledged = transport.commands.some(
+          (command) => command.type === "interaction-update",
+        );
+        resumes.push({
+          sessionId: request.sessionId,
+          idempotencyKey: request.idempotencyKey,
+          status: request.result.status,
+          values: request.result.values,
+        });
+        yield {
+          type: "message-completed",
+          text: `继续处理：${request.result.values.environment?.[0]}`,
+        };
+      },
+      async health() {
+        return { ok: true };
+      },
+    };
+    const lifecycle: string[] = [];
+    const gateway = new WeComAgentGateway({
+      transport,
+      adapters: [runtime],
+      router: new StaticRuntimeRouter(runtime.id),
+      store: new MemoryGatewayStore(),
+      outboxPollIntervalMs: 2,
+      onInteractionLifecycleEvent: (event) => lifecycle.push(event.phase),
+    });
+    await gateway.start();
+    const interactionId = await gateway.startRuntimeInteraction({
+      accountId: "bot-a",
+      conversationId: "chat-a",
+      conversationType: "direct",
+      senderId: "user-a",
+      adapterId: runtime.id,
+      sessionId: "agent-session-1",
+      interaction: {
+        kind: "single-select",
+        title: "请选择环境",
+        fieldId: "environment",
+        options: [
+          { value: "production-internal", label: "生产环境" },
+          { value: "staging-internal", label: "测试环境" },
+        ],
+      },
+    });
+    expect(transport.commands.at(-1)).toMatchObject({
+      type: "proactive-presentation",
+      presentation: {
+        kind: "actions",
+        id: interactionId,
+        actions: [
+          { id: "option_0", label: "生产环境" },
+          { id: "option_1", label: "测试环境" },
+        ],
+      },
+    });
+
+    await transport.receive({
+      ...message("interaction-wrong-sender"),
+      senderId: "user-b",
+      parts: [],
+      interaction: { presentationId: interactionId, actionId: "option_0" },
+    });
+    expect(resumes).toHaveLength(0);
+
+    await transport.receive({
+      ...message("interaction-correct"),
+      parts: [],
+      interaction: { presentationId: interactionId, actionId: "option_0" },
+    });
+    await waitFor(() => resumes.length === 1);
+    expect(callbackWasAcknowledged).toBe(true);
+    expect(resumes).toEqual([
+      {
+        sessionId: "agent-session-1",
+        idempotencyKey: `interaction-resume:${interactionId}`,
+        status: "submitted",
+        values: { environment: ["production-internal"] },
+      },
+    ]);
+    expect(transport.commands).toContainEqual(
+      expect.objectContaining({
+        type: "interaction-update",
+        presentation: expect.objectContaining({
+          id: interactionId,
+          body: "✅ 已提交：生产环境",
+        }),
+      }),
+    );
+    await waitFor(() =>
+      transport.commands.some(
+        (command) =>
+          command.type === "proactive" &&
+          command.text === "继续处理：production-internal",
+      ),
+    );
+
+    await transport.receive({
+      ...message("interaction-duplicate"),
+      parts: [],
+      interaction: { presentationId: interactionId, actionId: "option_0" },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(resumes).toHaveLength(1);
+
+    const cancelId = await gateway.startRuntimeInteraction({
+      accountId: "bot-a",
+      conversationId: "chat-a",
+      conversationType: "direct",
+      senderId: "user-a",
+      adapterId: runtime.id,
+      sessionId: "agent-session-1",
+      interaction: { kind: "confirm", title: "是否继续" },
+    });
+    await transport.receive({
+      ...message("interaction-cancel"),
+      parts: [],
+      interaction: { presentationId: cancelId, actionId: "cancel" },
+    });
+    await waitFor(() => resumes.length === 2);
+    expect(resumes[1]).toMatchObject({ status: "cancelled", values: {} });
+
+    const multiId = await gateway.startRuntimeInteraction({
+      accountId: "bot-a",
+      conversationId: "chat-a",
+      conversationType: "direct",
+      senderId: "user-a",
+      adapterId: runtime.id,
+      sessionId: "agent-session-1",
+      interaction: {
+        kind: "multi-select",
+        title: "选择内容",
+        fieldId: "content",
+        min: 1,
+        options: [
+          { value: "docs-internal", label: "文档" },
+          { value: "todos-internal", label: "待办" },
+        ],
+      },
+    });
+    await transport.receive({
+      ...message("interaction-multi"),
+      parts: [],
+      interaction: {
+        presentationId: multiId,
+        actionId: "submit",
+        selections: [
+          { fieldId: "choice", optionIds: ["option_0", "option_1"] },
+        ],
+      },
+    });
+    await waitFor(() => resumes.length === 3);
+    expect(resumes[2]).toMatchObject({
+      status: "submitted",
+      values: { content: ["docs-internal", "todos-internal"] },
+    });
+
+    const expiryId = await gateway.startRuntimeInteraction({
+      accountId: "bot-a",
+      conversationId: "chat-a",
+      conversationType: "direct",
+      senderId: "user-a",
+      adapterId: runtime.id,
+      sessionId: "agent-session-1",
+      interaction: {
+        kind: "confirm",
+        title: "即将过期",
+        expiresInMs: 5,
+      },
+    });
+    await waitFor(() => resumes.length === 4);
+    expect(resumes[3]).toMatchObject({
+      idempotencyKey: `interaction-resume:${expiryId}`,
+      status: "expired",
+      values: {},
+    });
+    expect(lifecycle).toEqual([
+      "requested",
+      "submitted",
+      "resume-started",
+      "resume-delivered",
+      "requested",
+      "cancelled",
+      "resume-started",
+      "resume-delivered",
+      "requested",
+      "submitted",
+      "resume-started",
+      "resume-delivered",
+      "requested",
+      "resume-started",
+      "resume-delivered",
+    ]);
+    expect(
+      JSON.stringify(
+        transport.commands.filter(
+          (command) => command.type === "proactive-presentation",
+        ),
+      ),
+    ).not.toContain("production-internal");
+    await gateway.stop();
+  });
+
   it("expires an unanswered approval without hanging the Agent run", async () => {
     const lifecycle: string[] = [];
     let decision = "";

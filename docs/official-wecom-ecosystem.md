@@ -43,6 +43,13 @@ SDK 下载路径；同一会话中文件下载与随后文本必须保持顺序�
 24 小时、最多 300 项的内存缓存保存卡片。本项目只复用已验证的 SDK 语义：采用通用 Presentation
 契约、SQLite 持久关联和即时更新，不复制 LLM JSON 抓取或仅内存状态。
 
+2026-08-25 继续核验官方仓库的交互式卡片 PR #176：贡献者已完成单选按钮、多问题聚合、投票单/
+多选、TTL、重复点击和真实 WebSocket E2E，并确认 callback `req_id` 在更新卡片后不可复用，后续回复
+必须主动发送。该 PR 尚未合入；其 pending 注册表只在内存中，重启后卡片仍可见但点击不再生效。
+本项目因此采用相同的用户交互语义，但用耐久 Interaction Broker、resume queue 和 Adapter Result
+替代内存 pending 与 synthetic 文本注入。M2.1 已完成 SQLite 原子状态、TTL、五秒 fast lane 和
+带稳定幂等键的 Adapter resume；详见 `interaction-cards.md`。
+
 ## 明确复用与明确不复用
 
 直接复用：

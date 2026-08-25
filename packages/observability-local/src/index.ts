@@ -8,6 +8,7 @@ import type {
   GatewayLifecycleEvent,
   GatewayOperationalSnapshot,
   InfrastructureErrorEvent,
+  InteractionLifecycleEvent,
 } from "@fyaic/wecom-channel-core";
 
 type Labels = Readonly<Record<string, string>>;
@@ -52,6 +53,20 @@ export class GatewayMetrics {
       phase: event.phase,
       effect: event.effect,
     });
+  }
+
+  recordInteraction(event: InteractionLifecycleEvent): void {
+    this.increment("interaction_events_total", {
+      phase: event.phase,
+      kind: event.kind,
+      conversation_type: event.conversationType,
+    });
+    this.incrementBy(
+      "interaction_duration_ms_sum",
+      { phase: event.phase },
+      event.elapsedMs,
+    );
+    this.increment("interaction_duration_ms_count", { phase: event.phase });
   }
 
   recordInfrastructureError(event: InfrastructureErrorEvent): void {

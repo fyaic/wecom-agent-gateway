@@ -8,13 +8,19 @@ import {
   type DurableMediaArtifact,
   type DurableOutboundCommand,
   type GatewayStore,
+  type InboundInteraction,
   type InboundMessage,
   type InboundPolicy,
   type MediaSpool,
   type MediaType,
   type OutboundCommand,
+  type PendingRuntimeInteraction,
+  type Presentation,
   type RuntimeApprovalDecision,
   type RuntimeApprovalRequest,
+  type RuntimeInteractionRequest,
+  type RuntimeInteractionResult,
+  type RuntimeInteractionResumeEntry,
   type RuntimeRouter,
 } from "@fyaic/wecom-runtime-contract";
 import { AgentReplyProjection, MutableReply } from "./mutable-reply.js";
@@ -38,6 +44,7 @@ export interface GatewayOptions {
   onLifecycleEvent?: (event: GatewayLifecycleEvent) => void;
   onAdapterLifecycleEvent?: (event: AdapterLifecycleEvent) => void;
   onApprovalLifecycleEvent?: (event: ApprovalLifecycleEvent) => void;
+  onInteractionLifecycleEvent?: (event: InteractionLifecycleEvent) => void;
   replyUpdateIntervalMs?: number;
   maxOutboundMediaPerRun?: number;
   outboxPollIntervalMs?: number;
@@ -50,6 +57,7 @@ export interface GatewayOptions {
   maxPendingInboundPerConversation?: number;
   maxConcurrentRuns?: number;
   approvalTimeoutMs?: number;
+  interactionTimeoutMs?: number;
   maxProactiveTextBytes?: number;
   now?: () => number;
   wallClock?: () => number;
@@ -67,6 +75,17 @@ export interface ProactiveMediaRequest {
   accountId: string;
   conversationId: string;
   media: AgentMediaOutput;
+}
+
+/** Adapter-neutral request to suspend a session on a durable human interaction. */
+export interface RuntimeInteractionStartRequest {
+  accountId: string;
+  conversationId: string;
+  conversationType: InboundMessage["conversationType"];
+  senderId: string;
+  adapterId: string;
+  sessionId: string;
+  interaction: RuntimeInteractionRequest;
 }
 
 export type GatewayOperationalState =
@@ -132,6 +151,14 @@ export interface InfrastructureErrorEvent {
     | "interrupt-approval"
     | "create-interaction"
     | "resolve-interaction"
+    | "create-runtime-interaction"
+    | "resolve-runtime-interaction"
+    | "cancel-runtime-interaction"
+    | "expire-runtime-interaction"
+    | "claim-interaction-resume"
+    | "complete-interaction-resume"
+    | "retry-interaction-resume"
+    | "dead-letter-interaction-resume"
     | "reconcile"
     | "stage"
     | "materialize"
@@ -158,6 +185,20 @@ export interface ApprovalLifecycleEvent {
   conversationType: InboundMessage["conversationType"];
   toolName: string;
   effect: "write" | "destructive";
+  elapsedMs: number;
+}
+
+export interface InteractionLifecycleEvent {
+  phase:
+    | "requested"
+    | "submitted"
+    | "cancelled"
+    | "resume-started"
+    | "resume-delivered"
+    | "resume-retry"
+    | "resume-dead";
+  conversationType: InboundMessage["conversationType"];
+  kind: RuntimeInteractionRequest["kind"];
   elapsedMs: number;
 }
 
@@ -255,6 +296,103 @@ export class WeComAgentGateway {
       request.media,
     );
     return delivered ? "delivered" : "queued";
+  }
+
+  async startRuntimeInteraction(
+    request: RuntimeInteractionStartRequest,
+  ): Promise<string> {
+    this.assertProactiveReady();
+    if (
+      !this.options.transport.capabilities.has("structured-presentation") ||
+      !this.options.transport.capabilities.has("interactive-presentation")
+    ) {
+      throw new Error(
+        `Transport ${this.options.transport.id} cannot deliver interactive presentations`,
+      );
+    }
+    const adapter = this.adapters.get(request.adapterId);
+    if (!adapter) {
+      throw new Error(`Runtime adapter not found: ${request.adapterId}`);
+    }
+    if (
+      !adapter.capabilities.has("interaction-resume") ||
+      !adapter.resumeInteraction
+    ) {
+      throw new Error(
+        `Adapter ${adapter.id} cannot resume durable interactions`,
+      );
+    }
+    assertOpaqueTarget(request.accountId, "accountId");
+    assertOpaqueTarget(request.conversationId, "conversationId");
+    assertOpaqueTarget(request.senderId, "senderId");
+    assertOpaqueTarget(request.sessionId, "sessionId");
+    validateRuntimeInteractionRequest(request.interaction);
+
+    const policyTimeoutMs = this.options.interactionTimeoutMs ?? 5 * 60_000;
+    if (!Number.isInteger(policyTimeoutMs) || policyTimeoutMs < 1) {
+      throw new Error(
+        "Gateway interactionTimeoutMs must be a positive integer",
+      );
+    }
+    const timeoutMs = Math.min(
+      policyTimeoutMs,
+      request.interaction.expiresInMs ?? policyTimeoutMs,
+    );
+    const now = this.wallClock();
+    const interactionId = `interaction_${randomUUID().replaceAll("-", "")}`;
+    const pending: PendingRuntimeInteraction = {
+      interactionId,
+      accountId: request.accountId,
+      conversationId: request.conversationId,
+      conversationType: request.conversationType,
+      senderId: request.senderId,
+      adapterId: adapter.id,
+      sessionId: request.sessionId,
+      request: request.interaction,
+      createdAt: iso(now),
+      expiresAt: iso(now + timeoutMs),
+    };
+
+    try {
+      const created =
+        await this.options.store.createRuntimeInteraction(pending);
+      if (!created) throw new Error("Unable to allocate runtime interaction");
+    } catch (error) {
+      this.notifyInteractionStoreError("create-runtime-interaction", error);
+      throw error;
+    }
+
+    try {
+      await this.enqueueDurableDelivery(interactionId, {
+        type: "proactive-presentation",
+        accountId: request.accountId,
+        conversationId: request.conversationId,
+        presentation: interactionPresentation(
+          interactionId,
+          request.interaction,
+        ),
+      });
+    } catch (error) {
+      try {
+        await this.options.store.cancelRuntimeInteraction({
+          interactionId,
+          now: this.wallClockIso(),
+        });
+      } catch (cancelError) {
+        this.notifyInteractionStoreError(
+          "cancel-runtime-interaction",
+          cancelError,
+        );
+      }
+      throw error;
+    }
+    this.notifyInteractionLifecycle({
+      phase: "requested",
+      conversationType: request.conversationType,
+      kind: request.interaction.kind,
+      elapsedMs: 0,
+    });
+    return interactionId;
   }
 
   async operationalSnapshot(): Promise<GatewayOperationalSnapshot> {
@@ -894,6 +1032,7 @@ export class WeComAgentGateway {
   private async handlePresentationInteraction(
     message: InboundMessage,
   ): Promise<void> {
+    if (await this.handleRuntimeInteraction(message)) return;
     const interaction = message.interaction!;
     const action =
       interaction.actionId === "approve"
@@ -936,6 +1075,95 @@ export class WeComAgentGateway {
         : "⛔ 已拒绝，本次操作不会执行。"
       : "该操作不存在、已处理、已失效，或不属于当前会话与发送者。";
     await this.updateInteraction(message, interaction.presentationId, text);
+  }
+
+  private async handleRuntimeInteraction(
+    message: InboundMessage,
+  ): Promise<boolean> {
+    const inbound = message.interaction!;
+    let pending: PendingRuntimeInteraction | undefined;
+    try {
+      pending = await this.options.store.getPendingRuntimeInteraction({
+        interactionId: inbound.presentationId,
+        accountId: message.accountId,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        now: this.wallClockIso(),
+      });
+    } catch (error) {
+      this.notifyInteractionStoreError("resolve-runtime-interaction", error);
+      await this.updateInteraction(
+        message,
+        inbound.presentationId,
+        "服务暂时无法确认本次操作，请稍后重试。",
+      );
+      return true;
+    }
+    if (!pending) return false;
+
+    const parsed = runtimeInteractionResult(
+      pending,
+      inbound,
+      this.wallClockIso(),
+    );
+    if (!parsed) {
+      await this.updateInteraction(
+        message,
+        inbound.presentationId,
+        "提交内容无效，请返回原卡片重新选择。",
+      );
+      return true;
+    }
+
+    let resumeId: string | undefined;
+    try {
+      resumeId = await this.options.store.resolveRuntimeInteractionAndEnqueue({
+        interactionId: pending.interactionId,
+        accountId: pending.accountId,
+        conversationId: pending.conversationId,
+        senderId: pending.senderId,
+        result: parsed.result,
+        now: parsed.result.submittedAt,
+      });
+    } catch (error) {
+      this.notifyInteractionStoreError("resolve-runtime-interaction", error);
+      await this.updateInteraction(
+        message,
+        inbound.presentationId,
+        "服务暂时无法保存本次操作，请稍后重试。",
+      );
+      return true;
+    }
+    if (!resumeId) {
+      await this.updateInteraction(
+        message,
+        inbound.presentationId,
+        "该操作已处理、已失效，或不再可用。",
+      );
+      return true;
+    }
+
+    // WeCom requires the callback card to be updated within five seconds. The
+    // durable resume has already been committed, so acknowledge the user before
+    // scheduling any Agent work.
+    await this.updateInteraction(
+      message,
+      inbound.presentationId,
+      parsed.result.status === "cancelled"
+        ? "已取消。"
+        : `✅ 已提交：${parsed.summary}`,
+    );
+    this.notifyInteractionLifecycle({
+      phase: parsed.result.status === "cancelled" ? "cancelled" : "submitted",
+      conversationType: pending.conversationType,
+      kind: pending.request.kind,
+      elapsedMs:
+        new Date(parsed.result.submittedAt).getTime() -
+        new Date(pending.createdAt).getTime(),
+    });
+    this.clearOutboxTimer();
+    this.scheduleOutbox(0);
+    return true;
   }
 
   private async resolveApprovalDecision(
@@ -1185,6 +1413,10 @@ export class WeComAgentGateway {
   }
 
   private async flushOutbox(): Promise<void> {
+    await Promise.all([this.flushDeliveries(), this.flushInteractionResumes()]);
+  }
+
+  private async flushDeliveries(): Promise<void> {
     const now = this.wallClock();
     let entries: DeliveryOutboxEntry[];
     try {
@@ -1204,6 +1436,225 @@ export class WeComAgentGateway {
       return;
     }
     await Promise.all(entries.map((entry) => this.dispatchSerialized(entry)));
+  }
+
+  private async flushInteractionResumes(): Promise<void> {
+    const now = this.wallClock();
+    try {
+      await this.options.store.expireRuntimeInteractionsAndEnqueue({
+        now: iso(now),
+        limit: this.options.outboxBatchSize ?? 10,
+      });
+    } catch (error) {
+      this.notifyInteractionStoreError("expire-runtime-interaction", error);
+    }
+    let entries: RuntimeInteractionResumeEntry[];
+    try {
+      entries = await this.options.store.claimDueInteractionResumes({
+        owner: this.deliveryOwner,
+        now: iso(now),
+        leaseUntil: iso(now + this.outboxLeaseMs()),
+        limit: this.options.outboxBatchSize ?? 10,
+      });
+    } catch (error) {
+      this.notifyInteractionStoreError("claim-interaction-resume", error);
+      return;
+    }
+    await Promise.all(
+      entries.map((entry) => this.dispatchInteractionResumeSerialized(entry)),
+    );
+  }
+
+  private async dispatchInteractionResumeSerialized(
+    entry: RuntimeInteractionResumeEntry,
+  ): Promise<void> {
+    const key = `${entry.accountId}:${entry.conversationId}`;
+    const previous = this.queues.get(key) ?? Promise.resolve();
+    const current = previous
+      .catch(() => undefined)
+      .then(async () =>
+        this.withRunSlot(() => this.dispatchInteractionResume(entry)),
+      );
+    this.queues.set(key, current);
+    try {
+      await current;
+    } finally {
+      if (this.queues.get(key) === current) this.queues.delete(key);
+    }
+  }
+
+  private async dispatchInteractionResume(
+    entry: RuntimeInteractionResumeEntry,
+  ): Promise<void> {
+    const adapter = this.adapters.get(entry.adapterId);
+    const startedAt = this.wallClock();
+    try {
+      if (
+        !adapter ||
+        !adapter.capabilities.has("interaction-resume") ||
+        !adapter.resumeInteraction
+      ) {
+        throw new Error(
+          `Adapter ${entry.adapterId} cannot resume durable interactions`,
+        );
+      }
+      this.notifyInteractionLifecycle({
+        phase: "resume-started",
+        conversationType: entry.conversationType,
+        kind: entry.kind,
+        elapsedMs: 0,
+      });
+      const projection = new AgentReplyProjection();
+      let completedText: string | undefined;
+      const mediaOutputs: AgentMediaOutput[] = [];
+      for await (const event of adapter.resumeInteraction({
+        sessionId: entry.sessionId,
+        idempotencyKey: `interaction-resume:${entry.interactionId}`,
+        result: entry.result,
+      })) {
+        if (event.type === "session-started") {
+          await this.options.store.setSession({
+            accountId: entry.accountId,
+            conversationId: entry.conversationId,
+            adapterId: adapter.sessionCompatibilityId ?? adapter.id,
+            sessionId: event.sessionId,
+          });
+        } else if (event.type === "status" || event.type === "text-delta") {
+          projection.apply(event);
+        } else if (event.type === "message-completed") {
+          completedText = projection.completed(event.text);
+        } else if (event.type === "media-output") {
+          if (!adapter.capabilities.has("multimodal-output")) {
+            throw new Error(
+              `Adapter ${adapter.id} emitted media without declaring multimodal-output`,
+            );
+          }
+          if (
+            !this.options.transport.capabilities.has("media-upload") ||
+            !this.options.transport.capabilities.has("multimodal-output")
+          ) {
+            throw new Error(
+              `Transport ${this.options.transport.id} cannot deliver media output`,
+            );
+          }
+          if (
+            adapter.outputModalities &&
+            !adapter.outputModalities.has(event.media.type)
+          ) {
+            throw new Error(
+              `Adapter ${adapter.id} emitted undeclared ${event.media.type} output`,
+            );
+          }
+          if (
+            this.options.transport.outputModalities &&
+            !this.options.transport.outputModalities.has(event.media.type)
+          ) {
+            throw new Error(
+              `Transport ${this.options.transport.id} cannot deliver ${event.media.type} output`,
+            );
+          }
+          const limit = this.options.maxOutboundMediaPerRun ?? 4;
+          if (mediaOutputs.length >= limit) {
+            throw new Error(
+              `Agent media output exceeds per-run limit (${limit})`,
+            );
+          }
+          mediaOutputs.push(event.media);
+        } else if (event.type === "approval-requested") {
+          throw new Error(
+            "Approval requests are not supported while resuming an interaction",
+          );
+        } else if (event.type === "failed") {
+          throw new Error(event.message);
+        }
+      }
+      completedText ??= projection.completed();
+      if (completedText.trim()) {
+        await this.enqueueDurableDelivery(
+          entry.interactionId,
+          {
+            type: "proactive",
+            accountId: entry.accountId,
+            conversationId: entry.conversationId,
+            text: completedText,
+          },
+          `interaction-resume:${entry.interactionId}:text`,
+        );
+      }
+      for (const media of mediaOutputs) {
+        await this.enqueueProactiveMedia(
+          entry.interactionId,
+          entry.accountId,
+          entry.conversationId,
+          media,
+        );
+      }
+      await this.options.store.completeInteractionResume({
+        resumeId: entry.id,
+        owner: this.deliveryOwner,
+        now: this.wallClockIso(),
+      });
+      this.notifyInteractionLifecycle({
+        phase: "resume-delivered",
+        conversationType: entry.conversationType,
+        kind: entry.kind,
+        elapsedMs: this.wallClock() - startedAt,
+      });
+    } catch (error) {
+      this.notifyRuntimeError(asError(error));
+      await this.settleFailedInteractionResume(entry, asError(error).message);
+    }
+  }
+
+  private async settleFailedInteractionResume(
+    entry: RuntimeInteractionResumeEntry,
+    error: string,
+  ): Promise<void> {
+    const now = this.wallClock();
+    if (entry.attempts >= (this.options.outboxMaxAttempts ?? 5)) {
+      try {
+        await this.options.store.deadLetterInteractionResume({
+          resumeId: entry.id,
+          owner: this.deliveryOwner,
+          error,
+          now: iso(now),
+        });
+        this.notifyInteractionLifecycle({
+          phase: "resume-dead",
+          conversationType: entry.conversationType,
+          kind: entry.kind,
+          elapsedMs: 0,
+        });
+      } catch (storeError) {
+        this.notifyInteractionStoreError(
+          "dead-letter-interaction-resume",
+          storeError,
+        );
+      }
+      return;
+    }
+    const delay = Math.min(
+      (this.options.outboxRetryBaseMs ?? 1_000) *
+        2 ** Math.max(0, entry.attempts - 1),
+      this.options.outboxRetryMaxMs ?? 30_000,
+    );
+    try {
+      await this.options.store.retryInteractionResume({
+        resumeId: entry.id,
+        owner: this.deliveryOwner,
+        error,
+        nextAttemptAt: iso(now + delay),
+        now: iso(now),
+      });
+      this.notifyInteractionLifecycle({
+        phase: "resume-retry",
+        conversationType: entry.conversationType,
+        kind: entry.kind,
+        elapsedMs: delay,
+      });
+    } catch (storeError) {
+      this.notifyInteractionStoreError("retry-interaction-resume", storeError);
+    }
   }
 
   private async dispatchSerialized(
@@ -1598,8 +2049,39 @@ export class WeComAgentGateway {
     }
   }
 
+  private notifyInteractionLifecycle(event: InteractionLifecycleEvent): void {
+    try {
+      this.options.onInteractionLifecycleEvent?.({
+        ...event,
+        elapsedMs: Math.max(0, Math.round(event.elapsedMs)),
+      });
+    } catch {
+      // Observability must never break interaction handling.
+    }
+  }
+
   private notifyApprovalStoreError(
     operation: "create-approval" | "resolve-approval" | "interrupt-approval",
+    error: unknown,
+  ): void {
+    this.notifyInfrastructureError({
+      component: "store",
+      componentId: "gateway-store",
+      operation,
+      error: asError(error),
+    });
+  }
+
+  private notifyInteractionStoreError(
+    operation:
+      | "create-runtime-interaction"
+      | "resolve-runtime-interaction"
+      | "cancel-runtime-interaction"
+      | "expire-runtime-interaction"
+      | "claim-interaction-resume"
+      | "complete-interaction-resume"
+      | "retry-interaction-resume"
+      | "dead-letter-interaction-resume",
     error: unknown,
   ): void {
     this.notifyInfrastructureError({
@@ -1638,6 +2120,322 @@ function assertOpaqueTarget(value: string, label: string): void {
   if (!value || value.length > 512 || /[\r\n\0]/.test(value)) {
     throw new Error(`Invalid proactive ${label}`);
   }
+}
+
+function validateRuntimeInteractionRequest(
+  request: RuntimeInteractionRequest,
+): void {
+  boundedRuntimeText(request.title, 200, "interaction title");
+  if (request.description !== undefined) {
+    boundedRuntimeText(request.description, 2_000, "interaction description");
+  }
+  if (
+    request.expiresInMs !== undefined &&
+    (!Number.isInteger(request.expiresInMs) || request.expiresInMs < 1)
+  ) {
+    throw new Error("Interaction expiresInMs must be a positive integer");
+  }
+  if (request.kind === "confirm") {
+    if (request.confirmLabel !== undefined) {
+      boundedRuntimeText(request.confirmLabel, 40, "confirm label");
+    }
+    if (request.cancelLabel !== undefined) {
+      boundedRuntimeText(request.cancelLabel, 40, "cancel label");
+    }
+    return;
+  }
+  if (request.kind === "actions") {
+    validateRuntimeOptions(request.actions, 1, 6, "actions");
+    return;
+  }
+  if (request.kind === "single-select") {
+    boundedRuntimeId(request.fieldId, "fieldId");
+    validateRuntimeOptions(request.options, 1, 20, "options");
+    return;
+  }
+  if (request.kind === "multi-select") {
+    boundedRuntimeId(request.fieldId, "fieldId");
+    validateRuntimeOptions(request.options, 1, 20, "options");
+    const min = request.min ?? 0;
+    const max = request.max ?? request.options.length;
+    if (
+      !Number.isInteger(min) ||
+      !Number.isInteger(max) ||
+      min < 0 ||
+      max < 1 ||
+      min > max ||
+      max > request.options.length
+    ) {
+      throw new Error("Invalid multi-select min/max bounds");
+    }
+    return;
+  }
+  if (request.fields.length < 1 || request.fields.length > 3) {
+    throw new Error("Interaction forms require between 1 and 3 fields");
+  }
+  const fieldIds = new Set<string>();
+  for (const field of request.fields) {
+    boundedRuntimeId(field.id, "field id");
+    if (fieldIds.has(field.id))
+      throw new Error("Form field ids must be unique");
+    fieldIds.add(field.id);
+    boundedRuntimeText(field.label, 100, "field label");
+    validateRuntimeOptions(field.options, 1, 10, "field options");
+  }
+  if (request.submitLabel !== undefined) {
+    boundedRuntimeText(request.submitLabel, 40, "submit label");
+  }
+}
+
+function validateRuntimeOptions(
+  options: Array<{ value: string; label: string }>,
+  min: number,
+  max: number,
+  label: string,
+): void {
+  if (options.length < min || options.length > max) {
+    throw new Error(`Interaction ${label} require between ${min} and ${max}`);
+  }
+  const values = new Set<string>();
+  for (const option of options) {
+    boundedRuntimeId(option.value, "option value");
+    if (values.has(option.value)) {
+      throw new Error("Interaction option values must be unique");
+    }
+    values.add(option.value);
+    boundedRuntimeText(option.label, 100, "option label");
+  }
+}
+
+function boundedRuntimeText(value: string, max: number, label: string): void {
+  const length = [...value.trim()].length;
+  if (length < 1 || length > max || /\0/.test(value)) {
+    throw new Error(`Invalid ${label}`);
+  }
+}
+
+function boundedRuntimeId(value: string, label: string): void {
+  if (!value || value.length > 256 || /[\r\n\0]/.test(value)) {
+    throw new Error(`Invalid ${label}`);
+  }
+}
+
+function interactionPresentation(
+  interactionId: string,
+  request: RuntimeInteractionRequest,
+): Presentation {
+  const title = cardExcerpt(request.title, 26);
+  const body = request.description
+    ? cardExcerpt(request.description, 112)
+    : undefined;
+  if (request.kind === "confirm") {
+    return {
+      kind: "actions",
+      id: interactionId,
+      title,
+      body,
+      actions: [
+        {
+          id: "confirm",
+          label: cardExcerpt(request.confirmLabel ?? "确认", 10),
+          style: "primary",
+        },
+        {
+          id: "cancel",
+          label: cardExcerpt(request.cancelLabel ?? "取消", 10),
+          style: "default",
+        },
+      ],
+    };
+  }
+  if (request.kind === "actions") {
+    return {
+      kind: "actions",
+      id: interactionId,
+      title,
+      body,
+      actions: request.actions.map((action, index) => ({
+        id: `action_${index}`,
+        label: cardExcerpt(action.label, 10),
+        style: index === 0 ? "primary" : "default",
+      })),
+    };
+  }
+  if (request.kind === "single-select" && request.options.length <= 6) {
+    return {
+      kind: "actions",
+      id: interactionId,
+      title,
+      body,
+      actions: request.options.map((option, index) => ({
+        id: `option_${index}`,
+        label: cardExcerpt(option.label, 10),
+        style: index === 0 ? "primary" : "default",
+      })),
+    };
+  }
+  if (request.kind === "single-select" || request.kind === "multi-select") {
+    return {
+      kind: "choice",
+      id: interactionId,
+      title,
+      body,
+      questionId: "choice",
+      options: request.options.map((option, index) => ({
+        id: `option_${index}`,
+        label: cardExcerpt(option.label, 11),
+      })),
+      multiple: request.kind === "multi-select",
+    };
+  }
+  return {
+    kind: "form",
+    id: interactionId,
+    title,
+    body,
+    fields: request.fields.map((field, fieldIndex) => ({
+      id: `field_${fieldIndex}`,
+      label: cardExcerpt(field.label, 13),
+      options: field.options.map((option, optionIndex) => ({
+        id: `option_${optionIndex}`,
+        label: cardExcerpt(option.label, 10),
+      })),
+    })),
+    submitId: "submit",
+    submitLabel: request.submitLabel
+      ? cardExcerpt(request.submitLabel, 10)
+      : undefined,
+  };
+}
+
+function runtimeInteractionResult(
+  pending: PendingRuntimeInteraction,
+  inbound: InboundInteraction,
+  submittedAt: string,
+): { result: RuntimeInteractionResult; summary: string } | undefined {
+  const request = pending.request;
+  const base = {
+    interactionId: pending.interactionId,
+    submittedAt,
+  };
+  if (request.kind === "confirm") {
+    if (inbound.actionId === "cancel") {
+      return {
+        result: { ...base, status: "cancelled", values: {} },
+        summary: request.cancelLabel ?? "取消",
+      };
+    }
+    if (inbound.actionId !== "confirm") return undefined;
+    return {
+      result: {
+        ...base,
+        status: "submitted",
+        values: { confirmation: ["confirmed"] },
+      },
+      summary: request.confirmLabel ?? "确认",
+    };
+  }
+  if (request.kind === "actions") {
+    const index = syntheticIndex(inbound.actionId, "action_", request.actions);
+    if (index === undefined) return undefined;
+    const action = request.actions[index]!;
+    return {
+      result: {
+        ...base,
+        status: "submitted",
+        values: { action: [action.value] },
+      },
+      summary: action.label,
+    };
+  }
+  if (request.kind === "single-select") {
+    const selected =
+      request.options.length <= 6
+        ? undefined
+        : selectedSyntheticIndexes(inbound, "choice", request.options);
+    if (selected && selected.length !== 1) return undefined;
+    const index =
+      request.options.length <= 6
+        ? syntheticIndex(inbound.actionId, "option_", request.options)
+        : selected?.[0];
+    if (index === undefined) return undefined;
+    const option = request.options[index]!;
+    return {
+      result: {
+        ...base,
+        status: "submitted",
+        values: { [request.fieldId]: [option.value] },
+      },
+      summary: option.label,
+    };
+  }
+  if (request.kind === "multi-select") {
+    const indexes = selectedSyntheticIndexes(
+      inbound,
+      "choice",
+      request.options,
+    );
+    if (!indexes) return undefined;
+    const min = request.min ?? 0;
+    const max = request.max ?? request.options.length;
+    if (indexes.length < min || indexes.length > max) return undefined;
+    const selected = indexes.map((index) => request.options[index]!);
+    return {
+      result: {
+        ...base,
+        status: "submitted",
+        values: { [request.fieldId]: selected.map((option) => option.value) },
+      },
+      summary: selected.length
+        ? selected.map((option) => option.label).join("、")
+        : "未选择",
+    };
+  }
+  const values: Record<string, string[]> = {};
+  const labels: string[] = [];
+  for (const [fieldIndex, field] of request.fields.entries()) {
+    const indexes = selectedSyntheticIndexes(
+      inbound,
+      `field_${fieldIndex}`,
+      field.options,
+    );
+    if (!indexes || indexes.length !== 1) return undefined;
+    const option = field.options[indexes[0]!]!;
+    values[field.id] = [option.value];
+    labels.push(`${field.label}：${option.label}`);
+  }
+  return {
+    result: { ...base, status: "submitted", values },
+    summary: labels.join(" · "),
+  };
+}
+
+function syntheticIndex(
+  id: string | undefined,
+  prefix: string,
+  items: readonly unknown[],
+): number | undefined {
+  if (!id?.startsWith(prefix)) return undefined;
+  const raw = id.slice(prefix.length);
+  if (!/^\d+$/.test(raw)) return undefined;
+  const index = Number(raw);
+  return index >= 0 && index < items.length ? index : undefined;
+}
+
+function selectedSyntheticIndexes(
+  inbound: InboundInteraction,
+  fieldId: string,
+  items: readonly unknown[],
+): number[] | undefined {
+  const selection = inbound.selections?.find(
+    (candidate) => candidate.fieldId === fieldId,
+  );
+  if (!selection) return undefined;
+  const indexes = selection.optionIds.map((optionId) =>
+    syntheticIndex(optionId, "option_", items),
+  );
+  if (indexes.some((index) => index === undefined)) return undefined;
+  return [...new Set(indexes as number[])];
 }
 
 function emptyOutboxStats(): GatewayOperationalSnapshot["outbox"] {
