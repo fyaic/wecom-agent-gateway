@@ -260,6 +260,11 @@ export interface RuntimeInteractionOption {
   label: string;
 }
 
+export interface RuntimeInteractionAction extends RuntimeInteractionOption {
+  /** Visual intent is explicit; adapters and Core must never infer it from position. */
+  style?: "default" | "primary" | "danger";
+}
+
 export interface RuntimeInteractionField {
   id: string;
   label: string;
@@ -277,6 +282,7 @@ export type RuntimeInteractionRequest =
       kind: "confirm";
       confirmLabel?: string;
       cancelLabel?: string;
+      confirmStyle?: "primary" | "danger";
     })
   | (RuntimeInteractionRequestBase & {
       kind: "single-select";
@@ -297,7 +303,7 @@ export type RuntimeInteractionRequest =
     })
   | (RuntimeInteractionRequestBase & {
       kind: "actions";
-      actions: RuntimeInteractionOption[];
+      actions: RuntimeInteractionAction[];
     })
   | (RuntimeInteractionRequestBase & {
       kind: "text-input";

@@ -448,6 +448,11 @@ PI_ARGS_JSON=["--provider","zai-vision","--model","glm-4.6v","--thinking","low",
 resume。示例 extension 不执行副作用；如果生产不希望暴露演示工具，验收后从 `PI_ARGS_JSON` 移除并
 重启，核心交互桥不会受影响。
 
+单选验收还必须目视检查：选项纵向排列、完整可读、等价选项没有首项蓝色偏置，只有“提交”使用主
+CTA 色。2026-08-25 首轮私聊中业务 resume 恰好一次且 Pi 原 run 完成，但横排按钮文字不全、首项错误
+高亮，并且结果卡更新收到 `42045`；因此该轮不能标记通过。修复后的第二轮必须确认结果 notice 原位
+替换成功，旧选项不再可连续点击。
+
 当前网络中 Codex Responses WebSocket 首轮会耗尽重试预算后才回退 HTTP，因此默认
 `CODEX_RESPONSES_WEBSOCKET=false`：adapter 使用 ChatGPT 登录兼容的 HTTP-only provider。
 如果部署网络已经确认可稳定连接 Responses WebSocket，可设为 `true` 使用内置 provider。

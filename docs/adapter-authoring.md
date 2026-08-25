@@ -122,6 +122,8 @@ compatibility，不是 Channel 替 Agent 思考或把媒体改写成文字。
 
 Adapter 只在 Kernel 真实请求用户输入时发出 `{type: "interaction-requested"}`，不得从自然语言猜测。
 请求必须使用稳定的 Runtime 语义，不含企业微信卡片 JSON、callback key 或目标 ID。
+等价选择不要携带视觉偏置；通用 action 只有在 Kernel 已明确 primary/danger 语义时才设置 `style`，
+不得把数组第一项自动视为推荐操作。
 
 普通实现声明 `interaction-resume`，结束当前 run 后由 Gateway durable queue 恢复同一 session。只有当
 Kernel 的原调用仍在等待控制响应时才额外声明 `interaction-live-resume`；这条响应不会经过正常会话队列，

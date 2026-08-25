@@ -63,21 +63,32 @@ Kernel 的启动、排队、推理和工具执行全部在该路径之外。
 
 ## 通用交互语义
 
-| Agent 意图                | 企业微信渲染                       | 典型场景                     |
-| ------------------------- | ---------------------------------- | ---------------------------- |
-| `confirm`                 | `button_interaction`               | 确认、取消、批准、拒绝       |
-| `single-select`，不超过 6 | 每个选项一个按钮                   | 环境、联系人、处理方式       |
-| `single-select`，超过 6   | `vote_interaction` 单选            | 较长候选列表                 |
-| `multi-select`            | `vote_interaction` 多选            | 文件、范围、参与人           |
-| 多字段选择                | `multiple_interaction`             | 环境、优先级、执行时间       |
-| `actions`                 | `button_interaction`               | 展开、导出、建待办、继续处理 |
-| 无选项开放问题            | Markdown / 普通文本                | 用户自由输入                 |
-| 结果摘要                  | `text_notice` / `news_notice`      | 报告、任务状态、链接导航     |
-| 一项选择加确认            | `button_selection` + `button_list` | 选择目标后确认执行           |
+| Agent 意图      | 企业微信渲染                       | 典型场景                     |
+| --------------- | ---------------------------------- | ---------------------------- |
+| `confirm`       | `button_interaction`               | 确认、取消、批准、拒绝       |
+| `single-select` | `vote_interaction` 纵向单选        | 环境、联系人、处理方式       |
+| `multi-select`  | `vote_interaction` 多选            | 文件、范围、参与人           |
+| 多字段选择      | `multiple_interaction`             | 环境、优先级、执行时间       |
+| `actions`       | `button_interaction`               | 展开、导出、建待办、继续处理 |
+| 无选项开放问题  | Markdown / 普通文本                | 用户自由输入                 |
+| 结果摘要        | `text_notice` / `news_notice`      | 报告、任务状态、链接导航     |
+| 一项选择加确认  | `button_selection` + `button_list` | 选择目标后确认执行           |
 
 当前公共展示契约只保留 `notice`、`article`、`actions`、`choice`、`form` 五种稳定语义。企业微信的
 `source`、`horizontal_content_list`、`emphasis_content`、`quote_area`、`jump_list` 等增强字段留给
 M2.5 的 Channel-neutral presentation 扩展，不提前把厂商字段写进 Runtime Contract。
+
+### 文案与颜色语义
+
+- 等价选项一律使用纵向 choice，不用横排按钮，也不把第一项渲染成蓝色；蓝色提交按钮只表示明确的
+  “完成选择”动作，不能暗示第一个候选更推荐。
+- confirm 的确认按钮默认 primary、取消按钮 default；危险操作只有在 Adapter 显式声明 danger 时才用
+  红色。通用 actions 同样必须显式声明 style，Core 不从位置或文字猜测颜色。
+- 选项标签保持原文，不按企业微信 SDK 的“建议 10/11 字”静默截断。Runtime 单项上限仍为 100 字；
+  Transport 使用更有纵向空间的 vote 布局。超过真实客户端可读范围时应改用分层选择或正文展示，不能
+  以省略号改变选项含义。
+- 已提交卡片更新为无 action 的结果 notice。按官方 SDK 示例，无跳转时省略 `card_action`；不能发送
+  `{type: 0}` 假装占位，因为真实智能机器人端会返回 `42045 card_action Missing or Invalid`。
 
 ## Runtime Contract
 
@@ -268,6 +279,11 @@ namespace、状态和视觉标识，防止 Agent 生成的“确认”冒充安�
 - [x] durable resume 仍作为 callback 决定和 at-least-once 投递记录。
 - [x] 本机真实 Pi RPC extension UI request/response 冒烟。
 - [ ] 授权企业微信私聊和测试群真实 choice/input 验收。
+
+2026-08-25 首轮授权私聊中，Pi select 原 run 完整恢复并最终回复“测试完成”；用户多次点击只产生一个
+durable resume，证明业务幂等成立。但原位结果卡因无动作 notice 携带 `{card_action:{type:0}}` 被真实
+服务端以 `42045` 拒绝，且三项横排按钮发生文案显示不全、第一项无语义地呈蓝色。该轮记为“功能部分
+通过、UI 失败”，不计入最终 E2E 通过；上述规则修复后必须重测。
 
 可运行的无副作用 Pi 示例位于 `examples/pi-wecom-interaction.mjs`；它只在 Agent 明确调用时展示选择、
 确认或输入，不执行办公写操作。

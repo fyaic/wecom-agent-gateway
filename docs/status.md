@@ -59,6 +59,7 @@
 | 审批按钮卡片与 SQLite 交互状态                  | 完成并自动化验证，待实测          | 回调 ACL/幂等/发送者/会话/失效绑定；五秒内原位更新；文本命令降级            |
 | 耐久通用 Interaction Broker                     | M2.1 完成并自动化验证             | 单选/多选/取消/TTL；五秒 fast lane；同 session resume；租约/重试/死信       |
 | Pi 原生 ask-user 交互桥                         | M2.2 完成并自动化验证，待企微实测 | select/confirm/input/editor；native response；live resume；限定文本回复     |
+| 单选卡片可读性与颜色语义                        | 已修复，待第二轮企微复测          | 纵向 vote、完整标签、无首项偏置、显式 action style                          |
 | SQLite 重启恢复                                 | 完成并自动化验证                  | 入站去重、runtime session、待发送文本与投递日志跨 reopen 保留               |
 | SQLite 文件权限                                 | 完成并自动化验证                  | Store 每次打开都强制主数据库为 `0600`；本机现有数据库已收紧                 |
 | SQLite 故障因果保留                             | 完成并自动化验证                  | 写入/提交失败后即使回滚也失败，仍抛出原始故障而非二次回滚错误               |
@@ -183,7 +184,7 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
 - 同名发布仓库已公开并进入 Public Preview；原仓库已改名并保持 private，发布仓库由审计后的干净
   根提交重新创建。未登录 API、README、SECURITY 和 Git refs 访问均已复核。
 - 项目自有代码采用与企业微信官方核心参考项目一致的 MIT；依赖许可证和来源规则已形成独立审计文档。
-- GitHub Actions 运行格式、TypeScript、154 项 deterministic tests、公开面和依赖许可证检查。
+- GitHub Actions 运行格式、TypeScript、155 项 deterministic tests、公开面和依赖许可证检查。
 - 已完成模式 `0600` 的最终离库 Git bundle 备份、旧仓库全部 refs 与 51 次 Actions 日志审计；旧历史
   确认包含私密名称和非 noreply 作者元数据，只保留在私有归档与离线 bundle。新的同名发布仓库从
   1 个审计后的根提交建立，GitHub CI、全新 clone、141 项测试和私密词扫描均通过；Dependabot 随后
@@ -219,9 +220,13 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
   at-least-once 投递。
 - Gateway 强制每 account + conversation 只有一个 pending interaction；开放输入只消费同 sender 的
   下一条非空纯文本，不创建第二个 Agent turn。
-- 154 项 deterministic tests 已通过；本机 Pi `0.84.2` 加载仓库示例后真实产生 select request，接受
+- 155 项 deterministic tests 已通过；本机 Pi `0.84.2` 加载仓库示例后真实产生 select request，接受
   “测试环境”的 native response，原 tool result 得到该值且同一 run 最终回复“测试完成”。下一步仅剩
   授权私聊和测试群的真实 choice/input 验收，然后进入 M2.3。
+- 首轮真实私聊 select 已证明 Pi 原 run 完成且多次点击只产生一次 resume，但结果 notice 的
+  `card_action:{type:0}` 被服务端以 `42045` 拒绝；横排按钮还导致文字不全和首项蓝色偏置。该轮记为部分
+  通过。实现已改为纵向中性 vote、保留完整标签、显式颜色语义以及无 action 时省略 `card_action`，等待
+  第二轮真实复测后再关闭验收项。
 
 ### M5：生产运行与韧性
 
@@ -248,7 +253,7 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
 
 - 已复用 SDK `downloadFile` 完成入站媒体下载/AES 解密、MIME 探测、大小限制、受保护临时物化、运行后清理和持久化脱敏。
 - 真实图片输入与输出上传/发送均已通过；Gateway 自管耐久 spool、媒体 outbox、完整性、配额、孤儿回收和重启恢复已完成自动化。下一步执行授权会话的真实媒体失败恢复；恶意内容扫描仍待部署策略。
-- 文本/媒体 outbox、Adapter、流式、session、工具、审批、结构化卡片与主动控制面已完成 154 项自动化验证；
+- 文本/媒体 outbox、Adapter、流式、session、工具、审批、结构化卡片与主动控制面已完成 155 项自动化验证；
   OS 子进程强杀和 SQLite 原始故障保留已纳入 CI。宿主机网络故障、告警接入和多实例顺序保留为
   部署硬化，不把 Agent 推理或模型效果混入 Gateway 主线。
 - Codex App Server 与 Kimi ACP 均在不产生虚假 turn、不注入 Prompt 的前提下完成真实分层测量；同一口径继续用于后续 Kernel。

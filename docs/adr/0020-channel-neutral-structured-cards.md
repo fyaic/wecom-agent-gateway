@@ -35,3 +35,12 @@ Agent Adapter 和 Gateway Core 不接收、生成或解释企业微信 `template
 
 Phase 1 提供五类确定性映射和审批交互闭环。后续如允许 Kernel 输出静态结构化内容或长期交互，必须
 先定义独立的 Agent-facing 事件、恢复语义和授权策略，不能通过抓取模型文本中的厂商 JSON 实现。
+
+## 2026-08-25 UX 修订
+
+真实客户端证明，把少量单选按位置映射为横排按钮会截断文字，并让第一项 primary 蓝色产生错误的推荐
+暗示。所有 `single-select` 因此统一映射为纵向 `vote_interaction`；等价候选保持中性，蓝色只表示提交
+或显式 primary action。通用 action style 必须由调用方声明，Core 不从数组位置推断。
+
+选项文案不按 SDK 建议长度静默截断。无跳转结果 notice 省略 `card_action`，与官方 SDK 更新示例一致；
+真实服务端已证明 `{type:0}` 占位会触发 `42045`。

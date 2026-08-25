@@ -1030,9 +1030,10 @@ describe("WeComAgentGateway", () => {
     expect(transport.commands.at(-1)).toMatchObject({
       type: "proactive-presentation",
       presentation: {
-        kind: "actions",
+        kind: "choice",
         id: interactionId,
-        actions: [
+        questionId: "choice",
+        options: [
           { id: "option_0", label: "生产环境" },
           { id: "option_1", label: "测试环境" },
         ],
@@ -1043,14 +1044,20 @@ describe("WeComAgentGateway", () => {
       ...message("interaction-wrong-sender"),
       senderId: "user-b",
       parts: [],
-      interaction: { presentationId: interactionId, actionId: "option_0" },
+      interaction: {
+        presentationId: interactionId,
+        selections: [{ fieldId: "choice", optionIds: ["option_0"] }],
+      },
     });
     expect(resumes).toHaveLength(0);
 
     await transport.receive({
       ...message("interaction-correct"),
       parts: [],
-      interaction: { presentationId: interactionId, actionId: "option_0" },
+      interaction: {
+        presentationId: interactionId,
+        selections: [{ fieldId: "choice", optionIds: ["option_0"] }],
+      },
     });
     await waitFor(() => resumes.length === 1);
     expect(callbackWasAcknowledged).toBe(true);
@@ -1082,7 +1089,10 @@ describe("WeComAgentGateway", () => {
     await transport.receive({
       ...message("interaction-duplicate"),
       parts: [],
-      interaction: { presentationId: interactionId, actionId: "option_0" },
+      interaction: {
+        presentationId: interactionId,
+        selections: [{ fieldId: "choice", optionIds: ["option_0"] }],
+      },
     });
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(resumes).toHaveLength(1);
@@ -1257,7 +1267,7 @@ describe("WeComAgentGateway", () => {
       parts: [],
       interaction: {
         presentationId: prompt.presentation.id,
-        actionId: "option_1",
+        selections: [{ fieldId: "choice", optionIds: ["option_1"] }],
       },
     });
     await original;
@@ -1266,6 +1276,64 @@ describe("WeComAgentGateway", () => {
       type: "reply",
       text: "已切换到测试环境",
       final: true,
+    });
+    await gateway.stop();
+  });
+
+  it("keeps peer actions neutral unless the Adapter declares visual intent", async () => {
+    class InteractiveTransport extends FakeTransport {
+      override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
+        "stream-reply-update",
+        "proactive-message",
+        "structured-presentation",
+        "interactive-presentation",
+      ]);
+    }
+    const transport = new InteractiveTransport();
+    const runtime: AgentRuntimeAdapter = {
+      id: "styled-interaction-runtime",
+      contractVersion: 1,
+      capabilities: new Set(["interaction-resume"]),
+      async *run() {
+        yield { type: "message-completed", text: "unused" };
+      },
+      async *resumeInteraction() {},
+      async health() {
+        return { ok: true };
+      },
+    };
+    const gateway = new WeComAgentGateway({
+      transport,
+      adapters: [runtime],
+      router: new StaticRuntimeRouter(runtime.id),
+      store: new MemoryGatewayStore(),
+    });
+    await gateway.start();
+    await gateway.startRuntimeInteraction({
+      accountId: "bot-a",
+      conversationId: "chat-a",
+      conversationType: "direct",
+      senderId: "user-a",
+      adapterId: runtime.id,
+      sessionId: "styled-session",
+      interaction: {
+        kind: "actions",
+        title: "选择操作",
+        actions: [
+          { value: "inspect", label: "查看" },
+          { value: "delete", label: "删除", style: "danger" },
+        ],
+      },
+    });
+    expect(transport.commands.at(-1)).toMatchObject({
+      type: "proactive-presentation",
+      presentation: {
+        kind: "actions",
+        actions: [
+          { id: "action_0", label: "查看", style: "default" },
+          { id: "action_1", label: "删除", style: "danger" },
+        ],
+      },
     });
     await gateway.stop();
   });

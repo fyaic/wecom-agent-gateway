@@ -71,14 +71,14 @@ afterEach(() => {
 
 describe("WeComBotTransport", () => {
   it("maps all five neutral presentation kinds to official template cards", () => {
-    expect(
-      renderWeComTemplateCard({
-        kind: "notice",
-        id: "notice_1",
-        title: "通知",
-        body: "已完成",
-      }).card_type,
-    ).toBe("text_notice");
+    const notice = renderWeComTemplateCard({
+      kind: "notice",
+      id: "notice_1",
+      title: "通知",
+      body: "已完成",
+    });
+    expect(notice.card_type).toBe("text_notice");
+    expect(notice).not.toHaveProperty("card_action");
     expect(
       renderWeComTemplateCard({
         kind: "article",
@@ -108,6 +108,21 @@ describe("WeComBotTransport", () => {
         options: [{ id: "a", label: "方案 A" }],
       }).card_type,
     ).toBe("vote_interaction");
+    expect(
+      renderWeComTemplateCard({
+        kind: "choice",
+        id: "choice_long",
+        title: "选择环境",
+        questionId: "environment",
+        options: [{ id: "production", label: "生产环境（仅限正式发布使用）" }],
+      }),
+    ).toMatchObject({
+      checkbox: {
+        option_list: [
+          { id: "production", text: "生产环境（仅限正式发布使用）" },
+        ],
+      },
+    });
     expect(
       renderWeComTemplateCard({
         kind: "form",

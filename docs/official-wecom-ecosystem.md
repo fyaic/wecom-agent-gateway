@@ -43,6 +43,12 @@ SDK 下载路径；同一会话中文件下载与随后文本必须保持顺序�
 24 小时、最多 300 项的内存缓存保存卡片。本项目只复用已验证的 SDK 语义：采用通用 Presentation
 契约、SQLite 持久关联和即时更新，不复制 LLM JSON 抓取或仅内存状态。
 
+2026-08-25 真实智能机器人回调补充了一个服务端兼容性事实：无跳转结果 notice 携带
+`card_action:{type:0}` 会收到 `42045 card_action Missing or Invalid`。SDK 类型允许 type 0，但官方
+README 的 `updateTemplateCard` 结果示例实际省略 `card_action`；本项目改为遵循该示例，对无动作卡片
+完全省略字段。同时，SDK 对 vote option 的 11 字描述是“建议”而非协议硬上限，本项目使用纵向 vote
+保留 Agent 的完整选项标签，不再为了横排按钮静默截断。
+
 2026-08-25 继续核验官方仓库的交互式卡片 PR #176：贡献者已完成单选按钮、多问题聚合、投票单/
 多选、TTL、重复点击和真实 WebSocket E2E，并确认 callback `req_id` 在更新卡片后不可复用，后续回复
 必须主动发送。该 PR 尚未合入；其 pending 注册表只在内存中，重启后卡片仍可见但点击不再生效。
