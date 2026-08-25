@@ -235,7 +235,9 @@ export type RuntimeCapability =
   | "status-events"
   | "multimodal-input"
   | "multimodal-output"
-  | "interaction-resume";
+  | "interaction-resume"
+  /** Resume is a control response to a still-live Kernel turn; bypass semantic turn queues. */
+  | "interaction-live-resume";
 
 export type AgentStatusPhase =
   | "accepted"
@@ -296,6 +298,13 @@ export type RuntimeInteractionRequest =
   | (RuntimeInteractionRequestBase & {
       kind: "actions";
       actions: RuntimeInteractionOption[];
+    })
+  | (RuntimeInteractionRequestBase & {
+      kind: "text-input";
+      fieldId: string;
+      placeholder?: string;
+      initialValue?: string;
+      multiline?: boolean;
     });
 
 export interface RuntimeInteractionResult {
@@ -442,6 +451,7 @@ export type AgentRunEvent =
     }
   | { type: "text-delta"; text: string }
   | { type: "media-output"; media: AgentMediaOutput }
+  | { type: "interaction-requested"; request: RuntimeInteractionRequest }
   | { type: "message-completed"; text?: string }
   | { type: "approval-requested"; approvalId: string; summary: string }
   | { type: "failed"; message: string };
@@ -586,6 +596,12 @@ export interface GatewayStore {
   ): Promise<boolean>;
   getPendingRuntimeInteraction(options: {
     interactionId: string;
+    accountId: string;
+    conversationId: string;
+    senderId: string;
+    now: string;
+  }): Promise<PendingRuntimeInteraction | undefined>;
+  getPendingRuntimeTextInteraction(options: {
     accountId: string;
     conversationId: string;
     senderId: string;

@@ -303,8 +303,9 @@ export class WeComAgentGateway {
   ): Promise<string> {
     this.assertProactiveReady();
     if (
-      !this.options.transport.capabilities.has("structured-presentation") ||
-      !this.options.transport.capabilities.has("interactive-presentation")
+      request.interaction.kind !== "text-input" &&
+      (!this.options.transport.capabilities.has("structured-presentation") ||
+        !this.options.transport.capabilities.has("interactive-presentation"))
     ) {
       throw new Error(
         `Transport ${this.options.transport.id} cannot deliver interactive presentations`,
@@ -356,22 +357,36 @@ export class WeComAgentGateway {
     try {
       const created =
         await this.options.store.createRuntimeInteraction(pending);
-      if (!created) throw new Error("Unable to allocate runtime interaction");
+      if (!created) {
+        throw new Error(
+          "This conversation already has an active runtime interaction",
+        );
+      }
     } catch (error) {
       this.notifyInteractionStoreError("create-runtime-interaction", error);
       throw error;
     }
 
     try {
-      await this.enqueueDurableDelivery(interactionId, {
-        type: "proactive-presentation",
-        accountId: request.accountId,
-        conversationId: request.conversationId,
-        presentation: interactionPresentation(
-          interactionId,
-          request.interaction,
-        ),
-      });
+      await this.enqueueDurableDelivery(
+        interactionId,
+        request.interaction.kind === "text-input"
+          ? {
+              type: "proactive",
+              accountId: request.accountId,
+              conversationId: request.conversationId,
+              text: textInteractionPrompt(request.interaction),
+            }
+          : {
+              type: "proactive-presentation",
+              accountId: request.accountId,
+              conversationId: request.conversationId,
+              presentation: interactionPresentation(
+                interactionId,
+                request.interaction,
+              ),
+            },
+      );
     } catch (error) {
       try {
         await this.options.store.cancelRuntimeInteraction({
@@ -604,6 +619,7 @@ export class WeComAgentGateway {
       await this.handleApprovalControl(message, approvalControl);
       return;
     }
+    if (await this.tryHandleTextInteraction(message)) return;
     const key = `${message.accountId}:${message.conversationId}`;
     const rejection = this.reserveInbound(key);
     if (rejection) {
@@ -635,6 +651,87 @@ export class WeComAgentGateway {
     }
   }
 
+  private async tryHandleTextInteraction(
+    message: InboundMessage,
+  ): Promise<boolean> {
+    let pending: PendingRuntimeInteraction | undefined;
+    try {
+      pending = await this.options.store.getPendingRuntimeTextInteraction({
+        accountId: message.accountId,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        now: this.wallClockIso(),
+      });
+    } catch (error) {
+      this.notifyInteractionStoreError("resolve-runtime-interaction", error);
+      if (await this.options.store.acceptInbound(message).catch(() => false)) {
+        await this.reply(
+          message,
+          `interaction-text-store-${message.id}`,
+          "服务暂时无法确认交互状态，请稍后重试。",
+          true,
+        );
+      }
+      return true;
+    }
+    if (!pending || pending.request.kind !== "text-input") return false;
+    if (!(await this.options.store.acceptInbound(message))) return true;
+
+    const part = message.parts.length === 1 ? message.parts[0] : undefined;
+    if (
+      part?.type !== "text" ||
+      !part.text.trim() ||
+      Buffer.byteLength(part.text, "utf8") >
+        (this.options.maxProactiveTextBytes ?? 20_000)
+    ) {
+      await this.reply(
+        message,
+        `interaction-text-invalid-${message.id}`,
+        "当前交互需要一条非空纯文本回复，请重新发送。",
+        true,
+      );
+      return true;
+    }
+
+    const submittedAt = this.wallClockIso();
+    const result: RuntimeInteractionResult = {
+      interactionId: pending.interactionId,
+      status: "submitted",
+      values: { [pending.request.fieldId]: [part.text] },
+      submittedAt,
+    };
+    let resumeId: string | undefined;
+    try {
+      resumeId = await this.options.store.resolveRuntimeInteractionAndEnqueue({
+        interactionId: pending.interactionId,
+        accountId: pending.accountId,
+        conversationId: pending.conversationId,
+        senderId: pending.senderId,
+        result,
+        now: submittedAt,
+      });
+    } catch (error) {
+      this.notifyInteractionStoreError("resolve-runtime-interaction", error);
+    }
+    await this.reply(
+      message,
+      `interaction-text-${message.id}`,
+      resumeId ? "✅ 已提交，正在继续。" : "该交互已处理、已失效，或不再可用。",
+      true,
+    );
+    if (!resumeId) return true;
+    this.notifyInteractionLifecycle({
+      phase: "submitted",
+      conversationType: pending.conversationType,
+      kind: pending.request.kind,
+      elapsedMs:
+        new Date(submittedAt).getTime() - new Date(pending.createdAt).getTime(),
+    });
+    this.clearOutboxTimer();
+    this.scheduleOutbox(0);
+    return true;
+  }
+
   private async handle(
     message: InboundMessage,
     enqueuedAt: number,
@@ -656,6 +753,7 @@ export class WeComAgentGateway {
       adapterId: adapter.sessionCompatibilityId ?? adapter.id,
     };
     const sessionId = await this.options.store.getSession(scope);
+    let activeSessionId = sessionId;
     const streamId = `run-${message.id}`;
     const projection = new AgentReplyProjection();
     let channelAcknowledged = false;
@@ -746,6 +844,7 @@ export class WeComAgentGateway {
           );
         }
         if (event.type === "session-started") {
+          activeSessionId = event.sessionId;
           await this.options.store.setSession({
             ...scope,
             sessionId: event.sessionId,
@@ -753,6 +852,22 @@ export class WeComAgentGateway {
         } else if (event.type === "status" || event.type === "text-delta") {
           const text = projection.apply(event);
           if (text !== undefined) reply.update(text);
+        } else if (event.type === "interaction-requested") {
+          if (!activeSessionId) {
+            throw new Error(
+              `Adapter ${adapter.id} requested interaction before starting a session`,
+            );
+          }
+          await this.startRuntimeInteraction({
+            accountId: message.accountId,
+            conversationId: message.conversationId,
+            conversationType: message.conversationType,
+            senderId: message.senderId,
+            adapterId: adapter.id,
+            sessionId: activeSessionId,
+            interaction: event.request,
+          });
+          reply.update("⏸️ 等待用户输入，交互请求已作为独立消息发送。");
         } else if (event.type === "message-completed") {
           await reply.close(projection.completed(event.text));
           closed = true;
@@ -1468,6 +1583,11 @@ export class WeComAgentGateway {
   private async dispatchInteractionResumeSerialized(
     entry: RuntimeInteractionResumeEntry,
   ): Promise<void> {
+    const adapter = this.adapters.get(entry.adapterId);
+    if (adapter?.capabilities.has("interaction-live-resume")) {
+      await this.dispatchInteractionResume(entry);
+      return;
+    }
     const key = `${entry.accountId}:${entry.conversationId}`;
     const previous = this.queues.get(key) ?? Promise.resolve();
     const current = previous
@@ -2135,6 +2255,16 @@ function validateRuntimeInteractionRequest(
   ) {
     throw new Error("Interaction expiresInMs must be a positive integer");
   }
+  if (request.kind === "text-input") {
+    boundedRuntimeId(request.fieldId, "fieldId");
+    if (request.placeholder !== undefined) {
+      boundedRuntimeText(request.placeholder, 500, "input placeholder");
+    }
+    if (request.initialValue !== undefined) {
+      boundedRuntimeText(request.initialValue, 2_000, "initial value");
+    }
+    return;
+  }
   if (request.kind === "confirm") {
     if (request.confirmLabel !== undefined) {
       boundedRuntimeText(request.confirmLabel, 40, "confirm label");
@@ -2224,6 +2354,9 @@ function interactionPresentation(
   interactionId: string,
   request: RuntimeInteractionRequest,
 ): Presentation {
+  if (request.kind === "text-input") {
+    throw new Error("Text interactions do not use structured presentations");
+  }
   const title = cardExcerpt(request.title, 26);
   const body = request.description
     ? cardExcerpt(request.description, 112)
@@ -2391,6 +2524,7 @@ function runtimeInteractionResult(
         : "未选择",
     };
   }
+  if (request.kind === "text-input") return undefined;
   const values: Record<string, string[]> = {};
   const labels: string[] = [];
   for (const [fieldIndex, field] of request.fields.entries()) {
@@ -2408,6 +2542,24 @@ function runtimeInteractionResult(
     result: { ...base, status: "submitted", values },
     summary: labels.join(" · "),
   };
+}
+
+function textInteractionPrompt(
+  request: Extract<RuntimeInteractionRequest, { kind: "text-input" }>,
+): string {
+  const lines = [request.title];
+  if (request.description) lines.push(request.description);
+  if (request.initialValue) {
+    lines.push(`当前内容：\n${request.initialValue}`);
+  } else if (request.placeholder) {
+    lines.push(`提示：${request.placeholder}`);
+  }
+  lines.push(
+    request.multiline
+      ? "请直接回复修改后的文本。"
+      : "请直接回复一条纯文本消息。",
+  );
+  return lines.join("\n\n");
 }
 
 function syntheticIndex(

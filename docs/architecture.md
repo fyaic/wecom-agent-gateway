@@ -188,8 +188,11 @@ Pi RPC process → 已配置 provider / 模型 / 工具
 `PI_MAX_WORKERS=2`：每个 worker 内仍串行切换 session file；同一个 opaque session 由 keyed lock
 保证绝不并发，不同 session 可以租用不同 worker 并行。进程数不会随会话数量增长，也不伪造一个
 进程内的并发语义。session handle 对 Core 不透明，恢复前必须落在启动时推断或显式配置的 session
-root 内。Pi 自有 extension UI dialog 不是 Gateway 写工具审批：未映射的
-`select/confirm/input/editor` 一律显式取消，避免无人值守时永久悬挂。
+root 内。Pi 自有 extension UI dialog 不是 Gateway 写工具审批。原生 `select/confirm/input/editor`
+已映射为 Runtime-neutral `interaction-requested`：选择/确认使用企业微信卡片，input/editor 使用同范围
+下一条纯文本，结果通过 native `extension_ui_response` 恢复仍在等待的同一个 tool call。live resume
+是控制响应，会绕过语义 turn 队列以避免原 run 与恢复互相等待；未映射、并发或自带 timeout 的 dialog
+显式取消。
 
 Pi 的 provider 凭据、模型、工具和 transcript 仍由 Pi 管理。子进程仅接收进程基础环境及
 `PI_AGENT_ENV_ALLOWLIST` 明确列名的变量，绝不继承企业微信 Bot secret 或 Gateway 数据库路径。

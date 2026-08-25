@@ -670,29 +670,47 @@ export class SqliteGatewayStore implements GatewayStore {
   async createRuntimeInteraction(
     interaction: PendingRuntimeInteraction,
   ): Promise<boolean> {
-    const result = this.database
-      .prepare(
-        `
+    return this.transaction(() => {
+      const active = this.database
+        .prepare(
+          `
+          SELECT 1
+          FROM runtime_interactions
+          WHERE account_id = ? AND conversation_id = ?
+            AND status = 'pending' AND expires_at > ?
+          LIMIT 1
+        `,
+        )
+        .get(
+          interaction.accountId,
+          interaction.conversationId,
+          interaction.createdAt,
+        );
+      if (active) return false;
+      const result = this.database
+        .prepare(
+          `
         INSERT OR IGNORE INTO runtime_interactions
           (interaction_id, account_id, conversation_id, conversation_type,
            sender_id, adapter_id, session_id, request_json, status,
            created_at, expires_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
       `,
-      )
-      .run(
-        interaction.interactionId,
-        interaction.accountId,
-        interaction.conversationId,
-        interaction.conversationType,
-        interaction.senderId,
-        interaction.adapterId,
-        interaction.sessionId,
-        JSON.stringify(interaction.request),
-        interaction.createdAt,
-        interaction.expiresAt,
-      );
-    return result.changes === 1;
+        )
+        .run(
+          interaction.interactionId,
+          interaction.accountId,
+          interaction.conversationId,
+          interaction.conversationType,
+          interaction.senderId,
+          interaction.adapterId,
+          interaction.sessionId,
+          JSON.stringify(interaction.request),
+          interaction.createdAt,
+          interaction.expiresAt,
+        );
+      return result.changes === 1;
+    });
   }
 
   async getPendingRuntimeInteraction(options: {
@@ -722,6 +740,33 @@ export class SqliteGatewayStore implements GatewayStore {
         ) as RuntimeInteractionRow | undefined;
       return row ? runtimeInteraction(row) : undefined;
     });
+  }
+
+  async getPendingRuntimeTextInteraction(options: {
+    accountId: string;
+    conversationId: string;
+    senderId: string;
+    now: string;
+  }): Promise<PendingRuntimeInteraction | undefined> {
+    const row = this.database
+      .prepare(
+        `
+        SELECT interaction_id, account_id, conversation_id, conversation_type,
+               sender_id, adapter_id, session_id, request_json, created_at, expires_at
+        FROM runtime_interactions
+        WHERE account_id = ? AND conversation_id = ? AND sender_id = ?
+          AND status = 'pending' AND expires_at > ?
+          AND json_extract(request_json, '$.kind') = 'text-input'
+        LIMIT 1
+      `,
+      )
+      .get(
+        options.accountId,
+        options.conversationId,
+        options.senderId,
+        options.now,
+      ) as RuntimeInteractionRow | undefined;
+    return row ? runtimeInteraction(row) : undefined;
   }
 
   async resolveRuntimeInteractionAndEnqueue(options: {

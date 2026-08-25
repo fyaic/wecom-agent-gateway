@@ -39,7 +39,8 @@ model selection, tool policy, and media understanding stay in the Kernel.
   map to official template cards; approval callbacks are durable and update in
   place.
 - **Interaction broker** — card choices bypass text interpretation; the Gateway
-  persists, validates, updates, and resumes the same Agent session.
+  persists, validates, updates, and resumes the same Agent session; Pi native
+  ask-user is bridged end to end.
 - **Durable delivery** — SQLite outbox leases, retries, dead letters, and a
   protected media spool survive process failure.
 - **Exact modalities** — transports and adapters declare concrete media types
@@ -75,13 +76,13 @@ flowchart LR
 
 ## Kernel adapters
 
-| Adapter     | Upstream interface           | Validated capabilities                                                      |
-| ----------- | ---------------------------- | --------------------------------------------------------------------------- |
-| Codex       | SDK / App Server JSONL       | Streaming, resume, cancel, status, approvals, tools, image/audio            |
-| Kimi Code   | ACP v1 stdio                 | Streaming, resume, cancel, permissions, status, image                       |
-| Generic ACP | ACP v1 stdio                 | Resume and media negotiated through `initialize`                            |
-| OpenClaw    | Gateway WebSocket v4         | Streaming, resume, cancel, status, image/audio/video/file                   |
-| Pi Agent    | Official strict-LF JSONL RPC | Streaming, resume, cancel, status, dynamic image input, bounded worker pool |
+| Adapter     | Upstream interface           | Validated capabilities                                                                       |
+| ----------- | ---------------------------- | -------------------------------------------------------------------------------------------- |
+| Codex       | SDK / App Server JSONL       | Streaming, resume, cancel, status, approvals, tools, image/audio                             |
+| Kimi Code   | ACP v1 stdio                 | Streaming, resume, cancel, permissions, status, image                                        |
+| Generic ACP | ACP v1 stdio                 | Resume and media negotiated through `initialize`                                             |
+| OpenClaw    | Gateway WebSocket v4         | Streaming, resume, cancel, status, image/audio/video/file                                    |
+| Pi Agent    | Official strict-LF JSONL RPC | Streaming, resume, cancel, status, dynamic image input, bounded worker pool, native ask-user |
 
 One Gateway process hosts one explicitly selected Kernel. See the
 [adapter authoring guide](docs/adapter-authoring.md) and the runnable
@@ -91,6 +92,8 @@ Gateway registry.
 
 See the [interaction-card architecture](docs/interaction-cards.md) for the
 implemented durable callback, TTL, scoped interaction, and Agent-resume design.
+The side-effect-free [Pi interaction extension](examples/pi-wecom-interaction.mjs)
+demonstrates native select, confirm, and text input.
 
 ## Quick start
 
@@ -164,7 +167,7 @@ and [ADRs](docs/README.md) for the complete contract.
 ## Maturity
 
 The project is in **Public Preview**; a stable v1 API is not promised yet. The
-current baseline has 148 deterministic tests and real acceptance evidence for
+current baseline has 154 deterministic tests and real acceptance evidence for
 direct and group conversations, mutable streaming, session recovery,
 image/file/MP4 transfer, proactive media, managed restarts, and four Kernel
 families. Cross-process SQLite outbox lease recovery after `SIGKILL` and a

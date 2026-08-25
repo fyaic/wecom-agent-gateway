@@ -94,9 +94,9 @@ JSON-RPC/stdin/stdout 提供 initialize、session new/load/resume、prompt、can
 
 ## Kernel 协议补充：Pi Agent
 
-Pi 官方 [`RPC Mode`](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/rpc.md) 是
+Pi 官方 [`RPC Mode`](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/rpc.md) 是
 stdin/stdout 严格 LF JSONL 协议，适合进程隔离集成；官方
-[`SDK`](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/sdk.md) 适合同进程 Node
+[`SDK`](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sdk.md) 适合同进程 Node
 嵌入。当前官方文档没有 ACP 接口，因此不能把 Pi 填入通用 ACP Adapter。
 
 RPC 已覆盖本项目最小需要：异步 `prompt`、base64 图片、`message_update` 文本增量、完全 settled
@@ -110,6 +110,15 @@ LF 分帧，等待 `agent_settled`，以 `get_last_assistant_text` 补齐终态�
 图片格式、Adapter 映射和模型视觉能力的完整本地链路。随后企业微信纯图片也完成官方 SDK
 下载/解密、临时物化、Pi 视觉回复、Outbox 投递和清理的端到端真实验证。两个不同 session 的真实
 RPC smoke 也已在默认 2-worker 池内重叠完成，避免跨会话全局队头阻塞。
+
+Pi 官方 RPC 同时定义了
+[`extension_ui_request` / `extension_ui_response`](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/rpc.md)
+双向消息：`select`、`confirm`、`input`、`editor` 会阻塞原调用，客户端按相同 request ID 返回结构化
+结果。官方 [`rpc-extension-ui` 示例](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/examples/rpc-extension-ui.ts)
+也明确展示宿主 UI 负责应答。项目已据此实现 Pi M2.2 原生桥：选择/确认映射官方企业微信模板卡片，
+输入映射发送者与会话绑定的下一条纯文本，最后以原生 response 恢复同一 tool call，不生成 synthetic
+Prompt。本机 Pi `0.84.2` 已用仓库内无副作用 extension 真实产生 select request、回传 value 并继续原
+run；企业微信端真实点击仍单列验收，不把本地 RPC 冒烟混写成 Channel E2E。
 
 ## Kernel 协议补充：OpenClaw Gateway Client
 
