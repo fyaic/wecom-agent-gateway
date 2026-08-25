@@ -272,7 +272,7 @@ namespace、状态和视觉标识，防止 Agent 生成的“确认”冒充安�
 ### M2.2：Agent ask-user MVP
 
 状态：2026-08-25 已完成 Pi 原生 hook、live resume 与文本降级的实现和自动化验证；真实企业微信
-私聊单选已通过，限定文本和群聊验收待执行。
+私聊单选与限定文本输入已通过，群聊验收待执行。
 
 - [x] `interaction-requested` Adapter hook 和 `text-input` 中立契约。
 - [x] Pi `select/confirm/input/editor` 原生 RPC 映射，不注入 synthetic Prompt。
@@ -281,7 +281,8 @@ namespace、状态和视觉标识，防止 Agent 生成的“确认”冒充安�
 - [x] durable resume 仍作为 callback 决定和 at-least-once 投递记录。
 - [x] 本机真实 Pi RPC extension UI request/response 冒烟。
 - [x] 授权企业微信私聊真实单选、结果原位更新和重复回调幂等验收。
-- [ ] 授权企业微信私聊 input 与测试群 choice/input 验收。
+- [x] 授权企业微信私聊 input：scoped next-text 消费、原 run 恢复且不创建第二 turn。
+- [ ] 授权企业微信测试群 choice/input 与提交者 ACL 验收。
 
 2026-08-25 首轮授权私聊中，Pi select 原 run 完整恢复并最终回复“测试完成”；用户多次点击只产生一个
 durable resume，证明业务幂等成立。但原位结果卡因无动作 notice 携带 `{card_action:{type:0}}` 被真实
@@ -296,6 +297,10 @@ durable resume，证明业务幂等成立。但原位结果卡因无动作 notic
 submit_button.text Missing or Invalid`。第四轮完成态补齐必填的“已完成”按钮；真实旧卡重复提交后，
 企业微信接受原位更新且没有错误，durable resume 仍保持恰好一次。该结果同时关闭 UI 收敛与业务幂等
 验收，未把重复按钮动作误送给 Agent。
+
+同日私聊 `text-input` 真实请求在 17.744 秒后收到用户输入，Broker 在 1ms 内完成 live resume；日志只有
+交互 submitted/resume 事件，没有把输入消息启动为第二个 Agent turn。原 Pi run 原样复述输入，全部
+回复投递无错误。
 
 可运行的无副作用 Pi 示例位于 `examples/pi-wecom-interaction.mjs`；它只在 Agent 明确调用时展示选择、
 确认或输入，不执行办公写操作。

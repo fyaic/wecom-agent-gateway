@@ -455,6 +455,10 @@ CTA 色。2026-08-25 首轮私聊中业务 resume 恰好一次且 Pi 原 run 完
 `submit_button.text` 收到 `42049`。第四轮补齐“已完成”按钮后，真实旧卡重复提交触发的原位更新被
 企业微信接受、错误为空，durable resume 仍为 1；因此再次点击只收敛 UI，不产生第二次 Agent resume。
 
+同日私聊 `text-input` 已真实通过：请求发出 17.744 秒后收到原发送者文本，live resume 1ms 且一次
+投递成功；该文本由 scoped interaction 消费，没有创建第二个 Agent turn，原 Pi run 随后原样复述输入。
+下一项仅剩授权测试群的 select 与提交者 ACL。
+
 当前网络中 Codex Responses WebSocket 首轮会耗尽重试预算后才回退 HTTP，因此默认
 `CODEX_RESPONSES_WEBSOCKET=false`：adapter 使用 ChatGPT 登录兼容的 HTTP-only provider。
 如果部署网络已经确认可稳定连接 Responses WebSocket，可设为 `true` 使用内置 provider。
