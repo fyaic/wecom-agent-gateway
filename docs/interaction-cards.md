@@ -312,9 +312,40 @@ submit_button.text Missing or Invalid`。第四轮完成态补齐必填的“已
 
 ### M2.3：回复底部快捷操作
 
-- `replyStreamWithCard` 最终回复组合。
-- 继续展开、生成文档、创建待办等受控 action。
-- 回调后的 Agent 输出自动使用新的主动可变消息。
+状态：实现与自动化闭环完成，待真实企业微信客户端验收。
+
+- [x] `message-completed.actions` 与操作员默认 action 的 Runtime-neutral 契约。
+- [x] `replyStreamWithCard` 最终回复组合；不支持或 `846608` 时主动文本 + 卡片降级。
+- [x] SQLite 保存发送者、会话、Adapter、session、TTL 和动作值；新卡替换同会话旧快捷卡。
+- [x] 点击后先原位更新，再以 `resumeMode=new-turn` 进入正常队列恢复相同 Agent session。
+- [x] 过期静默失效、重复点击不重复 continuation、写工具仍走独立审批。
+- [x] Pi 已结束 session 的 action continuation 与四层 deterministic tests。
+- [ ] 授权企业微信私聊真实组合回复、点击续跑、完成态和重复点击验收。
+
+```mermaid
+sequenceDiagram
+    participant A as Agent Adapter
+    participant G as Gateway
+    participant S as SQLite / Outbox
+    participant W as WeCom SDK
+    participant U as 用户
+
+    A->>G: message-completed(text, actions)
+    G->>S: 保存 scoped new-turn interaction
+    G->>W: replyStreamWithCard(text, card)
+    W->>U: 最终回答 + 快捷操作
+    U->>W: 点击 action
+    W->>G: template_card_event
+    G->>S: ACL + resolve + durable resume
+    G->>W: 五秒内禁用旧卡
+    G->>A: 同 session callback continuation
+    A->>G: 新一轮输出
+    G->>W: 主动可变消息 + 新快捷卡
+```
+
+快捷 action value 是 Adapter 或操作员预先绑定的规范化 continuation，不是 Gateway 从 label 猜出的
+Prompt，也不是可执行命令。`interaction-live-resume` 只服务仍在等待的 ask-user；最终回复动作已经是
+新的语义 turn，必须进入正常会话队列、并发限制和背压。
 
 ### M2.4：多 Kernel
 

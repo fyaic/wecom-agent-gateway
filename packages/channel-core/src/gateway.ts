@@ -18,6 +18,7 @@ import {
   type Presentation,
   type RuntimeApprovalDecision,
   type RuntimeApprovalRequest,
+  type RuntimeInteractionAction,
   type RuntimeInteractionRequest,
   type RuntimeInteractionResult,
   type RuntimeInteractionResumeEntry,
@@ -58,6 +59,9 @@ export interface GatewayOptions {
   maxConcurrentRuns?: number;
   approvalTimeoutMs?: number;
   interactionTimeoutMs?: number;
+  /** Optional safe, operator-defined actions attached to each final Agent reply. */
+  replyActions?: RuntimeInteractionAction[];
+  replyActionTimeoutMs?: number;
   maxProactiveTextBytes?: number;
   now?: () => number;
   wallClock?: () => number;
@@ -240,6 +244,14 @@ export class WeComAgentGateway {
     this.adapters = new Map(adapters.map((adapter) => [adapter.id, adapter]));
     if (this.adapters.size !== adapters.length) {
       throw new Error("Adapter ids must be unique within one Gateway process");
+    }
+    if (options.replyActions?.length) {
+      validateRuntimeInteractionRequest({
+        kind: "actions",
+        title: "接下来",
+        actions: options.replyActions,
+        resumeMode: "new-turn",
+      });
     }
   }
 
@@ -764,6 +776,7 @@ export class WeComAgentGateway {
           streamId,
           update.text,
           update.final,
+          update.presentation,
         );
         if (delivered && !channelAcknowledged) {
           channelAcknowledged = true;
@@ -869,7 +882,14 @@ export class WeComAgentGateway {
           });
           reply.update("⏸️ 等待用户输入，交互请求已作为独立消息发送。");
         } else if (event.type === "message-completed") {
-          await reply.close(projection.completed(event.text));
+          await this.closeReplyWithActions({
+            reply,
+            message,
+            adapter,
+            sessionId: activeSessionId,
+            text: projection.completed(event.text),
+            actions: event.actions,
+          });
           closed = true;
         } else if (event.type === "media-output") {
           if (!adapter.capabilities.has("multimodal-output")) {
@@ -917,7 +937,15 @@ export class WeComAgentGateway {
           throw new Error(event.message);
         }
       }
-      if (!closed) await reply.close(projection.completed());
+      if (!closed) {
+        await this.closeReplyWithActions({
+          reply,
+          message,
+          adapter,
+          sessionId: activeSessionId,
+          text: projection.completed(),
+        });
+      }
       for (const media of mediaOutputs) {
         await this.deliverMedia(message, media);
       }
@@ -1449,11 +1477,122 @@ export class WeComAgentGateway {
     }
   }
 
+  private async closeReplyWithActions(options: {
+    reply: MutableReply;
+    message: InboundMessage;
+    adapter: AgentRuntimeAdapter;
+    sessionId?: string;
+    text: string;
+    actions?: RuntimeInteractionAction[];
+  }): Promise<void> {
+    const actions = options.actions ?? this.options.replyActions;
+    if (!actions?.length) {
+      await options.reply.close(options.text);
+      return;
+    }
+    if (!options.adapter.capabilities.has("reply-actions")) {
+      throw new Error(
+        `Adapter ${options.adapter.id} emitted unsupported reply actions`,
+      );
+    }
+    if (!options.sessionId) {
+      throw new Error("Reply actions require a persistent Agent session");
+    }
+    const prepared = await this.prepareReplyActions({
+      accountId: options.message.accountId,
+      conversationId: options.message.conversationId,
+      conversationType: options.message.conversationType,
+      senderId: options.message.senderId,
+      adapterId: options.adapter.id,
+      sessionId: options.sessionId,
+      actions,
+    });
+    try {
+      await options.reply.close(options.text, prepared.presentation);
+    } catch (error) {
+      await this.options.store
+        .cancelRuntimeInteraction({
+          interactionId: prepared.interactionId,
+          now: this.wallClockIso(),
+        })
+        .catch((cancelError: unknown) =>
+          this.notifyInteractionStoreError(
+            "cancel-runtime-interaction",
+            cancelError,
+          ),
+        );
+      throw error;
+    }
+  }
+
+  private async prepareReplyActions(options: {
+    accountId: string;
+    conversationId: string;
+    conversationType: InboundMessage["conversationType"];
+    senderId: string;
+    adapterId: string;
+    sessionId: string;
+    actions: RuntimeInteractionAction[];
+  }): Promise<{ interactionId: string; presentation: Presentation }> {
+    if (
+      !this.options.transport.capabilities.has("structured-presentation") ||
+      !this.options.transport.capabilities.has("interactive-presentation")
+    ) {
+      throw new Error(
+        `Transport ${this.options.transport.id} cannot deliver reply actions`,
+      );
+    }
+    const request: RuntimeInteractionRequest = {
+      kind: "actions",
+      title: "接下来",
+      description: "选择一个快捷操作继续当前会话。",
+      actions: options.actions,
+      resumeMode: "new-turn",
+    };
+    validateRuntimeInteractionRequest(request);
+    const timeoutMs = this.options.replyActionTimeoutMs ?? 24 * 60 * 60 * 1_000;
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 1) {
+      throw new Error(
+        "Gateway replyActionTimeoutMs must be a positive integer",
+      );
+    }
+    const now = this.wallClock();
+    const interactionId = `interaction_${randomUUID().replaceAll("-", "")}`;
+    let created: boolean;
+    try {
+      created = await this.options.store.createRuntimeInteraction({
+        interactionId,
+        accountId: options.accountId,
+        conversationId: options.conversationId,
+        conversationType: options.conversationType,
+        senderId: options.senderId,
+        adapterId: options.adapterId,
+        sessionId: options.sessionId,
+        request,
+        createdAt: iso(now),
+        expiresAt: iso(now + timeoutMs),
+      });
+    } catch (error) {
+      this.notifyInteractionStoreError("create-runtime-interaction", error);
+      throw error;
+    }
+    if (!created) {
+      throw new Error(
+        "This conversation already has an active runtime interaction",
+      );
+    }
+    return {
+      interactionId,
+      presentation: interactionPresentation(interactionId, request),
+    };
+  }
+
   private async reply(
     message: InboundMessage,
     streamId: string,
     text: string,
     final: boolean,
+    presentation?: Presentation,
   ): Promise<boolean> {
     if (!message.replyReference)
       throw new Error("Inbound message has no reply reference");
@@ -1465,7 +1604,34 @@ export class WeComAgentGateway {
       streamId,
       text,
       final,
+      ...(presentation ? { presentation } : {}),
     };
+    if (
+      presentation &&
+      !this.options.transport.capabilities.has("reply-with-presentation")
+    ) {
+      const textCommand: DurableOutboundCommand = {
+        type: "reply",
+        accountId: message.accountId,
+        conversationId: message.conversationId,
+        replyReference: message.replyReference,
+        streamId,
+        text,
+        final,
+      };
+      const delivered = await this.enqueueDurableDelivery(
+        message.id,
+        textCommand,
+        `reply:${message.accountId}:${message.conversationId}:${streamId}`,
+      );
+      const cardDelivered = await this.enqueueDurableDelivery(message.id, {
+        type: "proactive-presentation",
+        accountId: message.accountId,
+        conversationId: message.conversationId,
+        presentation,
+      });
+      return delivered && cardDelivered;
+    }
     return this.enqueueDurableDelivery(
       message.id,
       command,
@@ -1584,7 +1750,13 @@ export class WeComAgentGateway {
     entry: RuntimeInteractionResumeEntry,
   ): Promise<void> {
     const adapter = this.adapters.get(entry.adapterId);
-    if (adapter?.capabilities.has("interaction-live-resume")) {
+    const startsNewTurn =
+      entry.request.kind === "actions" &&
+      entry.request.resumeMode === "new-turn";
+    if (
+      !startsNewTurn &&
+      adapter?.capabilities.has("interaction-live-resume")
+    ) {
       await this.dispatchInteractionResume(entry);
       return;
     }
@@ -1626,11 +1798,14 @@ export class WeComAgentGateway {
       });
       const projection = new AgentReplyProjection();
       let completedText: string | undefined;
+      let completedActions: RuntimeInteractionAction[] | undefined;
       const mediaOutputs: AgentMediaOutput[] = [];
       for await (const event of adapter.resumeInteraction({
         sessionId: entry.sessionId,
         idempotencyKey: `interaction-resume:${entry.interactionId}`,
+        interaction: entry.request,
         result: entry.result,
+        message: interactionResumeMessage(entry),
       })) {
         if (event.type === "session-started") {
           await this.options.store.setSession({
@@ -1643,6 +1818,7 @@ export class WeComAgentGateway {
           projection.apply(event);
         } else if (event.type === "message-completed") {
           completedText = projection.completed(event.text);
+          completedActions = event.actions;
         } else if (event.type === "media-output") {
           if (!adapter.capabilities.has("multimodal-output")) {
             throw new Error(
@@ -1700,6 +1876,29 @@ export class WeComAgentGateway {
           },
           `interaction-resume:${entry.interactionId}:text`,
         );
+      }
+      const replyActions = completedActions ?? this.options.replyActions;
+      if (replyActions?.length) {
+        if (!adapter.capabilities.has("reply-actions")) {
+          throw new Error(
+            `Adapter ${adapter.id} emitted unsupported reply actions`,
+          );
+        }
+        const prepared = await this.prepareReplyActions({
+          accountId: entry.accountId,
+          conversationId: entry.conversationId,
+          conversationType: entry.conversationType,
+          senderId: entry.senderId,
+          adapterId: entry.adapterId,
+          sessionId: entry.sessionId,
+          actions: replyActions,
+        });
+        await this.enqueueDurableDelivery(entry.interactionId, {
+          type: "proactive-presentation",
+          accountId: entry.accountId,
+          conversationId: entry.conversationId,
+          presentation: prepared.presentation,
+        });
       }
       for (const media of mediaOutputs) {
         await this.enqueueProactiveMedia(
@@ -2283,6 +2482,13 @@ function validateRuntimeInteractionRequest(
   }
   if (request.kind === "actions") {
     validateRuntimeOptions(request.actions, 1, 6, "actions");
+    if (
+      request.resumeMode !== undefined &&
+      request.resumeMode !== "elicitation" &&
+      request.resumeMode !== "new-turn"
+    ) {
+      throw new Error("Invalid action resume mode");
+    }
     return;
   }
   if (request.kind === "single-select") {
@@ -2561,6 +2767,42 @@ function textInteractionPrompt(
       : "请直接回复一条纯文本消息。",
   );
   return lines.join("\n\n");
+}
+
+function interactionResumeMessage(
+  entry: RuntimeInteractionResumeEntry,
+): InboundMessage | undefined {
+  if (
+    entry.request.kind !== "actions" ||
+    entry.request.resumeMode !== "new-turn" ||
+    entry.result.status !== "submitted"
+  ) {
+    return undefined;
+  }
+  const value = entry.result.values.action;
+  if (!value || value.length !== 1 || !value[0]?.trim()) {
+    throw new Error("Reply action continuation has no action value");
+  }
+  const actionIndex = entry.request.actions.findIndex(
+    (action) => action.value === value[0],
+  );
+  if (actionIndex < 0) {
+    throw new Error("Reply action continuation value is not registered");
+  }
+  return {
+    id: `reply-action-${entry.interactionId}`,
+    accountId: entry.accountId,
+    conversationId: entry.conversationId,
+    conversationType: entry.conversationType,
+    senderId: entry.senderId,
+    receivedAt: entry.result.submittedAt,
+    parts: [{ type: "text", text: value[0] }],
+    interaction: {
+      presentationId: entry.interactionId,
+      actionId: `action_${actionIndex}`,
+    },
+    metadata: { source: "reply-action" },
+  };
 }
 
 function syntheticIndex(

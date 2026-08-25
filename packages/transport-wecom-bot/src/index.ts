@@ -43,6 +43,13 @@ interface WeComClient {
     content: string,
     finish: boolean,
   ): Promise<unknown>;
+  replyStreamWithCard(
+    frame: WeComFrame,
+    streamId: string,
+    content: string,
+    finish: boolean,
+    options: { templateCard: TemplateCard },
+  ): Promise<unknown>;
   sendMessage(chatId: string, message: unknown): Promise<unknown>;
   updateTemplateCard(
     frame: WeComFrame,
@@ -111,6 +118,7 @@ export class WeComBotTransport implements ChannelTransport {
     "multimodal-output",
     "structured-presentation",
     "interactive-presentation",
+    "reply-with-presentation",
   ]);
   readonly inputModalities: ReadonlySet<MediaType> = new Set([
     "image",
@@ -189,12 +197,35 @@ export class WeComBotTransport implements ChannelTransport {
   async deliver(command: OutboundCommand): Promise<DeliveryReceipt> {
     if (command.type === "reply") {
       try {
-        await this.client.replyStream(
-          { headers: { req_id: command.replyReference.requestId } },
-          command.streamId,
-          command.text,
-          command.final,
-        );
+        const frame = {
+          headers: { req_id: command.replyReference.requestId },
+        };
+        if (command.presentation) {
+          if (!command.final) {
+            throw new Error(
+              "Reply presentations are only valid on the final stream update",
+            );
+          }
+          await this.client.replyStreamWithCard(
+            frame,
+            command.streamId,
+            command.text,
+            true,
+            {
+              templateCard: renderWeComTemplateCard(
+                command.presentation,
+                this.options.presentationLinkHosts,
+              ),
+            },
+          );
+        } else {
+          await this.client.replyStream(
+            frame,
+            command.streamId,
+            command.text,
+            command.final,
+          );
+        }
       } catch (error) {
         if (!hasErrorCode(error, 846608)) throw error;
         // The official plugin confirms 846608 means the six-minute stream update
@@ -204,6 +235,15 @@ export class WeComBotTransport implements ChannelTransport {
             msgtype: "markdown",
             markdown: { content: command.text },
           });
+          if (command.presentation) {
+            await this.client.sendMessage(command.conversationId, {
+              msgtype: "template_card",
+              template_card: renderWeComTemplateCard(
+                command.presentation,
+                this.options.presentationLinkHosts,
+              ),
+            });
+          }
         }
       }
     } else if (command.type === "proactive") {

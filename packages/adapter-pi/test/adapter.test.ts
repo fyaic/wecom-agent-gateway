@@ -75,6 +75,54 @@ describe("PiRuntimeAdapter", () => {
     await resumed.stop();
   });
 
+  it("continues a completed session from a real reply-action callback", async () => {
+    const fake = new FakePiClient();
+    const adapter = createAdapter(fake);
+    await adapter.start();
+    const first = await collect(
+      adapter.run({ message: message([{ type: "text", text: "hello" }]) }),
+    );
+    const session = first.find((event) => event.type === "session-started");
+    if (!session || session.type !== "session-started") {
+      throw new Error("Pi session was not created");
+    }
+    const callback = message([{ type: "text", text: "请继续展开上一条回答" }]);
+    callback.interaction = {
+      presentationId: "reply-actions-1",
+      actionId: "action_0",
+    };
+    const resumed = await collect(
+      adapter.resumeInteraction!({
+        sessionId: session.sessionId,
+        idempotencyKey: "interaction-resume:reply-actions-1",
+        interaction: {
+          kind: "actions",
+          title: "接下来",
+          actions: [{ value: "请继续展开上一条回答", label: "继续展开" }],
+          resumeMode: "new-turn",
+        },
+        result: {
+          interactionId: "reply-actions-1",
+          status: "submitted",
+          values: { action: ["请继续展开上一条回答"] },
+          submittedAt: "2026-08-25T00:00:00.000Z",
+        },
+        message: callback,
+      }),
+    );
+    expect(resumed.at(-1)).toEqual({
+      type: "message-completed",
+      text: "reply-2",
+    });
+    expect(
+      fake.commands.filter((command) => command.type === "prompt"),
+    ).toMatchObject([
+      { type: "prompt", message: "hello" },
+      { type: "prompt", message: "请继续展开上一条回答" },
+    ]);
+    await adapter.stop();
+  });
+
   it("replaces a failed RPC client before the next run", async () => {
     const first = new FakePiClient();
     const second = new FakePiClient();
@@ -296,6 +344,7 @@ describe("PiRuntimeAdapter", () => {
       adapter.resumeInteraction!({
         sessionId,
         idempotencyKey: "interaction-resume:test-confirm",
+        interaction: { kind: "confirm", title: "继续执行？" },
         result: {
           interactionId: "interaction-test-confirm",
           status: "submitted",
@@ -372,6 +421,15 @@ describe("PiRuntimeAdapter", () => {
       selectAdapter.resumeInteraction!({
         sessionId: selectSession,
         idempotencyKey: "interaction-resume:test-select",
+        interaction: {
+          kind: "single-select",
+          title: "选择环境",
+          fieldId: "selection",
+          options: [
+            { value: "pi-option-0", label: "生产" },
+            { value: "pi-option-1", label: "测试" },
+          ],
+        },
         result: {
           interactionId: "interaction-test-select",
           status: "submitted",
@@ -532,6 +590,7 @@ describe("PooledPiRuntimeAdapter", () => {
       adapter.resumeInteraction!({
         sessionId: "session-a",
         idempotencyKey: "interaction-resume:pool",
+        interaction: { kind: "confirm", title: "继续执行？" },
         result: {
           interactionId: "interaction-pool",
           status: "submitted",
@@ -542,6 +601,50 @@ describe("PooledPiRuntimeAdapter", () => {
     );
     await run;
     expect(tracker.resumes).toEqual(["interaction-resume:pool"]);
+    await adapter.stop();
+  });
+
+  it("acquires a pooled worker for a completed-session reply action", async () => {
+    const fake = new FakePiClient();
+    const adapter = new PooledPiRuntimeAdapter({
+      maxWorkers: 1,
+      workerFactory: () => createAdapter(fake),
+    });
+    await adapter.start();
+    const first = await collect(
+      adapter.run({ message: message([{ type: "text", text: "first" }]) }),
+    );
+    const session = first.find((event) => event.type === "session-started");
+    if (!session || session.type !== "session-started") {
+      throw new Error("pooled Pi session was not created");
+    }
+    const callback = message([{ type: "text", text: "继续展开" }]);
+    const resumed = await collect(
+      adapter.resumeInteraction!({
+        sessionId: session.sessionId,
+        idempotencyKey: "interaction-resume:pooled-reply-action",
+        interaction: {
+          kind: "actions",
+          title: "接下来",
+          actions: [{ value: "继续展开", label: "继续展开" }],
+          resumeMode: "new-turn",
+        },
+        result: {
+          interactionId: "pooled-reply-action",
+          status: "submitted",
+          values: { action: ["继续展开"] },
+          submittedAt: "2026-08-25T00:00:00.000Z",
+        },
+        message: callback,
+      }),
+    );
+    expect(resumed.at(-1)).toEqual({
+      type: "message-completed",
+      text: "reply-2",
+    });
+    expect(
+      fake.commands.filter((command) => command.type === "prompt"),
+    ).toHaveLength(2);
     await adapter.stop();
   });
 });

@@ -1280,6 +1280,112 @@ describe("WeComAgentGateway", () => {
     await gateway.stop();
   });
 
+  it("attaches durable final-reply actions and continues the same session once", async () => {
+    class ReplyActionTransport extends FakeTransport {
+      override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
+        "stream-reply-update",
+        "proactive-message",
+        "structured-presentation",
+        "interactive-presentation",
+        "reply-with-presentation",
+      ]);
+    }
+    const transport = new ReplyActionTransport();
+    const resumes: Array<{ sessionId: string; text?: string }> = [];
+    const runtime: AgentRuntimeAdapter = {
+      id: "reply-action-runtime",
+      contractVersion: 1,
+      capabilities: new Set([
+        "streaming",
+        "resume",
+        "interaction-resume",
+        "interaction-live-resume",
+        "reply-actions",
+      ]),
+      async *run() {
+        yield { type: "session-started", sessionId: "reply-action-session" };
+        yield { type: "message-completed", text: "第一轮完成" };
+      },
+      async *resumeInteraction(request) {
+        resumes.push({
+          sessionId: request.sessionId,
+          text:
+            request.message?.parts[0]?.type === "text"
+              ? request.message.parts[0].text
+              : undefined,
+        });
+        yield { type: "message-completed", text: "已继续展开" };
+      },
+      async health() {
+        return { ok: true };
+      },
+    };
+    const gateway = new WeComAgentGateway({
+      transport,
+      adapters: [runtime],
+      router: new StaticRuntimeRouter(runtime.id),
+      store: new MemoryGatewayStore(),
+      replyActions: [
+        {
+          value: "请继续展开上一条回答",
+          label: "继续展开",
+          style: "primary",
+        },
+      ],
+      outboxPollIntervalMs: 2,
+      replyUpdateIntervalMs: 1,
+    });
+    await gateway.start();
+    await transport.receive(message("reply-action-original"));
+    const final = transport.commands.find(
+      (command) => command.type === "reply" && command.presentation,
+    );
+    if (!final || final.type !== "reply" || !final.presentation) {
+      throw new Error("final reply action card was not delivered");
+    }
+    expect(final).toMatchObject({
+      text: "第一轮完成",
+      final: true,
+      presentation: {
+        kind: "actions",
+        title: "接下来",
+        actions: [{ id: "action_0", label: "继续展开", style: "primary" }],
+      },
+    });
+    const callback = {
+      ...message("reply-action-callback"),
+      parts: [],
+      interaction: {
+        presentationId: final.presentation.id,
+        actionId: "action_0",
+      },
+      replyReference: { requestId: "reply-action-callback-request" },
+    };
+    await transport.receive(callback);
+    await waitFor(() => resumes.length === 1);
+    await waitFor(() =>
+      transport.commands.some(
+        (command) =>
+          command.type === "proactive" && command.text === "已继续展开",
+      ),
+    );
+    expect(resumes).toEqual([
+      {
+        sessionId: "reply-action-session",
+        text: "请继续展开上一条回答",
+      },
+    ]);
+    expect(
+      transport.commands.filter(
+        (command) => command.type === "interaction-update",
+      ),
+    ).toHaveLength(1);
+    await transport.receive({ ...callback, id: "reply-action-duplicate" });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(resumes).toHaveLength(1);
+    await gateway.stop();
+  });
+
   it("keeps peer actions neutral unless the Adapter declares visual intent", async () => {
     class InteractiveTransport extends FakeTransport {
       override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([

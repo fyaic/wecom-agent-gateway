@@ -54,6 +54,8 @@ interface MemoryInteractionResume {
   conversationType: RuntimeInteractionResumeEntry["conversationType"];
   adapterId: string;
   sessionId: string;
+  senderId: string;
+  request: PendingRuntimeInteraction["request"];
   result: RuntimeInteractionResult;
   status: "pending" | "leased" | "delivered" | "dead";
   attempts: number;
@@ -358,15 +360,20 @@ export class MemoryGatewayStore implements GatewayStore {
     interaction: PendingRuntimeInteraction,
   ): Promise<boolean> {
     if (this.runtimeInteractions.has(interaction.interactionId)) return false;
-    if (
-      [...this.runtimeInteractions.values()].some(
-        (candidate) =>
-          candidate.status === "pending" &&
-          candidate.accountId === interaction.accountId &&
-          candidate.conversationId === interaction.conversationId &&
-          candidate.expiresAt > interaction.createdAt,
-      )
-    ) {
+    for (const candidate of this.runtimeInteractions.values()) {
+      if (
+        candidate.status !== "pending" ||
+        candidate.accountId !== interaction.accountId ||
+        candidate.conversationId !== interaction.conversationId ||
+        candidate.expiresAt <= interaction.createdAt
+      ) {
+        continue;
+      }
+      if (isReplyActionRequest(candidate.request)) {
+        candidate.status = "cancelled";
+        candidate.resolvedAt = interaction.createdAt;
+        continue;
+      }
       return false;
     }
     this.runtimeInteractions.set(interaction.interactionId, {
@@ -448,6 +455,8 @@ export class MemoryGatewayStore implements GatewayStore {
       conversationType: interaction.conversationType,
       adapterId: interaction.adapterId,
       sessionId: interaction.sessionId,
+      senderId: interaction.senderId,
+      request: interaction.request,
       result: options.result,
       status: "pending",
       attempts: 0,
@@ -489,6 +498,7 @@ export class MemoryGatewayStore implements GatewayStore {
       interaction.status = "expired";
       interaction.result = result;
       interaction.resolvedAt = options.now;
+      if (isReplyActionRequest(interaction.request)) continue;
       const id = String(this.nextInteractionResumeId++);
       this.interactionResumes.set(id, {
         id,
@@ -499,6 +509,8 @@ export class MemoryGatewayStore implements GatewayStore {
         conversationType: interaction.conversationType,
         adapterId: interaction.adapterId,
         sessionId: interaction.sessionId,
+        senderId: interaction.senderId,
+        request: interaction.request,
         result,
         status: "pending",
         attempts: 0,
@@ -669,7 +681,15 @@ function leaseInteractionResume(
     conversationType: item.conversationType,
     adapterId: item.adapterId,
     sessionId: item.sessionId,
+    senderId: item.senderId,
+    request: item.request,
     result: item.result,
     attempts: item.attempts,
   };
+}
+
+function isReplyActionRequest(
+  request: PendingRuntimeInteraction["request"],
+): boolean {
+  return request.kind === "actions" && request.resumeMode === "new-turn";
 }

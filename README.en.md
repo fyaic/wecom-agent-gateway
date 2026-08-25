@@ -41,6 +41,9 @@ model selection, tool policy, and media understanding stay in the Kernel.
 - **Interaction broker** — card choices bypass text interpretation; the Gateway
   persists, validates, updates, and resumes the same Agent session; Pi native
   ask-user is bridged end to end.
+- **Final reply actions** — a streamed answer can carry native quick actions;
+  scoped, idempotent callbacks continue the same Agent session while write
+  tools still require approval.
 - **Durable delivery** — SQLite outbox leases, retries, dead letters, and a
   protected media spool survive process failure.
 - **Exact modalities** — transports and adapters declare concrete media types

@@ -13,7 +13,9 @@ export type ChannelCapability =
   | "multimodal-input"
   | "multimodal-output"
   | "structured-presentation"
-  | "interactive-presentation";
+  | "interactive-presentation"
+  /** Final mutable reply can carry one channel-native structured presentation. */
+  | "reply-with-presentation";
 
 export interface PresentationLink {
   label?: string;
@@ -125,6 +127,8 @@ export type OutboundCommand =
       streamId: string;
       text: string;
       final: boolean;
+      /** Only valid on the final update; the Transport owns vendor rendering. */
+      presentation?: Presentation;
     }
   | {
       type: "proactive";
@@ -237,7 +241,9 @@ export type RuntimeCapability =
   | "multimodal-output"
   | "interaction-resume"
   /** Resume is a control response to a still-live Kernel turn; bypass semantic turn queues. */
-  | "interaction-live-resume";
+  | "interaction-live-resume"
+  /** Final replies may expose actions that continue the same session after a callback. */
+  | "reply-actions";
 
 export type AgentStatusPhase =
   | "accepted"
@@ -304,6 +310,8 @@ export type RuntimeInteractionRequest =
   | (RuntimeInteractionRequestBase & {
       kind: "actions";
       actions: RuntimeInteractionAction[];
+      /** Elicitation resumes a live ask-user call; new-turn starts a real callback continuation. */
+      resumeMode?: "elicitation" | "new-turn";
     })
   | (RuntimeInteractionRequestBase & {
       kind: "text-input";
@@ -324,7 +332,10 @@ export interface AgentInteractionResumeRequest {
   sessionId: string;
   /** Stable across retries; Adapters must use it to suppress duplicate effects. */
   idempotencyKey: string;
+  interaction: RuntimeInteractionRequest;
   result: RuntimeInteractionResult;
+  /** Present for callback continuations that intentionally start a new Agent turn. */
+  message?: InboundMessage;
 }
 
 export interface PendingRuntimeInteraction {
@@ -349,6 +360,8 @@ export interface RuntimeInteractionResumeEntry {
   conversationType: ConversationType;
   adapterId: string;
   sessionId: string;
+  senderId: string;
+  request: RuntimeInteractionRequest;
   result: RuntimeInteractionResult;
   attempts: number;
 }
@@ -458,7 +471,12 @@ export type AgentRunEvent =
   | { type: "text-delta"; text: string }
   | { type: "media-output"; media: AgentMediaOutput }
   | { type: "interaction-requested"; request: RuntimeInteractionRequest }
-  | { type: "message-completed"; text?: string }
+  | {
+      type: "message-completed";
+      text?: string;
+      /** Adapter-neutral final-answer actions; values become callback continuations. */
+      actions?: RuntimeInteractionAction[];
+    }
   | { type: "approval-requested"; approvalId: string; summary: string }
   | { type: "failed"; message: string };
 

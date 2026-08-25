@@ -16,6 +16,8 @@ tagged.
   results, leased resume delivery, and dead-letter handling.
 - Pi native select, confirm, input, and editor bridging with same-call live
   resume, scoped plain-text input, and a side-effect-free example extension.
+- Final stream reply actions with official `replyStreamWithCard`, proactive
+  fallback, durable callback continuation, and Pi same-session support.
 
 ### Fixed
 
