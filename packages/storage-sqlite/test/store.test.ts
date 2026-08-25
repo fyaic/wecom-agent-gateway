@@ -761,6 +761,16 @@ describe("SqliteGatewayStore", () => {
         conversationType: "direct",
         adapterId: "pi",
         sessionId: "session-1",
+        senderId: "user",
+        request: {
+          kind: "multi-select",
+          title: "选择范围",
+          fieldId: "scope",
+          options: [
+            { value: "docs", label: "文档" },
+            { value: "calendar", label: "日程" },
+          ],
+        },
         result,
         attempts: 1,
       },
@@ -869,6 +879,61 @@ describe("SqliteGatewayStore", () => {
         },
       }),
     ]);
+    store.close();
+  });
+
+  it("replaces stale reply actions and expires them without Agent resume", async () => {
+    const store = new SqliteGatewayStore(":memory:");
+    const replyAction = (interactionId: string, createdAt: string) => ({
+      interactionId,
+      accountId: "bot",
+      conversationId: "chat",
+      conversationType: "direct" as const,
+      senderId: "user",
+      adapterId: "pi",
+      sessionId: "session-actions",
+      request: {
+        kind: "actions" as const,
+        title: "接下来",
+        actions: [{ value: "continue", label: "继续展开" }],
+        resumeMode: "new-turn" as const,
+      },
+      createdAt,
+      expiresAt: "2026-08-26T00:00:00.000Z",
+    });
+    await expect(
+      store.createRuntimeInteraction(
+        replyAction("reply_action_1", "2026-08-25T00:00:00.000Z"),
+      ),
+    ).resolves.toBe(true);
+    await expect(
+      store.createRuntimeInteraction(
+        replyAction("reply_action_2", "2026-08-25T00:01:00.000Z"),
+      ),
+    ).resolves.toBe(true);
+    await expect(
+      store.getPendingRuntimeInteraction({
+        interactionId: "reply_action_1",
+        accountId: "bot",
+        conversationId: "chat",
+        senderId: "user",
+        now: "2026-08-25T00:02:00.000Z",
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      store.expireRuntimeInteractionsAndEnqueue({
+        now: "2026-08-26T00:00:00.000Z",
+        limit: 10,
+      }),
+    ).resolves.toBe(1);
+    await expect(
+      store.claimDueInteractionResumes({
+        owner: "worker",
+        now: "2026-08-26T00:00:00.000Z",
+        leaseUntil: "2026-08-26T00:01:00.000Z",
+        limit: 10,
+      }),
+    ).resolves.toEqual([]);
     store.close();
   });
 

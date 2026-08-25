@@ -17,6 +17,7 @@ import { renderWeComTemplateCard, WeComBotTransport } from "../src/index.js";
 class FakeClient {
   readonly listeners = new Map<string, (...args: any[]) => void>();
   readonly replies: any[][] = [];
+  readonly repliesWithCard: any[][] = [];
   readonly pushes: any[][] = [];
   readonly cardUpdates: any[][] = [];
   readonly mediaPushes: any[][] = [];
@@ -33,6 +34,10 @@ class FakeClient {
   disconnect(): void {}
   async replyStream(...args: any[]): Promise<void> {
     this.replies.push(args);
+    if (this.replyError) throw this.replyError;
+  }
+  async replyStreamWithCard(...args: any[]): Promise<void> {
+    this.repliesWithCard.push(args);
     if (this.replyError) throw this.replyError;
   }
   async sendMessage(...args: any[]): Promise<void> {
@@ -326,6 +331,72 @@ describe("WeComBotTransport", () => {
           option_list: [{ id: "completed", text: "已完成", is_checked: true }],
         },
       },
+    ]);
+  });
+
+  it("combines a final stream reply with one card and falls back proactively", async () => {
+    const client = new FakeClient();
+    const transport = new WeComBotTransport({
+      accountId: "bot-a",
+      botId: "id",
+      secret: "secret",
+      clientFactory: () => client,
+    });
+    const presentation = {
+      kind: "actions" as const,
+      id: "actions_1",
+      title: "接下来",
+      actions: [
+        { id: "continue", label: "继续展开", style: "primary" as const },
+      ],
+    };
+    await transport.deliver({
+      type: "reply",
+      accountId: "bot-a",
+      conversationId: "chat-1",
+      replyReference: { requestId: "req-1" },
+      streamId: "stream-1",
+      text: "最终回答",
+      final: true,
+      presentation,
+    });
+    expect(client.repliesWithCard[0]).toMatchObject([
+      { headers: { req_id: "req-1" } },
+      "stream-1",
+      "最终回答",
+      true,
+      {
+        templateCard: {
+          task_id: "actions_1",
+          card_type: "button_interaction",
+          button_list: [{ key: "continue", text: "继续展开", style: 1 }],
+        },
+      },
+    ]);
+
+    client.replyError = { errcode: 846608 };
+    await transport.deliver({
+      type: "reply",
+      accountId: "bot-a",
+      conversationId: "chat-1",
+      replyReference: { requestId: "expired" },
+      streamId: "stream-2",
+      text: "窗口过期后的回答",
+      final: true,
+      presentation: { ...presentation, id: "actions_2" },
+    });
+    expect(client.pushes.slice(-2)).toMatchObject([
+      [
+        "chat-1",
+        { msgtype: "markdown", markdown: { content: "窗口过期后的回答" } },
+      ],
+      [
+        "chat-1",
+        {
+          msgtype: "template_card",
+          template_card: { task_id: "actions_2" },
+        },
+      ],
     ]);
   });
 

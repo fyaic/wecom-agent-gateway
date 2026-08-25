@@ -95,6 +95,7 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
     "status-events",
     "interaction-resume",
     "interaction-live-resume",
+    "reply-actions",
   ]);
   readonly capabilities: ReadonlySet<RuntimeCapability> =
     this.mutableCapabilities;
@@ -248,6 +249,24 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
     request: AgentInteractionResumeRequest,
   ): AsyncIterable<AgentRunEvent> {
     if (this.completedInteractionResumes.has(request.idempotencyKey)) return;
+    if (
+      request.interaction.kind === "actions" &&
+      request.interaction.resumeMode === "new-turn"
+    ) {
+      if (!request.message) {
+        throw new Error("Pi reply action continuation has no callback message");
+      }
+      yield* this.run({
+        message: request.message,
+        sessionId: request.sessionId,
+      });
+      rememberBounded(
+        this.completedInteractionResumes,
+        request.idempotencyKey,
+        1_000,
+      );
+      return;
+    }
     const active = this.active;
     const pending = active?.interaction;
     if (!active || active.sessionId !== request.sessionId || !pending) {
@@ -612,6 +631,7 @@ export class PooledPiRuntimeAdapter implements AgentRuntimeAdapter {
     [];
   private readonly activeSessions = new Map<string, AgentRuntimeAdapter>();
   private readonly sessionLocks = new Map<string, Promise<void>>();
+  private readonly completedInteractionResumes = new Set<string>();
   private startPromise?: Promise<void>;
   private started = false;
 
@@ -693,7 +713,27 @@ export class PooledPiRuntimeAdapter implements AgentRuntimeAdapter {
   async *resumeInteraction(
     request: AgentInteractionResumeRequest,
   ): AsyncIterable<AgentRunEvent> {
+    if (this.completedInteractionResumes.has(request.idempotencyKey)) return;
     const worker = this.activeSessions.get(request.sessionId);
+    if (
+      !worker &&
+      request.interaction.kind === "actions" &&
+      request.interaction.resumeMode === "new-turn"
+    ) {
+      if (!request.message) {
+        throw new Error("Pi reply action continuation has no callback message");
+      }
+      yield* this.run({
+        message: request.message,
+        sessionId: request.sessionId,
+      });
+      rememberBounded(
+        this.completedInteractionResumes,
+        request.idempotencyKey,
+        1_000,
+      );
+      return;
+    }
     if (!worker?.resumeInteraction) {
       throw new Error("Pi interaction is no longer assigned to a live worker");
     }

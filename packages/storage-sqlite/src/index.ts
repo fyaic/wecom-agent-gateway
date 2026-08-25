@@ -674,19 +674,35 @@ export class SqliteGatewayStore implements GatewayStore {
       const active = this.database
         .prepare(
           `
-          SELECT 1
+          SELECT interaction_id, request_json
           FROM runtime_interactions
           WHERE account_id = ? AND conversation_id = ?
             AND status = 'pending' AND expires_at > ?
-          LIMIT 1
         `,
         )
-        .get(
+        .all(
           interaction.accountId,
           interaction.conversationId,
           interaction.createdAt,
-        );
-      if (active) return false;
+        ) as unknown as Array<{
+        interaction_id: string;
+        request_json: string;
+      }>;
+      for (const candidate of active) {
+        const request = JSON.parse(
+          candidate.request_json,
+        ) as PendingRuntimeInteraction["request"];
+        if (!isReplyActionRequest(request)) return false;
+        this.database
+          .prepare(
+            `
+            UPDATE runtime_interactions
+            SET status = 'cancelled', resolved_at = ?
+            WHERE interaction_id = ? AND status = 'pending'
+          `,
+          )
+          .run(interaction.createdAt, candidate.interaction_id);
+      }
       const result = this.database
         .prepare(
           `
@@ -864,7 +880,7 @@ export class SqliteGatewayStore implements GatewayStore {
         .prepare(
           `
           SELECT interaction_id, account_id, conversation_id,
-                 conversation_type, adapter_id, session_id
+                 conversation_type, adapter_id, session_id, request_json
           FROM runtime_interactions
           WHERE status = 'pending' AND expires_at <= ?
           ORDER BY expires_at, interaction_id
@@ -894,6 +910,16 @@ export class SqliteGatewayStore implements GatewayStore {
           )
           .run(resultJson, options.now, row.interaction_id, options.now);
         if (updated.changes !== 1) continue;
+        if (
+          isReplyActionRequest(
+            JSON.parse(
+              row.request_json,
+            ) as PendingRuntimeInteraction["request"],
+          )
+        ) {
+          expired += 1;
+          continue;
+        }
         this.database
           .prepare(
             `
@@ -1060,7 +1086,8 @@ export class SqliteGatewayStore implements GatewayStore {
         SELECT resumes.id, resumes.interaction_id, resumes.account_id,
                resumes.conversation_id, resumes.conversation_type,
                resumes.adapter_id, resumes.session_id, resumes.result_json,
-               resumes.attempts, interactions.request_json
+               resumes.attempts, interactions.sender_id,
+               interactions.request_json
         FROM runtime_interaction_resumes AS resumes
         JOIN runtime_interactions AS interactions
           ON interactions.interaction_id = resumes.interaction_id
@@ -1068,22 +1095,24 @@ export class SqliteGatewayStore implements GatewayStore {
       `,
       )
       .get(id) as RuntimeInteractionResumeRow | undefined;
-    return row
-      ? {
-          id: String(row.id),
-          interactionId: row.interaction_id,
-          kind: (
-            JSON.parse(row.request_json) as PendingRuntimeInteraction["request"]
-          ).kind,
-          accountId: row.account_id,
-          conversationId: row.conversation_id,
-          conversationType: row.conversation_type,
-          adapterId: row.adapter_id,
-          sessionId: row.session_id,
-          result: JSON.parse(row.result_json) as RuntimeInteractionResult,
-          attempts: row.attempts,
-        }
-      : undefined;
+    if (!row) return undefined;
+    const request = JSON.parse(
+      row.request_json,
+    ) as PendingRuntimeInteraction["request"];
+    return {
+      id: String(row.id),
+      interactionId: row.interaction_id,
+      kind: request.kind,
+      accountId: row.account_id,
+      conversationId: row.conversation_id,
+      conversationType: row.conversation_type,
+      adapterId: row.adapter_id,
+      sessionId: row.session_id,
+      senderId: row.sender_id,
+      request,
+      result: JSON.parse(row.result_json) as RuntimeInteractionResult,
+      attempts: row.attempts,
+    };
   }
 
   private getLeasedOutboxRow(id: string, owner: string): OutboxRow {
@@ -1177,6 +1206,7 @@ interface RuntimeInteractionScopeRow {
 
 interface RuntimeInteractionExpiryRow extends RuntimeInteractionScopeRow {
   interaction_id: string;
+  request_json: string;
 }
 
 interface RuntimeInteractionResumeRow {
@@ -1187,9 +1217,16 @@ interface RuntimeInteractionResumeRow {
   conversation_type: RuntimeInteractionResumeEntry["conversationType"];
   adapter_id: string;
   session_id: string;
+  sender_id: string;
   result_json: string;
   request_json: string;
   attempts: number;
+}
+
+function isReplyActionRequest(
+  request: PendingRuntimeInteraction["request"],
+): boolean {
+  return request.kind === "actions" && request.resumeMode === "new-turn";
 }
 
 function runtimeInteraction(

@@ -1,11 +1,13 @@
 import type {
   AgentRunEvent,
   AgentStatusPhase,
+  Presentation,
 } from "@fyaic/wecom-runtime-contract";
 
 export interface ReplyUpdate {
   text: string;
   final: boolean;
+  presentation?: Presentation;
 }
 
 export interface MutableReplyOptions {
@@ -55,7 +57,7 @@ export class MutableReply {
     }
   }
 
-  async close(text: string): Promise<void> {
+  async close(text: string, presentation?: Presentation): Promise<void> {
     if (this.closed) return;
     this.closed = true;
     this.pendingText = undefined;
@@ -64,7 +66,11 @@ export class MutableReply {
       this.timer = undefined;
     }
     await this.inFlight;
-    await this.deliver({ text, final: true });
+    await this.deliver({
+      text,
+      final: true,
+      ...(presentation ? { presentation } : {}),
+    });
   }
 
   private flushPending(): void {

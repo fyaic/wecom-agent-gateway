@@ -75,6 +75,7 @@ Kernel 应使用 ACP 子进程和环境 allowlist。Gateway SDK 不负责 Agent 
 | `multimodal-output`       | 可产生受根目录、大小和数量约束的 `media-output`                   |
 | `interaction-resume`      | 可接收持久化的结构化交互结果并恢复同一 Kernel session             |
 | `interaction-live-resume` | 结果是仍在等待的原生调用控制响应；允许绕过语义 turn 队列          |
+| `reply-actions`           | 可附最终快捷动作，并把真实 callback 作为新 turn 继续同一 session  |
 
 Kernel 自己拥有工具不等于 `tools`；模型支持图片也不等于 Adapter 已实现安全媒体输入。
 
@@ -129,3 +130,8 @@ Adapter 只在 Kernel 真实请求用户输入时发出 `{type: "interaction-req
 Kernel 的原调用仍在等待控制响应时才额外声明 `interaction-live-resume`；这条响应不会经过正常会话队列，
 Adapter 必须验证 session 仍绑定原 live worker，并按 idempotency key 忽略重复投递。任何失败都不能通过
 合成用户 Prompt 来“模拟恢复”。
+
+最终回复快捷操作与 live ask-user 不同。Adapter 只有在能把
+`resumeMode=new-turn` 的 callback continuation 恢复为同 session 新回合时才声明 `reply-actions`；所选
+value 是 Adapter 预先绑定的规范化输入，不得是 shell 命令或厂商卡片 JSON。该 continuation 必须经过
+Gateway 正常会话队列和并发限制，不能借 `interaction-live-resume` 绕过背压。

@@ -24,6 +24,7 @@ import {
 } from "@fyaic/wecom-local-control";
 import { createConfiguredAdapter } from "./adapter-registry.js";
 import { redactSecrets } from "./redaction.js";
+import { parseReplyActions } from "./reply-actions.js";
 
 const botId = required("WECOM_BOT_ID");
 const secret = required("WECOM_BOT_SECRET");
@@ -203,6 +204,11 @@ const gateway = new WeComAgentGateway({
   interactionTimeoutMs: positiveInteger(
     process.env.GATEWAY_INTERACTION_TIMEOUT_MS,
     5 * 60_000,
+  ),
+  replyActions: parseReplyActions(process.env.GATEWAY_REPLY_ACTIONS_JSON),
+  replyActionTimeoutMs: positiveInteger(
+    process.env.GATEWAY_REPLY_ACTION_TIMEOUT_MS,
+    24 * 60 * 60 * 1_000,
   ),
   maxProactiveTextBytes: positiveInteger(
     process.env.GATEWAY_PROACTIVE_MAX_TEXT_BYTES,
