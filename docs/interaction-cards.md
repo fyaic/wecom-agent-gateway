@@ -89,7 +89,8 @@ M2.5 的 Channel-neutral presentation 扩展，不提前把厂商字段写进 Ru
   以省略号改变选项含义。
 - 当前智能机器人端对无跳转 `text_notice` 的更新与 SDK 示例不一致：`card_action` 省略或设为
   `{type: 0}` 都返回 `42045`。结果状态因此保持为交互卡语义，使用 update-only 的
-  `checkbox.disable=true`、已勾选“已完成”且不再提供提交按钮；不添加虚假跳转链接。
+  `checkbox.disable=true` 和已勾选“已完成”；不添加虚假跳转链接。真实服务端仍强制要求
+  `submit_button`，因此保留同名“已完成”按钮，重复回调只返回既有状态且不恢复 Agent。
 
 ## Runtime Contract
 
@@ -289,6 +290,9 @@ durable resume，证明业务幂等成立。但原位结果卡因无动作 notic
 第二轮已验证纵向单选发送成功，用户提交后 1ms 内只完成一次 live resume，Pi 原 run 继续完成；但按
 官方示例省略 `card_action` 的 `text_notice` 仍被真实服务端以相同 `42045` 拒绝。第三轮改为禁用的
 `vote_interaction` 结果态，必须再次真实验证后才能关闭 UI 验收。
+
+第三轮证明禁用 checkbox 被服务端接受，但省略 submit button 会返回 `42049
+submit_button.text Missing or Invalid`。第四轮完成态补齐必填的“已完成”按钮；业务去重边界不变。
 
 可运行的无副作用 Pi 示例位于 `examples/pi-wecom-interaction.mjs`；它只在 Agent 明确调用时展示选择、
 确认或输入，不执行办公写操作。

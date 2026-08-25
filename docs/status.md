@@ -59,7 +59,7 @@
 | 审批按钮卡片与 SQLite 交互状态                  | 完成并自动化验证，待实测           | 回调 ACL/幂等/发送者/会话/失效绑定；五秒内原位更新；文本命令降级            |
 | 耐久通用 Interaction Broker                     | M2.1 完成并自动化验证              | 单选/多选/取消/TTL；五秒 fast lane；同 session resume；租约/重试/死信       |
 | Pi 原生 ask-user 交互桥                         | M2.2 完成并自动化验证，待企微实测  | select/confirm/input/editor；native response；live resume；限定文本回复     |
-| 单选卡片可读性与颜色语义                        | 纵向选择已实测，结果态待第三轮复测 | 完整标签、无首项偏置、显式 action style、禁用完成态                         |
+| 单选卡片可读性与颜色语义                        | 纵向选择已实测，结果态待第四轮复测 | 完整标签、无首项偏置、显式 action style、禁用完成态                         |
 | SQLite 重启恢复                                 | 完成并自动化验证                   | 入站去重、runtime session、待发送文本与投递日志跨 reopen 保留               |
 | SQLite 文件权限                                 | 完成并自动化验证                   | Store 每次打开都强制主数据库为 `0600`；本机现有数据库已收紧                 |
 | SQLite 故障因果保留                             | 完成并自动化验证                   | 写入/提交失败后即使回滚也失败，仍抛出原始故障而非二次回滚错误               |
@@ -226,8 +226,9 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
 - 首轮真实私聊 select 已证明 Pi 原 run 完成且多次点击只产生一次 resume，但结果 notice 的
   `card_action:{type:0}` 被服务端以 `42045` 拒绝；横排按钮还导致文字不全和首项蓝色偏置。该轮记为部分
   通过。第二轮已确认纵向 vote 能提交、9 秒内收到用户选择、live resume 仅 1ms 且恰好一次；但按官方
-  示例省略 `card_action` 的结果 notice 仍返回相同 `42045`。结果更新现改为无提交按钮的禁用
-  `vote_interaction` 完成态，等待第三轮真实复测后再关闭验收项。
+  示例省略 `card_action` 的结果 notice 仍返回相同 `42045`。第三轮禁用 vote 已越过该校验，但服务端因
+  缺少必填 `submit_button.text` 返回 `42049`；提交约 12.8 秒、live resume 2ms 且恰好一次。第四轮完成态
+  补齐“已完成”按钮，重复回调仍由 durable Broker 幂等消费，复测后再关闭验收项。
 
 ### M5：生产运行与韧性
 
