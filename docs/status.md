@@ -4,77 +4,77 @@
 
 ## 已完成并有自动化验证
 
-| 能力                                            | 状态                               | 证据                                                                        |
-| ----------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------- |
-| Runtime-neutral 核心契约                        | 完成                               | TypeScript strict typecheck                                                 |
-| Runtime Contract v1 与启动期兼容检查            | 完成并自动化验证                   | 真实 Adapter 必须声明 v1；错误版本和重复 ID 在启动前拒绝                    |
-| Agent 状态/emoji 中立事件                       | 完成并自动化验证                   | Channel 只呈现 Agent 显式状态；不注入提示、不推断情绪                       |
-| 可变 Bot 消息与流式合并                         | 完成并自动化验证                   | 中性即时回执、250ms 增量合并、同一消息最终化                                |
-| Channel/Kernel 分层延迟事件                     | 完成并自动化验证                   | 队列、首回执、Kernel 首事件/首文本、完成/失败分别记录                       |
-| Transport/Kernel capability 声明                | 完成并真实验证                     | ACP initialize 与 Transport capability 共同约束流式、恢复和多模态           |
-| 精确输入/输出模态契约                           | 完成并自动化/真实验证              | Core 按 Transport/Adapter 类型集合 fail closed；图片、文件、MP4 链路通过    |
-| Adapter Host 生命周期                           | 完成并自动化验证                   | Adapter ready 后开放入口；停入口、排空任务后释放 Adapter                    |
-| 配置驱动 Adapter Registry                       | 完成并自动化验证                   | `codex` / `kimi` / 任意 ACP v1 可执行程序；Core 无厂商类型                  |
-| 外部 Adapter SDK 与模板                         | 完成并自动化验证                   | 可信模块动态装载、v1/shape/tool 校验；新增 Kernel 无需修改 Registry         |
-| 外部 Adapter 模板 Doctor                        | 本机真实验证                       | 通过部署入口动态加载模板；普通 10/10、live health 11/11                     |
-| 通用 ACP v1 Adapter                             | 完成并真实验证                     | stdio、协商、流式/load/cancel/图片真实通过；permission 自动化通过           |
-| Codex/ACP 共享 Runtime Contract                 | 完成并自动化验证                   | 两个 Adapter 共用文本、流式、首轮 session 与恢复 testkit                    |
-| Kimi Code ACP Adapter                           | 完成并真实验证                     | 本机真实两轮及企业微信文本、同会话图片均通过                                |
-| OpenClaw Gateway WebSocket Adapter              | 完成并本机真实验证                 | 官方客户端、流式/恢复/取消/图片契约；GLM-5.2 两轮真实通过                   |
-| OpenClaw 终态事件对账                           | 完成并自动化/真实验证              | `agent.wait + chat.history` 恢复缺失终态，不改写 Agent 内容                 |
-| Pi 官方 JSONL RPC Adapter                       | 完成并真实验证                     | 严格 LF、文本流式/恢复/取消、session root、UI fail-closed；真实私聊通过     |
-| Pi CLI 与真实 RPC Doctor                        | 本机真实验证                       | Pi `0.84.2`；启动/get_state/health/停止通过，Doctor 9/9                     |
-| Pi 模型输入能力动态协商                         | 完成并自动化/真实验证              | GLM-5.2 动态关闭图片；GLM-4.6V 动态开启并完成真实截图识别                   |
-| Pi 有界 worker pool                             | 完成并本机真实验证                 | 默认 2 worker；同 session 串行、不同 session 并行；真实并发与受管重启通过   |
-| 部署前 Doctor 与 checked start                  | 完成并自动化验证                   | Node、凭据、ACL、权限、存储、可执行文件/Gateway 连接与 live health          |
-| 聚合 Operational Snapshot                       | 完成并自动化验证                   | 运行/组件/工作/Outbox 健康；无正文、用户/会话/内部 ID                       |
-| loopback 健康与 Prometheus 指标                 | 完成并自动化验证                   | livez/readyz/metrics、超时、枚举 label、拒绝非 loopback bind                |
-| Linux/systemd 与容器基线                        | 完成并自动化验证                   | 专用用户、私有 env、非 root/read-only/cap-drop、内部 healthcheck            |
-| macOS OpenClaw 受管单实例                       | 完成并本机真实验证                 | LaunchAgent、钥匙串进程注入、RunAtLoad/KeepAlive、受管重启与重新鉴权        |
-| macOS Pi 受管单实例                             | 完成并本机真实验证                 | LaunchAgent、Pi 私有 auth、互斥 plist；受管重启后 ready 并重新鉴权          |
-| Fake transport → core → fake runtime → 流式回复 | 完成                               | `packages/channel-core/test/gateway.test.ts`                                |
-| 入站消息去重                                    | 完成                               | 同一 `accountId + messageId` 只触发一次 runtime                             |
-| 会话恢复映射                                    | 完成                               | 第二条消息复用 fake session                                                 |
-| 官方 SDK frame 归一化                           | 完成                               | `packages/transport-wecom-bot/test/transport.test.ts`                       |
-| 被动流式回复与主动推送映射                      | 完成                               | fake SDK client contract test                                               |
-| Gateway 原生主动消息控制面                      | 完成并自动化验证                   | 0600 Unix socket、白名单别名、无凭据 CLI、文本/媒体 Outbox                  |
-| Codex SDK adapter 最小实现                      | 本机真实 SDK smoke 已通过          | 创建真实 thread，经历瞬时重连后返回预期文本；快照增量与恢复 ID 有自动化测试 |
-| Codex App Server 持久 adapter                   | 完成并真实验证                     | 单一常驻进程、JSONL RPC、thread 恢复、流式事件、取消和无语义启动            |
-| 入站媒体临时物化                                | 完成并自动化验证                   | SDK 下载/解密、50MB 上限、`0700/0600` 权限、finally 清理                    |
-| Codex 原生图片/音频输入                         | 完成，真实图片已通过               | App Server `localImage`/`localAudio`；不转成文字描述、不注入占位 Prompt     |
-| 媒体敏感字段持久化边界                          | 完成并自动化验证                   | SQLite 不保存临时 URL、AES key 或本地临时路径                               |
-| Agent 输出媒体通用链路                          | 完成并自动化验证                   | 显式事件、capability 交集、每 run 上限、安全根目录、脱敏日志                |
-| 官方 SDK 媒体上传与主动发送                     | 完成并真实验证                     | `uploadMedia` → `media_id` → `sendMediaMessage`；仅发送至授权私聊           |
-| 出站媒体耐久 Spool                              | 完成并自动化验证                   | 私有复制、大小/哈希、总配额、孤儿回收；数据库无 Agent 原始路径              |
-| 媒体 Outbox 崩溃恢复                            | 完成并自动化验证                   | 删除原文件后重启，SQLite + spool 恢复发送并在成功后清理                     |
-| Runtime-neutral 工具注册                        | 完成并自动化验证                   | schema/effect/approval 契约；core 不解释工具语义                            |
-| Codex 动态工具桥                                | 完成并真实验证                     | `dynamicTools`、`item/tool/call`、超时/输出上限、通用错误脱敏               |
-| `wecom-cli` 只读联系人工具                      | 完成并真实验证                     | 精确命令映射、二次参数校验、`execFile`、独立配置目录；本机真实搜索通过      |
-| 持久化审批控制面                                | 完成并真实批准验证                 | 精确命令、同会话/发送者绑定、幂等决定、超时与停机/重启中断                  |
-| Codex 写工具审批映射                            | 完成并真实批准验证                 | 仅批准后执行；拒绝/过期/中断均不调用工具函数                                |
-| `wecom-cli` 单条待办创建工具                    | 完成并真实验证，默认关闭           | 精确 argv、参数二次校验、具体审批摘要、返回 ID 移除                         |
-| Kernel 审批截止与孤立审批回收                   | 完成并自动化验证                   | Adapter 较短上限；turn 先结束即中断该 run 的 pending                        |
-| 独立持久审批提示                                | 完成并自动化验证                   | 主动 Bot 消息不受 Agent 流覆盖；Transport 不支持时 fail closed              |
-| Channel-neutral 五类结构化卡片                  | Phase 1 完成并自动化验证           | 通知/图文/按钮/投票/表单映射官方 SDK；不接收厂商 JSON                       |
-| 审批按钮卡片与 SQLite 交互状态                  | 完成并自动化验证，待实测           | 回调 ACL/幂等/发送者/会话/失效绑定；五秒内原位更新；文本命令降级            |
-| 耐久通用 Interaction Broker                     | M2.1 完成并自动化验证              | 单选/多选/取消/TTL；五秒 fast lane；同 session resume；租约/重试/死信       |
-| Pi 原生 ask-user 交互桥                         | M2.2 完成并自动化验证，待企微实测  | select/confirm/input/editor；native response；live resume；限定文本回复     |
-| 单选卡片可读性与颜色语义                        | 纵向选择已实测，结果态待第四轮复测 | 完整标签、无首项偏置、显式 action style、禁用完成态                         |
-| SQLite 重启恢复                                 | 完成并自动化验证                   | 入站去重、runtime session、待发送文本与投递日志跨 reopen 保留               |
-| SQLite 文件权限                                 | 完成并自动化验证                   | Store 每次打开都强制主数据库为 `0600`；本机现有数据库已收紧                 |
-| SQLite 故障因果保留                             | 完成并自动化验证                   | 写入/提交失败后即使回滚也失败，仍抛出原始故障而非二次回滚错误               |
-| 文本持久化 Outbox                               | 完成并自动化验证                   | 发送前提交、事务认领、租约过期接管、指数退避与死信                          |
-| OS 进程强杀后的 Outbox 恢复                     | 完成并自动化验证                   | 子进程持有 SQLite 租约时 `SIGKILL`；新进程租约过期后恢复并完成唯一投递      |
-| 流式待发版本替代                                | 完成并自动化验证                   | 同一 stream 只恢复最新 pending 状态，旧 partial 标记 superseded             |
-| Outbox 分会话调度                               | 完成并自动化验证                   | 同会话有序、不同会话并发，不引入全局队头阻塞                                |
-| Outbox 无标识生命周期指标                       | 完成并自动化验证                   | 阶段、命令类型、尝试次数；不含消息/会话/目标 ID                             |
-| 有界入站与 Agent 并发                           | 完成并自动化验证                   | ACL 前置；全局/单会话待处理上限、run semaphore、无标识拒绝事件              |
-| 死信聚合与受限重排                              | 完成并自动化验证                   | 仅统计数量；显式确认后只重排最终回复/主动文本，不含 partial/媒体            |
-| Fail-closed ACL                                 | 完成并自动化验证                   | sender/conversation allowlist；空配置拒绝启动                               |
-| 流式窗口过期降级                                | 完成并自动化验证                   | 官方错误码 `846608` 的最终文本改走 Bot `sendMessage`                        |
-| SDK/Adapter/Outbox 故障恢复                     | 完成并自动化/受管验证              | 重新鉴权后续投递、失败 Pi client 替换、租约/媒体恢复、受管重启              |
-| 凭据日志脱敏                                    | 完成并自动化验证                   | Bot 凭据与常见 secret/token/authorization 字段替换为 `[REDACTED]`           |
-| 分域精确白名单与私聊挑战注册                    | 完成并自动化验证                   | 私聊从真实回调注册；群聊从最新会话唯一匹配；内部 ID 不输出                  |
+| 能力                                            | 状态                        | 证据                                                                        |
+| ----------------------------------------------- | --------------------------- | --------------------------------------------------------------------------- |
+| Runtime-neutral 核心契约                        | 完成                        | TypeScript strict typecheck                                                 |
+| Runtime Contract v1 与启动期兼容检查            | 完成并自动化验证            | 真实 Adapter 必须声明 v1；错误版本和重复 ID 在启动前拒绝                    |
+| Agent 状态/emoji 中立事件                       | 完成并自动化验证            | Channel 只呈现 Agent 显式状态；不注入提示、不推断情绪                       |
+| 可变 Bot 消息与流式合并                         | 完成并自动化验证            | 中性即时回执、250ms 增量合并、同一消息最终化                                |
+| Channel/Kernel 分层延迟事件                     | 完成并自动化验证            | 队列、首回执、Kernel 首事件/首文本、完成/失败分别记录                       |
+| Transport/Kernel capability 声明                | 完成并真实验证              | ACP initialize 与 Transport capability 共同约束流式、恢复和多模态           |
+| 精确输入/输出模态契约                           | 完成并自动化/真实验证       | Core 按 Transport/Adapter 类型集合 fail closed；图片、文件、MP4 链路通过    |
+| Adapter Host 生命周期                           | 完成并自动化验证            | Adapter ready 后开放入口；停入口、排空任务后释放 Adapter                    |
+| 配置驱动 Adapter Registry                       | 完成并自动化验证            | `codex` / `kimi` / 任意 ACP v1 可执行程序；Core 无厂商类型                  |
+| 外部 Adapter SDK 与模板                         | 完成并自动化验证            | 可信模块动态装载、v1/shape/tool 校验；新增 Kernel 无需修改 Registry         |
+| 外部 Adapter 模板 Doctor                        | 本机真实验证                | 通过部署入口动态加载模板；普通 10/10、live health 11/11                     |
+| 通用 ACP v1 Adapter                             | 完成并真实验证              | stdio、协商、流式/load/cancel/图片真实通过；permission 自动化通过           |
+| Codex/ACP 共享 Runtime Contract                 | 完成并自动化验证            | 两个 Adapter 共用文本、流式、首轮 session 与恢复 testkit                    |
+| Kimi Code ACP Adapter                           | 完成并真实验证              | 本机真实两轮及企业微信文本、同会话图片均通过                                |
+| OpenClaw Gateway WebSocket Adapter              | 完成并本机真实验证          | 官方客户端、流式/恢复/取消/图片契约；GLM-5.2 两轮真实通过                   |
+| OpenClaw 终态事件对账                           | 完成并自动化/真实验证       | `agent.wait + chat.history` 恢复缺失终态，不改写 Agent 内容                 |
+| Pi 官方 JSONL RPC Adapter                       | 完成并真实验证              | 严格 LF、文本流式/恢复/取消、session root、UI fail-closed；真实私聊通过     |
+| Pi CLI 与真实 RPC Doctor                        | 本机真实验证                | Pi `0.84.2`；启动/get_state/health/停止通过，Doctor 9/9                     |
+| Pi 模型输入能力动态协商                         | 完成并自动化/真实验证       | GLM-5.2 动态关闭图片；GLM-4.6V 动态开启并完成真实截图识别                   |
+| Pi 有界 worker pool                             | 完成并本机真实验证          | 默认 2 worker；同 session 串行、不同 session 并行；真实并发与受管重启通过   |
+| 部署前 Doctor 与 checked start                  | 完成并自动化验证            | Node、凭据、ACL、权限、存储、可执行文件/Gateway 连接与 live health          |
+| 聚合 Operational Snapshot                       | 完成并自动化验证            | 运行/组件/工作/Outbox 健康；无正文、用户/会话/内部 ID                       |
+| loopback 健康与 Prometheus 指标                 | 完成并自动化验证            | livez/readyz/metrics、超时、枚举 label、拒绝非 loopback bind                |
+| Linux/systemd 与容器基线                        | 完成并自动化验证            | 专用用户、私有 env、非 root/read-only/cap-drop、内部 healthcheck            |
+| macOS OpenClaw 受管单实例                       | 完成并本机真实验证          | LaunchAgent、钥匙串进程注入、RunAtLoad/KeepAlive、受管重启与重新鉴权        |
+| macOS Pi 受管单实例                             | 完成并本机真实验证          | LaunchAgent、Pi 私有 auth、互斥 plist；受管重启后 ready 并重新鉴权          |
+| Fake transport → core → fake runtime → 流式回复 | 完成                        | `packages/channel-core/test/gateway.test.ts`                                |
+| 入站消息去重                                    | 完成                        | 同一 `accountId + messageId` 只触发一次 runtime                             |
+| 会话恢复映射                                    | 完成                        | 第二条消息复用 fake session                                                 |
+| 官方 SDK frame 归一化                           | 完成                        | `packages/transport-wecom-bot/test/transport.test.ts`                       |
+| 被动流式回复与主动推送映射                      | 完成                        | fake SDK client contract test                                               |
+| Gateway 原生主动消息控制面                      | 完成并自动化验证            | 0600 Unix socket、白名单别名、无凭据 CLI、文本/媒体 Outbox                  |
+| Codex SDK adapter 最小实现                      | 本机真实 SDK smoke 已通过   | 创建真实 thread，经历瞬时重连后返回预期文本；快照增量与恢复 ID 有自动化测试 |
+| Codex App Server 持久 adapter                   | 完成并真实验证              | 单一常驻进程、JSONL RPC、thread 恢复、流式事件、取消和无语义启动            |
+| 入站媒体临时物化                                | 完成并自动化验证            | SDK 下载/解密、50MB 上限、`0700/0600` 权限、finally 清理                    |
+| Codex 原生图片/音频输入                         | 完成，真实图片已通过        | App Server `localImage`/`localAudio`；不转成文字描述、不注入占位 Prompt     |
+| 媒体敏感字段持久化边界                          | 完成并自动化验证            | SQLite 不保存临时 URL、AES key 或本地临时路径                               |
+| Agent 输出媒体通用链路                          | 完成并自动化验证            | 显式事件、capability 交集、每 run 上限、安全根目录、脱敏日志                |
+| 官方 SDK 媒体上传与主动发送                     | 完成并真实验证              | `uploadMedia` → `media_id` → `sendMediaMessage`；仅发送至授权私聊           |
+| 出站媒体耐久 Spool                              | 完成并自动化验证            | 私有复制、大小/哈希、总配额、孤儿回收；数据库无 Agent 原始路径              |
+| 媒体 Outbox 崩溃恢复                            | 完成并自动化验证            | 删除原文件后重启，SQLite + spool 恢复发送并在成功后清理                     |
+| Runtime-neutral 工具注册                        | 完成并自动化验证            | schema/effect/approval 契约；core 不解释工具语义                            |
+| Codex 动态工具桥                                | 完成并真实验证              | `dynamicTools`、`item/tool/call`、超时/输出上限、通用错误脱敏               |
+| `wecom-cli` 只读联系人工具                      | 完成并真实验证              | 精确命令映射、二次参数校验、`execFile`、独立配置目录；本机真实搜索通过      |
+| 持久化审批控制面                                | 完成并真实批准验证          | 精确命令、同会话/发送者绑定、幂等决定、超时与停机/重启中断                  |
+| Codex 写工具审批映射                            | 完成并真实批准验证          | 仅批准后执行；拒绝/过期/中断均不调用工具函数                                |
+| `wecom-cli` 单条待办创建工具                    | 完成并真实验证，默认关闭    | 精确 argv、参数二次校验、具体审批摘要、返回 ID 移除                         |
+| Kernel 审批截止与孤立审批回收                   | 完成并自动化验证            | Adapter 较短上限；turn 先结束即中断该 run 的 pending                        |
+| 独立持久审批提示                                | 完成并自动化验证            | 主动 Bot 消息不受 Agent 流覆盖；Transport 不支持时 fail closed              |
+| Channel-neutral 五类结构化卡片                  | Phase 1 完成并自动化验证    | 通知/图文/按钮/投票/表单映射官方 SDK；不接收厂商 JSON                       |
+| 审批按钮卡片与 SQLite 交互状态                  | 完成并自动化验证，待实测    | 回调 ACL/幂等/发送者/会话/失效绑定；五秒内原位更新；文本命令降级            |
+| 耐久通用 Interaction Broker                     | M2.1 完成并自动化验证       | 单选/多选/取消/TTL；五秒 fast lane；同 session resume；租约/重试/死信       |
+| Pi 原生 ask-user 交互桥                         | M2.2 完成，私聊单选真实通过 | select/confirm/input/editor；native response；live resume；限定文本回复     |
+| 单选卡片可读性与颜色语义                        | 私聊真实通过                | 完整标签、无首项偏置、显式 action style、禁用完成态、重复回调幂等           |
+| SQLite 重启恢复                                 | 完成并自动化验证            | 入站去重、runtime session、待发送文本与投递日志跨 reopen 保留               |
+| SQLite 文件权限                                 | 完成并自动化验证            | Store 每次打开都强制主数据库为 `0600`；本机现有数据库已收紧                 |
+| SQLite 故障因果保留                             | 完成并自动化验证            | 写入/提交失败后即使回滚也失败，仍抛出原始故障而非二次回滚错误               |
+| 文本持久化 Outbox                               | 完成并自动化验证            | 发送前提交、事务认领、租约过期接管、指数退避与死信                          |
+| OS 进程强杀后的 Outbox 恢复                     | 完成并自动化验证            | 子进程持有 SQLite 租约时 `SIGKILL`；新进程租约过期后恢复并完成唯一投递      |
+| 流式待发版本替代                                | 完成并自动化验证            | 同一 stream 只恢复最新 pending 状态，旧 partial 标记 superseded             |
+| Outbox 分会话调度                               | 完成并自动化验证            | 同会话有序、不同会话并发，不引入全局队头阻塞                                |
+| Outbox 无标识生命周期指标                       | 完成并自动化验证            | 阶段、命令类型、尝试次数；不含消息/会话/目标 ID                             |
+| 有界入站与 Agent 并发                           | 完成并自动化验证            | ACL 前置；全局/单会话待处理上限、run semaphore、无标识拒绝事件              |
+| 死信聚合与受限重排                              | 完成并自动化验证            | 仅统计数量；显式确认后只重排最终回复/主动文本，不含 partial/媒体            |
+| Fail-closed ACL                                 | 完成并自动化验证            | sender/conversation allowlist；空配置拒绝启动                               |
+| 流式窗口过期降级                                | 完成并自动化验证            | 官方错误码 `846608` 的最终文本改走 Bot `sendMessage`                        |
+| SDK/Adapter/Outbox 故障恢复                     | 完成并自动化/受管验证       | 重新鉴权后续投递、失败 Pi client 替换、租约/媒体恢复、受管重启              |
+| 凭据日志脱敏                                    | 完成并自动化验证            | Bot 凭据与常见 secret/token/authorization 字段替换为 `[REDACTED]`           |
+| 分域精确白名单与私聊挑战注册                    | 完成并自动化验证            | 私聊从真实回调注册；群聊从最新会话唯一匹配；内部 ID 不输出                  |
 
 ## 真实企业微信联调记录
 
@@ -132,6 +132,7 @@
 | 2026-08-25 | 隔离 Linux 网络断开与恢复     | 通过   | 官方 SDK disconnected、ready 降级；1/2/4/8/16s 退避后随网络恢复自动 authenticated、ready 恢复            |
 | 2026-08-25 | SQLite 持久卷只读与恢复       | 通过   | 同一卷 `:ro` 时真实 EROFS 并 fail closed；恢复读写后数据库、Adapter、官方连接和健康全部恢复              |
 | 2026-08-25 | SQLite 受限容量耗尽与恢复     | 通过   | 无网络 2MB Linux tmpfs 触发磁盘已满；释放预留空间后 42 条已提交记录全部可读、无 dead                     |
+| 2026-08-25 | Pi 私聊单选交互               | 通过   | 纵向完整选项、仅提交为主色；原 run 仅恢复一次；完成态原位更新成功，重复提交不再恢复 Agent                |
 
 ### 延迟结论
 
@@ -209,7 +210,7 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
 - M2.1 已实现 Agent-neutral Request/Result、`interaction-resume` capability、SQLite 原子
   resolve/enqueue、TTL sweep、租约恢复、退避重试/死信、即时卡片更新和新的主动回复边界。
 - deterministic adapter 已覆盖单选、多选、取消、过期、重复点击、跨发送者 ACL 和同 session 恢复；
-  SQLite 测试覆盖租约过期接管。真实企业微信 choice/form 验收仍明确列为下一步，尚未冒充实测完成。
+  SQLite 测试覆盖租约过期接管。真实企业微信私聊单选已通过，表单和群聊仍单独列为后续验收。
 
 ### M2.2：Agent ask-user 接入
 
@@ -221,14 +222,15 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
 - Gateway 强制每 account + conversation 只有一个 pending interaction；开放输入只消费同 sender 的
   下一条非空纯文本，不创建第二个 Agent turn。
 - 155 项 deterministic tests 已通过；本机 Pi `0.84.2` 加载仓库示例后真实产生 select request，接受
-  “测试环境”的 native response，原 tool result 得到该值且同一 run 最终回复“测试完成”。下一步仅剩
-  授权私聊和测试群的真实 choice/input 验收，然后进入 M2.3。
+  “测试环境”的 native response，原 tool result 得到该值且同一 run 最终回复“测试完成”。授权私聊
+  单选已完成真实闭环；下一步验证限定文本输入，再在授权测试群复测 ACL。
 - 首轮真实私聊 select 已证明 Pi 原 run 完成且多次点击只产生一次 resume，但结果 notice 的
   `card_action:{type:0}` 被服务端以 `42045` 拒绝；横排按钮还导致文字不全和首项蓝色偏置。该轮记为部分
   通过。第二轮已确认纵向 vote 能提交、9 秒内收到用户选择、live resume 仅 1ms 且恰好一次；但按官方
   示例省略 `card_action` 的结果 notice 仍返回相同 `42045`。第三轮禁用 vote 已越过该校验，但服务端因
   缺少必填 `submit_button.text` 返回 `42049`；提交约 12.8 秒、live resume 2ms 且恰好一次。第四轮完成态
-  补齐“已完成”按钮，重复回调仍由 durable Broker 幂等消费，复测后再关闭验收项。
+  补齐“已完成”按钮后，旧卡重复提交触发的原位更新被企业微信接受且无错误；durable resume 数量仍为
+  1，证明 UI 可收敛而 Agent 业务不会重复执行。私聊单选验收至此关闭。
 
 ### M5：生产运行与韧性
 

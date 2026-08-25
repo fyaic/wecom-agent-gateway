@@ -452,8 +452,8 @@ resume。示例 extension 不执行副作用；如果生产不希望暴露演示
 CTA 色。2026-08-25 首轮私聊中业务 resume 恰好一次且 Pi 原 run 完成，但横排按钮文字不全、首项错误
 高亮，并且结果卡更新收到 `42045`；因此该轮不能标记通过。第二轮纵向单选与 live resume 通过，但
 省略 `card_action` 的结果 notice 仍收到相同错误。第三轮的禁用完成态又因缺少服务端强制要求的
-`submit_button.text` 收到 `42049`。第四轮应显示禁用且已勾选的完成状态，并保留必填“已完成”按钮；
-再次点击该按钮不得产生第二次 Agent resume。
+`submit_button.text` 收到 `42049`。第四轮补齐“已完成”按钮后，真实旧卡重复提交触发的原位更新被
+企业微信接受、错误为空，durable resume 仍为 1；因此再次点击只收敛 UI，不产生第二次 Agent resume。
 
 当前网络中 Codex Responses WebSocket 首轮会耗尽重试预算后才回退 HTTP，因此默认
 `CODEX_RESPONSES_WEBSOCKET=false`：adapter 使用 ChatGPT 登录兼容的 HTTP-only provider。

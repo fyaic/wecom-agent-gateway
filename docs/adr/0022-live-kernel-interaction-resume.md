@@ -45,4 +45,5 @@ Pi Adapter 将 select/confirm 映射为企业微信结构化交互，将 input/e
 - deterministic tests 覆盖 Pi confirm/select/input 映射、重复 resume、worker 路由、单并发无死锁和
   scoped next-text 消费；SQLite 覆盖每会话单 pending 与 sender 范围。
 - 本机 Pi `0.84.2` 加载仓库无副作用 extension 后，真实产生 `extension_ui_request`、接受原生选择值并
-  继续原 run。真实企业微信点击和群聊 ACL 仍按 runbook 单独验收。
+  继续原 run。企业微信私聊单选已完成原 run 恢复、原位结果更新和重复回调幂等验收；限定文本输入与
+  群聊 ACL 仍按 runbook 单独验收。
