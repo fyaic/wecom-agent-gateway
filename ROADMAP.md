@@ -27,9 +27,11 @@ changes.
       runtime resume queue with deterministic end-to-end tests.
 - [x] M2.2: connect Pi native ask-user hooks to the neutral interaction contract,
       including live same-call resume and scoped text fallback.
+- [x] Complete the real WeCom ask-user acceptance matrix across private select,
+      private scoped input, group select, in-place updates, and duplicate safety.
 - [ ] M2.3: `replyStreamWithCard` final-answer actions and proactive fallback.
-- [ ] Complete real WeCom acceptance for approval and ask-user cards, including
-      callback scoping, in-place updates, rejection, expiry, and duplicates.
+- [ ] Complete the remaining real WeCom approval-card rejection, expiry, and
+      process-interruption acceptance checks.
 
 - Exercise host-level physical network loss, native WeCom video callbacks, and
   a real Linux/systemd soak. Cross-process SQLite lease recovery after
