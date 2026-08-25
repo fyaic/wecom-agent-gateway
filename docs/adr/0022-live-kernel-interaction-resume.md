@@ -46,4 +46,5 @@ Pi Adapter 将 select/confirm 映射为企业微信结构化交互，将 input/e
   scoped next-text 消费；SQLite 覆盖每会话单 pending 与 sender 范围。
 - 本机 Pi `0.84.2` 加载仓库无副作用 extension 后，真实产生 `extension_ui_request`、接受原生选择值并
   继续原 run。企业微信私聊单选已完成原 run 恢复、原位结果更新和重复回调幂等验收；限定文本输入也
-  已确认 scoped next-text 消费、1ms live resume 且不创建第二 turn。群聊 ACL 仍按 runbook 单独验收。
+  已确认 scoped next-text 消费、1ms live resume 且不创建第二 turn。授权测试群 select 进一步通过
+  group-only ACL、1ms live resume、原位更新和最终回复；跨发送者拒绝保留 deterministic 证据边界。
