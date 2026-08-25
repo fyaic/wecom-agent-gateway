@@ -49,8 +49,9 @@ README 的 `updateTemplateCard` 结果示例实际省略 `card_action`；第二�
 也返回相同错误。项目因此不再用 `text_notice` 表示交互完成，而使用 SDK 明确标注“仅更新卡片时有效”
 的 `checkbox.disable=true`，保留一个已选中的完成状态。第三轮实测又确认，即使 checkbox 已禁用，
 服务端仍强制要求 `submit_button.text`，省略时返回 `42049`；完成态因此保留“已完成”按钮，重复点击由
-Broker 幂等消费。同时，SDK 对 vote option 的 11 字描述是“建议”而非协议硬上限，本项目使用纵向
-vote 保留 Agent 的完整选项标签，不再为了横排按钮静默截断。
+Broker 幂等消费。补齐该按钮后真实 `updateTemplateCard` 已被服务端接受；重复提交只更新卡片，不再
+恢复 Agent。同时，SDK 对 vote option 的 11 字描述是“建议”而非协议硬上限，本项目使用纵向 vote
+保留 Agent 的完整选项标签，不再为了横排按钮静默截断。
 
 2026-08-25 继续核验官方仓库的交互式卡片 PR #176：贡献者已完成单选按钮、多问题聚合、投票单/
 多选、TTL、重复点击和真实 WebSocket E2E，并确认 callback `req_id` 在更新卡片后不可复用，后续回复

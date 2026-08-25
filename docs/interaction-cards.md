@@ -254,7 +254,7 @@ namespace、状态和视觉标识，防止 Agent 生成的“确认”冒充安�
 
 ### M2.1：Interaction Broker
 
-状态：2026-08-25 已完成确定性闭环，真实企业微信 choice/form 验收待执行。
+状态：2026-08-25 已完成确定性闭环，真实企业微信私聊单选已通过；表单和群聊待执行。
 
 - [x] Agent-neutral Request/Result 和 `interaction-resume` capability 契约。
 - [x] SQLite 完整交互状态机、TTL sweep 与 durable resume queue。
@@ -272,7 +272,7 @@ namespace、状态和视觉标识，防止 Agent 生成的“确认”冒充安�
 ### M2.2：Agent ask-user MVP
 
 状态：2026-08-25 已完成 Pi 原生 hook、live resume 与文本降级的实现和自动化验证；真实企业微信
-点击/文本验收待执行。
+私聊单选已通过，限定文本和群聊验收待执行。
 
 - [x] `interaction-requested` Adapter hook 和 `text-input` 中立契约。
 - [x] Pi `select/confirm/input/editor` 原生 RPC 映射，不注入 synthetic Prompt。
@@ -280,7 +280,8 @@ namespace、状态和视觉标识，防止 Agent 生成的“确认”冒充安�
 - [x] 每 account + conversation 最多一个活跃交互；文本回复额外绑定原 sender。
 - [x] durable resume 仍作为 callback 决定和 at-least-once 投递记录。
 - [x] 本机真实 Pi RPC extension UI request/response 冒烟。
-- [ ] 授权企业微信私聊和测试群真实 choice/input 验收。
+- [x] 授权企业微信私聊真实单选、结果原位更新和重复回调幂等验收。
+- [ ] 授权企业微信私聊 input 与测试群 choice/input 验收。
 
 2026-08-25 首轮授权私聊中，Pi select 原 run 完整恢复并最终回复“测试完成”；用户多次点击只产生一个
 durable resume，证明业务幂等成立。但原位结果卡因无动作 notice 携带 `{card_action:{type:0}}` 被真实
@@ -288,11 +289,13 @@ durable resume，证明业务幂等成立。但原位结果卡因无动作 notic
 通过、UI 失败”，不计入最终 E2E 通过；上述规则修复后必须重测。
 
 第二轮已验证纵向单选发送成功，用户提交后 1ms 内只完成一次 live resume，Pi 原 run 继续完成；但按
-官方示例省略 `card_action` 的 `text_notice` 仍被真实服务端以相同 `42045` 拒绝。第三轮改为禁用的
-`vote_interaction` 结果态，必须再次真实验证后才能关闭 UI 验收。
+官方示例省略 `card_action` 的 `text_notice` 仍被真实服务端以相同 `42045` 拒绝。第三轮因此改为禁用的
+`vote_interaction` 结果态。
 
 第三轮证明禁用 checkbox 被服务端接受，但省略 submit button 会返回 `42049
-submit_button.text Missing or Invalid`。第四轮完成态补齐必填的“已完成”按钮；业务去重边界不变。
+submit_button.text Missing or Invalid`。第四轮完成态补齐必填的“已完成”按钮；真实旧卡重复提交后，
+企业微信接受原位更新且没有错误，durable resume 仍保持恰好一次。该结果同时关闭 UI 收敛与业务幂等
+验收，未把重复按钮动作误送给 Agent。
 
 可运行的无副作用 Pi 示例位于 `examples/pi-wecom-interaction.mjs`；它只在 Agent 明确调用时展示选择、
 确认或输入，不执行办公写操作。

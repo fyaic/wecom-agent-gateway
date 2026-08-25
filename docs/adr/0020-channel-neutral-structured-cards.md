@@ -45,4 +45,5 @@ Phase 1 提供五类确定性映射和审批交互闭环。后续如允许 Kerne
 选项文案不按 SDK 建议长度静默截断。真实服务端对无跳转结果 notice 的 `card_action` 省略与 `{type:0}`
 两种形式都返回 `42045`，因此完成态映射为 update-only 的禁用 vote checkbox：显示已完成、保留结果
 摘要且不引入虚假 URL。服务端在 checkbox 禁用时仍要求 `submit_button.text`，省略会返回 `42049`；
-因此保留“已完成”按钮，其重复回调由 Interaction Broker 幂等消费。
+因此保留“已完成”按钮，其重复回调由 Interaction Broker 幂等消费。真实复测确认该完成态可被服务端
+接受，重复按钮动作只收敛 UI，durable resume 仍恰好一次。
