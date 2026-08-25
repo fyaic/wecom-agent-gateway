@@ -9,6 +9,8 @@ import type {
   InboundMessage,
   OutboundCommand,
   PendingApproval,
+  PendingPresentationInteraction,
+  ResolvedPresentationInteraction,
 } from "@fyaic/wecom-runtime-contract";
 
 interface MemoryOutboxItem {
@@ -28,6 +30,12 @@ interface MemoryApproval extends PendingApproval {
   resolvedAt?: string;
 }
 
+interface MemoryPresentationInteraction extends PendingPresentationInteraction {
+  status: "pending" | "resolved" | "expired";
+  actionId?: string;
+  resolvedAt?: string;
+}
+
 export class MemoryGatewayStore implements GatewayStore {
   readonly deliveries: Array<{
     messageId: string;
@@ -39,6 +47,10 @@ export class MemoryGatewayStore implements GatewayStore {
   private readonly sessions = new Map<string, string>();
   private readonly outbox = new Map<string, MemoryOutboxItem>();
   private readonly approvals = new Map<string, MemoryApproval>();
+  private readonly presentationInteractions = new Map<
+    string,
+    MemoryPresentationInteraction
+  >();
   private nextOutboxId = 1;
 
   async acceptInbound(message: InboundMessage): Promise<boolean> {
@@ -252,6 +264,57 @@ export class MemoryGatewayStore implements GatewayStore {
       interrupted += 1;
     }
     return interrupted;
+  }
+
+  async createPresentationInteraction(
+    interaction: PendingPresentationInteraction,
+  ): Promise<boolean> {
+    if (this.presentationInteractions.has(interaction.interactionId)) {
+      return false;
+    }
+    this.presentationInteractions.set(interaction.interactionId, {
+      ...interaction,
+      status: "pending",
+    });
+    return true;
+  }
+
+  async resolvePresentationInteraction(options: {
+    interactionId: string;
+    accountId: string;
+    conversationId: string;
+    senderId: string;
+    actionId: string;
+    now: string;
+  }): Promise<ResolvedPresentationInteraction | undefined> {
+    const interaction = this.presentationInteractions.get(
+      options.interactionId,
+    );
+    if (
+      interaction?.status === "pending" &&
+      interaction.expiresAt <= options.now
+    ) {
+      interaction.status = "expired";
+      interaction.resolvedAt = options.now;
+    }
+    if (
+      !interaction ||
+      interaction.status !== "pending" ||
+      interaction.accountId !== options.accountId ||
+      interaction.conversationId !== options.conversationId ||
+      interaction.senderId !== options.senderId
+    ) {
+      return undefined;
+    }
+    interaction.status = "resolved";
+    interaction.actionId = options.actionId;
+    interaction.resolvedAt = options.now;
+    return {
+      interactionId: interaction.interactionId,
+      kind: interaction.kind,
+      correlationId: interaction.correlationId,
+      actionId: options.actionId,
+    };
   }
 
   private sessionKey(scope: {

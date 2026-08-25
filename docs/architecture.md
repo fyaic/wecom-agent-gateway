@@ -72,8 +72,11 @@ approved → adapter 执行工具
 denied / expired / interrupted → adapter 不执行
 ```
 
-审批码不进入 Agent 的可变流式回复：原回复只显示等待状态，独立 Bot 主动消息保持可复制，直到
-客户端历史消息自然保留。Transport 不支持 `proactive-message` 时审批 fail closed。Gateway 不把
+支持结构化交互的 Transport 会发送独立“批准/拒绝”按钮卡片；初始卡片经 Outbox 耐久投递，回调继续
+经过 ACL、入站幂等以及 SQLite 中 account/conversation/sender/expiry 绑定，并在官方五秒窗口内原位
+更新结果。业务决定先持久化，原位更新是不可重试的 UX 操作。Transport 不支持卡片时，审批码不进入
+Agent 的可变流式回复：原回复只显示等待状态，独立 Bot 主动消息保持可复制，直到客户端历史消息自然
+保留。Transport 不支持 `proactive-message` 时审批 fail closed。Gateway 不把
 “可以”“同意”等自然语言解释成审批。控制命令必须是单一文本 part，并精确匹配
 `/approve CODE` 或 `/deny CODE`。它绕过 Agent 队列是为了解开正在等待的同会话 turn，不绕过
 ACL、入站幂等或发送者绑定。重复、跨会话、跨发送者和过期命令统一拒绝。
@@ -85,6 +88,13 @@ App Server 当前为 90 秒。停机和启动都会把遗留 `pending` 标成 `i
 结束，也立即中断属于该 run 的审批。进程重启后不会恢复并补执行旧副作用。SQLite 保存状态和经过
 校验的具体审批摘要用于审计；prompt 不含原始 JSON、内部 ID、凭据或工具结果，生命周期日志连摘要
 也不记录。存储异常 fail closed，并保证内存中的等待不会永久悬挂。
+
+## 结构化卡片边界
+
+Core 只认识通用 `Presentation`：notice、article、actions、choice、form。WeCom Transport 负责映射为
+官方五种 template card、约束长度/数量/唯一 ID、校验 HTTPS 链接和可选 hostname allowlist，并把
+`template_card_event` 归一化为通用交互。卡片不是 Agent 推理接口；当前 Phase 1 仅由 Gateway 控制面
+生成审批卡片。不会扫描 Agent 文本中的 JSON，也不会把企业微信私有结构扩散到 Adapter。
 
 ## Gateway Core 与 Adapter Host
 

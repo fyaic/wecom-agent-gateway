@@ -602,6 +602,78 @@ describe("SqliteGatewayStore", () => {
       { approval_id: "WAIT0001", status: "interrupted" },
     ]);
   });
+
+  it("persists, scopes, expires, and deduplicates presentation interactions", async () => {
+    const store = new SqliteGatewayStore(":memory:");
+    expect(
+      await store.createPresentationInteraction({
+        interactionId: "approval_card_1",
+        accountId: "bot",
+        conversationId: "chat",
+        senderId: "user",
+        kind: "approval",
+        correlationId: "A1B2C3D4",
+        createdAt: "2026-08-20T00:00:00.000Z",
+        expiresAt: "2026-08-20T00:05:00.000Z",
+      }),
+    ).toBe(true);
+    expect(
+      await store.resolvePresentationInteraction({
+        interactionId: "approval_card_1",
+        accountId: "bot",
+        conversationId: "chat",
+        senderId: "other-user",
+        actionId: "approve",
+        now: "2026-08-20T00:01:00.000Z",
+      }),
+    ).toBeUndefined();
+    await expect(
+      store.resolvePresentationInteraction({
+        interactionId: "approval_card_1",
+        accountId: "bot",
+        conversationId: "chat",
+        senderId: "user",
+        actionId: "approve",
+        now: "2026-08-20T00:01:00.000Z",
+      }),
+    ).resolves.toMatchObject({
+      kind: "approval",
+      correlationId: "A1B2C3D4",
+      actionId: "approve",
+    });
+    await expect(
+      store.resolvePresentationInteraction({
+        interactionId: "approval_card_1",
+        accountId: "bot",
+        conversationId: "chat",
+        senderId: "user",
+        actionId: "approve",
+        now: "2026-08-20T00:02:00.000Z",
+      }),
+    ).resolves.toBeUndefined();
+
+    await store.createPresentationInteraction({
+      interactionId: "approval_card_2",
+      accountId: "bot",
+      conversationId: "chat",
+      senderId: "user",
+      kind: "approval",
+      correlationId: "DEAD0001",
+      createdAt: "2026-08-20T00:00:00.000Z",
+      expiresAt: "2026-08-20T00:01:00.000Z",
+    });
+    await expect(
+      store.resolvePresentationInteraction({
+        interactionId: "approval_card_2",
+        accountId: "bot",
+        conversationId: "chat",
+        senderId: "user",
+        actionId: "deny",
+        now: "2026-08-20T00:02:00.000Z",
+      }),
+    ).resolves.toBeUndefined();
+    store.close();
+  });
 });
 
 function replyCommand(text: string, final: boolean): DurableOutboundCommand {

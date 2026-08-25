@@ -1,6 +1,6 @@
 # 企业微信官方与周边生态调研
 
-调研快照：2026-08-20；Kernel 协议补充于 2026-08-24。版本和 commit 是为了让结论可复核，
+调研快照：2026-08-20；Kernel 协议补充于 2026-08-24；卡片复核于 2026-08-25。版本和 commit 是为了让结论可复核，
 不表示项目永久固定在这些版本。
 
 ## 官方能力地图
@@ -35,6 +35,14 @@ SDK 方法，不复制密码学或分片上传协议。
 SDK 下载路径；同一会话中文件下载与随后文本必须保持顺序，不能让文本 turn 越过仍在物化的
 文件。本项目以独立 SDK client、按会话队列和 contract tests 约束这些风险。
 
+卡片能力的源码复核确认：SDK `1.0.7` 提供 `replyTemplateCard`、`replyStreamWithCard`、主动
+`sendMessage({msgtype: "template_card"})`、`updateTemplateCard` 和独立
+`event.template_card_event` 事件；支持 `text_notice`、`news_notice`、`button_interaction`、
+`vote_interaction`、`multiple_interaction`。更新必须使用对应回调的 `req_id` 并在五秒内完成。
+官方 OpenClaw 插件已经实现五类卡片解析、回调和更新，但其做法是从 LLM 文本提取厂商 JSON，并用
+24 小时、最多 300 项的内存缓存保存卡片。本项目只复用已验证的 SDK 语义：采用通用 Presentation
+契约、SQLite 持久关联和即时更新，不复制 LLM JSON 抓取或仅内存状态。
+
 ## 明确复用与明确不复用
 
 直接复用：
@@ -61,7 +69,7 @@ SDK 下载路径；同一会话中文件下载与随后文本必须保持顺序�
 
 每次升级官方 SDK 都必须跑 transport contract tests，并在真实沙箱补做单聊、群聊、断线重连、流式回复、主动推送与媒体矩阵。
 
-当前 transport 已按官方插件语义处理错误码 `846608`：超过六分钟的流式 partial 不再重试，最终文本改用同一个 Bot 的 `sendMessage` 主动推送。事件 frame 的 `846605 invalid req_id` 路径仍待接入官方 `event` listener 后实现。
+当前 transport 已按官方插件语义处理错误码 `846608`：超过六分钟的流式 partial 不再重试，最终文本改用同一个 Bot 的 `sendMessage` 主动推送。模板卡片事件已接入 SDK 专用 listener；五秒更新窗口超时按 UX 失败记录，不重放业务决定。
 
 ## Kernel 协议补充：ACP 与 Kimi Code
 

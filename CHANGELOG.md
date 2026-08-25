@@ -6,6 +6,13 @@ tagged.
 
 ## [Unreleased]
 
+### Added
+
+- Channel-neutral notice, article, action, choice, and form presentations,
+  rendered through the official WeCom SDK's five template-card types.
+- Durable, sender- and conversation-scoped card interactions with an approval
+  button-card flow, in-place callback updates, and exact-command fallback.
+
 ## [0.1.0] - 2026-08-25
 
 ### Added

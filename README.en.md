@@ -35,6 +35,9 @@ model selection, tool policy, and media understanding stay in the Kernel.
   leak into Gateway Core.
 - **Mutable Bot UX** — one reply evolves from an immediate acknowledgement to
   explicit Agent status, streamed text, and the final answer.
+- **Structured cards** — neutral notices, articles, actions, choices, and forms
+  map to official template cards; approval callbacks are durable and update in
+  place.
 - **Durable delivery** — SQLite outbox leases, retries, dead letters, and a
   protected media spool survive process failure.
 - **Exact modalities** — transports and adapters declare concrete media types

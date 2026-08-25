@@ -130,6 +130,8 @@ export interface InfrastructureErrorEvent {
     | "create-approval"
     | "resolve-approval"
     | "interrupt-approval"
+    | "create-interaction"
+    | "resolve-interaction"
     | "reconcile"
     | "stage"
     | "materialize"
@@ -453,6 +455,11 @@ export class WeComAgentGateway {
       });
       if (!decision.allowed) return;
     }
+    if (message.interaction) {
+      if (!(await this.options.store.acceptInbound(message))) return;
+      await this.handlePresentationInteraction(message);
+      return;
+    }
     const approvalControl = parseApprovalControl(message);
     if (approvalControl) {
       if (!(await this.options.store.acceptInbound(message))) return;
@@ -774,19 +781,56 @@ export class WeComAgentGateway {
         `Transport ${this.options.transport.id} cannot deliver a durable approval prompt`,
       );
     }
-    await this.enqueueDurableDelivery(message.id, {
-      type: "proactive",
-      accountId: message.accountId,
-      conversationId: message.conversationId,
-      text: [
-        "🔐 操作审批",
-        summary,
-        `请在 ${approvalWindow(timeoutMs)}内复制并发送：`,
-        `/approve ${approvalId}`,
-        "如需拒绝，请发送：",
-        `/deny ${approvalId}`,
-      ].join("\n"),
-    });
+    if (
+      this.options.transport.capabilities.has("structured-presentation") &&
+      this.options.transport.capabilities.has("interactive-presentation")
+    ) {
+      const interactionId = `approval_${randomUUID().replaceAll("-", "")}`;
+      const createdAt = this.wallClockIso();
+      try {
+        const created = await this.options.store.createPresentationInteraction({
+          interactionId,
+          accountId: message.accountId,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          kind: "approval",
+          correlationId: approvalId,
+          createdAt,
+          expiresAt: new Date(
+            new Date(createdAt).getTime() + timeoutMs,
+          ).toISOString(),
+        });
+        if (!created) throw new Error("Unable to allocate card interaction");
+      } catch (error) {
+        this.notifyInfrastructureError({
+          component: "store",
+          componentId: "gateway-store",
+          operation: "create-interaction",
+          error: asError(error),
+        });
+        throw error;
+      }
+      await this.enqueueDurableDelivery(message.id, {
+        type: "proactive-presentation",
+        accountId: message.accountId,
+        conversationId: message.conversationId,
+        presentation: {
+          kind: "actions",
+          id: interactionId,
+          title: "🔐 操作审批",
+          body: `${cardExcerpt(summary, 80)}\n请在 ${approvalWindow(timeoutMs)}内选择。`,
+          actions: [
+            { id: "approve", label: "批准", style: "primary" },
+            { id: "deny", label: "拒绝", style: "danger" },
+          ],
+        },
+      });
+      return;
+    }
+    await this.enqueueDurableDelivery(
+      message.id,
+      approvalFallbackCommand(message, approvalId, summary, timeoutMs),
+    );
   }
 
   private async createApprovalId(options: {
@@ -830,43 +874,146 @@ export class WeComAgentGateway {
     message: InboundMessage,
     control: { approvalId: string; decision: "approved" | "denied" },
   ): Promise<void> {
-    const now = this.wallClockIso();
-    let resolved = false;
-    try {
-      resolved = await this.options.store.resolveApproval({
-        approvalId: control.approvalId,
-        accountId: message.accountId,
-        conversationId: message.conversationId,
-        senderId: message.senderId,
-        decision: control.decision,
-        now,
-      });
-    } catch (error) {
-      this.notifyApprovalStoreError("resolve-approval", error);
-    }
-    const pending = this.approvalResolvers.get(control.approvalId);
-    if (resolved && pending) {
-      clearTimeout(pending.timer);
-      this.approvalResolvers.delete(control.approvalId);
-      pending.resolve(control.decision);
-      this.notifyApprovalLifecycle({
-        phase: control.decision,
-        conversationType: pending.conversationType,
-        toolName: pending.toolName,
-        effect: pending.effect,
-        elapsedMs: this.wallClock() - pending.requestedAt,
-      });
-    }
+    const resolved = await this.resolveApprovalDecision(
+      message,
+      control.approvalId,
+      control.decision,
+    );
     await this.reply(
       message,
       `approval-control-${message.id}`,
-      resolved && pending
+      resolved
         ? control.decision === "approved"
           ? "✅ 已批准，继续执行。"
           : "⛔ 已拒绝，本次操作不会执行。"
         : "该审批不存在、已处理、已失效，或不属于当前会话与发送者。",
       true,
     );
+  }
+
+  private async handlePresentationInteraction(
+    message: InboundMessage,
+  ): Promise<void> {
+    const interaction = message.interaction!;
+    const action =
+      interaction.actionId === "approve"
+        ? "approved"
+        : interaction.actionId === "deny"
+          ? "denied"
+          : undefined;
+    let interactionRecord;
+    if (action) {
+      try {
+        interactionRecord =
+          await this.options.store.resolvePresentationInteraction({
+            interactionId: interaction.presentationId,
+            accountId: message.accountId,
+            conversationId: message.conversationId,
+            senderId: message.senderId,
+            actionId: interaction.actionId!,
+            now: this.wallClockIso(),
+          });
+      } catch (error) {
+        this.notifyInfrastructureError({
+          component: "store",
+          componentId: "gateway-store",
+          operation: "resolve-interaction",
+          error: asError(error),
+        });
+      }
+    }
+    const resolved =
+      interactionRecord?.kind === "approval" && action
+        ? await this.resolveApprovalDecision(
+            message,
+            interactionRecord.correlationId,
+            action,
+          )
+        : false;
+    const text = resolved
+      ? action === "approved"
+        ? "✅ 已批准，继续执行。"
+        : "⛔ 已拒绝，本次操作不会执行。"
+      : "该操作不存在、已处理、已失效，或不属于当前会话与发送者。";
+    await this.updateInteraction(message, interaction.presentationId, text);
+  }
+
+  private async resolveApprovalDecision(
+    message: InboundMessage,
+    approvalId: string,
+    decision: "approved" | "denied",
+  ): Promise<boolean> {
+    let resolved = false;
+    try {
+      resolved = await this.options.store.resolveApproval({
+        approvalId,
+        accountId: message.accountId,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        decision,
+        now: this.wallClockIso(),
+      });
+    } catch (error) {
+      this.notifyApprovalStoreError("resolve-approval", error);
+    }
+    const pending = this.approvalResolvers.get(approvalId);
+    if (!resolved || !pending) return false;
+    clearTimeout(pending.timer);
+    this.approvalResolvers.delete(approvalId);
+    pending.resolve(decision);
+    this.notifyApprovalLifecycle({
+      phase: decision,
+      conversationType: pending.conversationType,
+      toolName: pending.toolName,
+      effect: pending.effect,
+      elapsedMs: this.wallClock() - pending.requestedAt,
+    });
+    return true;
+  }
+
+  private async updateInteraction(
+    message: InboundMessage,
+    presentationId: string,
+    text: string,
+  ): Promise<void> {
+    if (!message.replyReference) return;
+    const command: OutboundCommand = {
+      type: "interaction-update",
+      accountId: message.accountId,
+      conversationId: message.conversationId,
+      replyReference: message.replyReference,
+      presentation: {
+        kind: "notice",
+        id: presentationId,
+        title: "操作结果",
+        body: text,
+      },
+    };
+    try {
+      const receipt = await this.options.transport.deliver(command);
+      await this.options.store.recordDelivery({
+        messageId: message.id,
+        command,
+        receipt,
+      });
+    } catch (error) {
+      this.notifyInfrastructureError({
+        component: "transport",
+        componentId: this.options.transport.id,
+        operation: "deliver",
+        error: asError(error),
+      });
+      try {
+        await this.options.store.recordDelivery({
+          messageId: message.id,
+          command,
+          error: asError(error).message,
+        });
+      } catch {
+        // The approval decision is durable even when the five-second UI update
+        // window or delivery journal is unavailable.
+      }
+    }
   }
 
   private async expireApproval(
@@ -1546,6 +1693,34 @@ function approvalWindow(timeoutMs: number): string {
   return remainingSeconds === 0
     ? `${minutes} 分钟`
     : `${minutes} 分 ${remainingSeconds} 秒`;
+}
+
+function cardExcerpt(value: string, maxCharacters: number): string {
+  const characters = [...value.trim()];
+  return characters.length <= maxCharacters
+    ? characters.join("")
+    : `${characters.slice(0, maxCharacters - 1).join("")}…`;
+}
+
+function approvalFallbackCommand(
+  message: InboundMessage,
+  approvalId: string,
+  summary: string,
+  timeoutMs: number,
+): DurableOutboundCommand {
+  return {
+    type: "proactive",
+    accountId: message.accountId,
+    conversationId: message.conversationId,
+    text: [
+      "🔐 操作审批",
+      summary,
+      `请在 ${approvalWindow(timeoutMs)}内复制并发送：`,
+      `/approve ${approvalId}`,
+      "如需拒绝，请发送：",
+      `/deny ${approvalId}`,
+    ].join("\n"),
+  };
 }
 
 function asError(error: unknown): Error {
