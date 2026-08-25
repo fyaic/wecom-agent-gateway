@@ -315,7 +315,17 @@ describe("WeComBotTransport", () => {
     });
     expect(client.cardUpdates[0]).toMatchObject([
       { headers: { req_id: "req-card" } },
-      { card_type: "text_notice", task_id: "approval_1" },
+      {
+        card_type: "vote_interaction",
+        task_id: "approval_1",
+        sub_title_text: "已批准",
+        checkbox: {
+          question_key: "result",
+          disable: true,
+          mode: 0,
+          option_list: [{ id: "completed", text: "已完成", is_checked: true }],
+        },
+      },
     ]);
   });
 

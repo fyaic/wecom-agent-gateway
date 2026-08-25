@@ -42,5 +42,6 @@ Phase 1 提供五类确定性映射和审批交互闭环。后续如允许 Kerne
 暗示。所有 `single-select` 因此统一映射为纵向 `vote_interaction`；等价候选保持中性，蓝色只表示提交
 或显式 primary action。通用 action style 必须由调用方声明，Core 不从数组位置推断。
 
-选项文案不按 SDK 建议长度静默截断。无跳转结果 notice 省略 `card_action`，与官方 SDK 更新示例一致；
-真实服务端已证明 `{type:0}` 占位会触发 `42045`。
+选项文案不按 SDK 建议长度静默截断。真实服务端对无跳转结果 notice 的 `card_action` 省略与 `{type:0}`
+两种形式都返回 `42045`，因此完成态映射为 update-only 的禁用 vote checkbox：显示已完成、保留结果
+摘要、移除提交按钮，不引入虚假 URL。
