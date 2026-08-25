@@ -189,7 +189,8 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
 - 已生成并目视复核 1280×640 社交预览资产，不使用企业微信官方 Logo 或机器人形象，避免暗示官方
   背书；当前 private 页面不提供上传入口，转 public 后上传并以未登录视角复核。
 - squash merge、自动删除分支、Dependabot 漏洞告警和自动安全修复已启用；历史净化、默认分支保护、
-  Private Vulnerability Reporting 和未登录视角复核均已完成。首个 provenance-backed release 与社交
+  Private Vulnerability Reporting 和未登录视角复核均已完成。`v0.1.0` 已通过 tag-triggered GitHub
+  Actions 发布可复现源码包和 SHA-256，并以 GitHub/Sigstore provenance 通过消费者侧验证；只剩社交
   预览上传仍按发布清单单独执行。
 
 ## 下一阶段

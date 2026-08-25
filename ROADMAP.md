@@ -17,7 +17,7 @@ changes.
 - [x] Loopback health/readiness and privacy-safe Prometheus metrics
 - [x] Deterministic test suite and real acceptance evidence
 - [x] Sanitize all Git refs before changing repository visibility
-- [ ] Publish the first signed or provenance-backed release
+- [x] Publish the first signed or provenance-backed release
 
 ## Next
 

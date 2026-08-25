@@ -66,7 +66,7 @@ The repository must remain private until every blocking item below is complete.
 - [x] Move verified entries from Unreleased into the `v0.1.0` changelog section.
 - [x] Prepare [`releases/v0.1.0.md`](releases/v0.1.0.md); re-run its links and
       claims from the sanitized default branch before publishing.
-- [ ] Attach only reproducible, checksummed artifacts; never attach local config,
+- [x] Attach only reproducible, checksummed artifacts; never attach local config,
       databases, logs, transcripts, or media.
 - [x] Announce Public Preview limitations and unsupported production guarantees.
 - [x] Verify badges, documentation links, issue forms, and Security Advisory flow
