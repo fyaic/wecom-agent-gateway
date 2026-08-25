@@ -222,7 +222,7 @@ export class WeComBotTransport implements ChannelTransport {
     } else if (command.type === "interaction-update") {
       await this.client.updateTemplateCard(
         { headers: { req_id: command.replyReference.requestId } },
-        renderWeComTemplateCard(
+        renderWeComInteractionUpdateCard(
           command.presentation,
           this.options.presentationLinkHosts,
         ),
@@ -793,6 +793,33 @@ export function renderWeComTemplateCard(
     submit_button: {
       key: boundedId(presentation.submitId, "submit"),
       text: bounded(presentation.submitLabel ?? "提交", 10, "submit label"),
+    },
+  };
+}
+
+/**
+ * The intelligent-Bot update endpoint rejects a no-link text_notice with
+ * errcode 42045, both with card_action omitted and with {type: 0}. Render an
+ * inert result state using the SDK's update-only checkbox.disable capability.
+ */
+function renderWeComInteractionUpdateCard(
+  presentation: Presentation,
+  allowedLinkHosts?: readonly string[],
+): TemplateCard {
+  if (presentation.kind !== "notice" || presentation.action) {
+    return renderWeComTemplateCard(presentation, allowedLinkHosts);
+  }
+  assertPresentationId(presentation.id);
+  return {
+    task_id: presentation.id,
+    card_type: "vote_interaction",
+    main_title: { title: bounded(presentation.title, 26, "title") },
+    sub_title_text: optionalBounded(presentation.body, 112, "body"),
+    checkbox: {
+      question_key: "result",
+      disable: true,
+      mode: 0,
+      option_list: [{ id: "completed", text: "已完成", is_checked: true }],
     },
   };
 }

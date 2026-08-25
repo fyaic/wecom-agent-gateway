@@ -20,8 +20,8 @@ tagged.
 ### Fixed
 
 - Preserve complete choice labels, render peer selections vertically without
-  first-option color bias, and omit invalid no-op `card_action` data from
-  result-card updates.
+  first-option color bias, and render updates as an inert checked result state
+  instead of an invalid no-link notice.
 
 ## [0.1.0] - 2026-08-25
 

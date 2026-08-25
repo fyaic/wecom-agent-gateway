@@ -87,8 +87,9 @@ M2.5 的 Channel-neutral presentation 扩展，不提前把厂商字段写进 Ru
 - 选项标签保持原文，不按企业微信 SDK 的“建议 10/11 字”静默截断。Runtime 单项上限仍为 100 字；
   Transport 使用更有纵向空间的 vote 布局。超过真实客户端可读范围时应改用分层选择或正文展示，不能
   以省略号改变选项含义。
-- 已提交卡片更新为无 action 的结果 notice。按官方 SDK 示例，无跳转时省略 `card_action`；不能发送
-  `{type: 0}` 假装占位，因为真实智能机器人端会返回 `42045 card_action Missing or Invalid`。
+- 当前智能机器人端对无跳转 `text_notice` 的更新与 SDK 示例不一致：`card_action` 省略或设为
+  `{type: 0}` 都返回 `42045`。结果状态因此保持为交互卡语义，使用 update-only 的
+  `checkbox.disable=true`、已勾选“已完成”且不再提供提交按钮；不添加虚假跳转链接。
 
 ## Runtime Contract
 
@@ -284,6 +285,10 @@ namespace、状态和视觉标识，防止 Agent 生成的“确认”冒充安�
 durable resume，证明业务幂等成立。但原位结果卡因无动作 notice 携带 `{card_action:{type:0}}` 被真实
 服务端以 `42045` 拒绝，且三项横排按钮发生文案显示不全、第一项无语义地呈蓝色。该轮记为“功能部分
 通过、UI 失败”，不计入最终 E2E 通过；上述规则修复后必须重测。
+
+第二轮已验证纵向单选发送成功，用户提交后 1ms 内只完成一次 live resume，Pi 原 run 继续完成；但按
+官方示例省略 `card_action` 的 `text_notice` 仍被真实服务端以相同 `42045` 拒绝。第三轮改为禁用的
+`vote_interaction` 结果态，必须再次真实验证后才能关闭 UI 验收。
 
 可运行的无副作用 Pi 示例位于 `examples/pi-wecom-interaction.mjs`；它只在 Agent 明确调用时展示选择、
 确认或输入，不执行办公写操作。
