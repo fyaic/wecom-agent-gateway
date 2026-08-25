@@ -14,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { basename, extname, isAbsolute, join, relative } from "node:path";
 import { WSClient, generateReqId } from "@wecom/aibot-node-sdk";
+import type { TemplateCard } from "@wecom/aibot-node-sdk";
 import type {
   AgentMediaOutput,
   ChannelTransport,
@@ -24,6 +25,7 @@ import type {
   MediaType,
   MessagePart,
   OutboundCommand,
+  Presentation,
 } from "@fyaic/wecom-runtime-contract";
 
 interface WeComFrame {
@@ -42,6 +44,11 @@ interface WeComClient {
     finish: boolean,
   ): Promise<unknown>;
   sendMessage(chatId: string, message: unknown): Promise<unknown>;
+  updateTemplateCard(
+    frame: WeComFrame,
+    templateCard: TemplateCard,
+    userids?: string[],
+  ): Promise<unknown>;
   sendMediaMessage(
     chatId: string,
     mediaType: WeComMediaType,
@@ -90,6 +97,7 @@ export interface WeComBotTransportOptions {
   mediaMaxBytes?: number;
   mediaRetentionMs?: number;
   mediaOutputRoots?: readonly string[];
+  presentationLinkHosts?: readonly string[];
 }
 
 export class WeComBotTransport implements ChannelTransport {
@@ -101,6 +109,8 @@ export class WeComBotTransport implements ChannelTransport {
     "media-upload",
     "multimodal-input",
     "multimodal-output",
+    "structured-presentation",
+    "interactive-presentation",
   ]);
   readonly inputModalities: ReadonlySet<MediaType> = new Set([
     "image",
@@ -153,6 +163,15 @@ export class WeComBotTransport implements ChannelTransport {
         this.reportError(error);
       }
     });
+    this.client.on("event.template_card_event", (frame: WeComFrame) => {
+      try {
+        void onMessage(this.normalizeInteraction(frame)).catch(
+          (error: unknown) => this.reportError(error),
+        );
+      } catch (error) {
+        this.reportError(error);
+      }
+    });
     await this.client.connect();
   }
 
@@ -192,6 +211,22 @@ export class WeComBotTransport implements ChannelTransport {
         msgtype: "markdown",
         markdown: { content: command.text },
       });
+    } else if (command.type === "proactive-presentation") {
+      await this.client.sendMessage(command.conversationId, {
+        msgtype: "template_card",
+        template_card: renderWeComTemplateCard(
+          command.presentation,
+          this.options.presentationLinkHosts,
+        ),
+      });
+    } else if (command.type === "interaction-update") {
+      await this.client.updateTemplateCard(
+        { headers: { req_id: command.replyReference.requestId } },
+        renderWeComTemplateCard(
+          command.presentation,
+          this.options.presentationLinkHosts,
+        ),
+      );
     } else {
       const outbound = await this.loadOutboundMedia(command.media);
       const uploaded = await this.client.uploadMedia(outbound.buffer, {
@@ -317,6 +352,44 @@ export class WeComBotTransport implements ChannelTransport {
       parts: normalizeParts(body),
       replyReference: { requestId },
       metadata: { msgtype: body.msgtype, chattype: body.chattype },
+    };
+  }
+
+  private normalizeInteraction(frame: WeComFrame): InboundMessage {
+    const body = frame.body ?? {};
+    const eventContainer = asRecord(body.event);
+    const nested = asRecord(eventContainer.template_card_event);
+    const event = Object.keys(nested).length > 0 ? nested : eventContainer;
+    const interactionId = stringValue(event.task_id);
+    if (!interactionId)
+      throw new Error("WeCom template card event has no task_id");
+    const from = asRecord(body.from);
+    const senderId =
+      stringValue(from.userid) ?? stringValue(body.userid) ?? "unknown";
+    const messageId = stringValue(body.msgid) ?? generateReqId("interaction");
+    const chatId = stringValue(body.chatid);
+    const chatType = stringValue(body.chattype);
+    const isGroup = chatType === "group" || (!chatType && Boolean(chatId));
+    if (isGroup && !chatId) {
+      throw new Error("WeCom group interaction has no chatid");
+    }
+    const requestId = frame.headers?.req_id;
+    if (!requestId) throw new Error("WeCom template card event has no req_id");
+    return {
+      id: messageId,
+      accountId: this.options.accountId,
+      conversationId: isGroup ? chatId! : senderId,
+      conversationType: isGroup ? "group" : "direct",
+      senderId,
+      receivedAt: timestamp(body.create_time),
+      parts: [],
+      interaction: {
+        presentationId: interactionId,
+        actionId: stringValue(event.event_key),
+        selections: normalizeSelections(event),
+      },
+      replyReference: { requestId },
+      metadata: { msgtype: "event", eventtype: "template_card_event" },
     };
   }
 
@@ -602,4 +675,209 @@ function hasErrorCode(error: unknown, code: number): boolean {
     stringValue(record.message) ?? ""
   }`;
   return record.errcode === code || message.includes(String(code));
+}
+
+export function renderWeComTemplateCard(
+  presentation: Presentation,
+  allowedLinkHosts?: readonly string[],
+): TemplateCard {
+  assertPresentationId(presentation.id);
+  const base = {
+    task_id: presentation.id,
+    main_title: { title: bounded(presentation.title, 26, "title") },
+  };
+  if (presentation.kind === "notice") {
+    return {
+      ...base,
+      card_type: "text_notice",
+      sub_title_text: optionalBounded(presentation.body, 112, "body"),
+      card_action: presentation.action
+        ? linkAction(presentation.action.url, allowedLinkHosts)
+        : { type: 0 },
+    };
+  }
+  if (presentation.kind === "article") {
+    return {
+      ...base,
+      card_type: "news_notice",
+      sub_title_text: optionalBounded(
+        presentation.description,
+        112,
+        "description",
+      ),
+      card_image: {
+        url: safeHttpsUrl(presentation.imageUrl, allowedLinkHosts),
+      },
+      card_action: linkAction(presentation.action.url, allowedLinkHosts),
+    };
+  }
+  if (presentation.kind === "actions") {
+    if (presentation.actions.length < 1 || presentation.actions.length > 6) {
+      throw new Error("Action cards require between 1 and 6 actions");
+    }
+    uniqueIds(
+      presentation.actions.map((action) => action.id),
+      "action",
+    );
+    return {
+      ...base,
+      card_type: "button_interaction",
+      sub_title_text: optionalBounded(presentation.body, 112, "body"),
+      button_list: presentation.actions.map((action) => ({
+        key: boundedId(action.id, "action"),
+        text: bounded(action.label, 10, "action label"),
+        style:
+          action.style === "danger" ? 4 : action.style === "default" ? 2 : 1,
+      })),
+    };
+  }
+  if (presentation.kind === "choice") {
+    if (presentation.options.length < 1 || presentation.options.length > 20) {
+      throw new Error("Choice cards require between 1 and 20 options");
+    }
+    uniqueIds(
+      presentation.options.map((option) => option.id),
+      "option",
+    );
+    return {
+      ...base,
+      card_type: "vote_interaction",
+      sub_title_text: optionalBounded(presentation.body, 112, "body"),
+      checkbox: {
+        question_key: boundedId(presentation.questionId, "question"),
+        mode: presentation.multiple ? 1 : 0,
+        option_list: presentation.options.map((option) => ({
+          id: boundedId(option.id, "option"),
+          text: bounded(option.label, 11, "option label"),
+        })),
+      },
+      submit_button: {
+        key: "submit",
+        text: bounded(presentation.submitLabel ?? "提交", 10, "submit label"),
+      },
+    };
+  }
+  if (presentation.fields.length < 1 || presentation.fields.length > 3) {
+    throw new Error("Form cards require between 1 and 3 fields");
+  }
+  uniqueIds(
+    presentation.fields.map((field) => field.id),
+    "field",
+  );
+  return {
+    ...base,
+    card_type: "multiple_interaction",
+    sub_title_text: optionalBounded(presentation.body, 112, "body"),
+    select_list: presentation.fields.map((field) => {
+      if (field.options.length < 1 || field.options.length > 10) {
+        throw new Error("Form fields require between 1 and 10 options");
+      }
+      uniqueIds(
+        field.options.map((option) => option.id),
+        "option",
+      );
+      return {
+        question_key: boundedId(field.id, "field"),
+        title: bounded(field.label, 13, "field label"),
+        option_list: field.options.map((option) => ({
+          id: boundedId(option.id, "option"),
+          text: bounded(option.label, 10, "option label"),
+        })),
+      };
+    }),
+    submit_button: {
+      key: boundedId(presentation.submitId, "submit"),
+      text: bounded(presentation.submitLabel ?? "提交", 10, "submit label"),
+    },
+  };
+}
+
+function normalizeSelections(
+  event: Record<string, unknown>,
+): Array<{ fieldId: string; optionIds: string[] }> | undefined {
+  const selected = asRecord(asRecord(event.selected_items).selected_item);
+  const raw = Array.isArray(asRecord(event.selected_items).selected_item)
+    ? (asRecord(event.selected_items).selected_item as unknown[])
+    : Object.keys(selected).length > 0
+      ? [selected]
+      : [];
+  const selections = raw.flatMap((item) => {
+    const record = asRecord(item);
+    const fieldId = stringValue(record.question_key);
+    if (!fieldId) return [];
+    const optionIds = asRecord(record.option_ids).option_id;
+    return [
+      {
+        fieldId,
+        optionIds: Array.isArray(optionIds)
+          ? optionIds.filter(
+              (value): value is string => typeof value === "string",
+            )
+          : [],
+      },
+    ];
+  });
+  return selections.length > 0 ? selections : undefined;
+}
+
+function assertPresentationId(id: string): void {
+  if (!/^[A-Za-z0-9_@-]{1,128}$/.test(id)) {
+    throw new Error("Presentation id contains unsupported characters");
+  }
+}
+
+function boundedId(value: string, name: string): string {
+  if (!/^[A-Za-z0-9_.:@-]{1,128}$/.test(value)) {
+    throw new Error(`${name} id contains unsupported characters`);
+  }
+  return value;
+}
+
+function uniqueIds(ids: string[], name: string): void {
+  if (new Set(ids).size !== ids.length) {
+    throw new Error(`${name} ids must be unique`);
+  }
+}
+
+function bounded(value: string, maxCharacters: number, name: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) throw new Error(`${name} must not be empty`);
+  if ([...trimmed].length > maxCharacters) {
+    throw new Error(`${name} exceeds ${maxCharacters} characters`);
+  }
+  return trimmed;
+}
+
+function optionalBounded(
+  value: string | undefined,
+  maxCharacters: number,
+  name: string,
+): string | undefined {
+  return value === undefined ? undefined : bounded(value, maxCharacters, name);
+}
+
+function linkAction(
+  url: string,
+  allowedLinkHosts?: readonly string[],
+): { type: 1; url: string } {
+  return { type: 1, url: safeHttpsUrl(url, allowedLinkHosts) };
+}
+
+function safeHttpsUrl(
+  value: string,
+  allowedLinkHosts?: readonly string[],
+): string {
+  const url = new URL(value);
+  if (url.protocol !== "https:" || url.username || url.password) {
+    throw new Error("Presentation links must use credential-free HTTPS URLs");
+  }
+  if (
+    allowedLinkHosts &&
+    !allowedLinkHosts.some(
+      (host) => url.hostname === host || url.hostname.endsWith(`.${host}`),
+    )
+  ) {
+    throw new Error("Presentation link host is not allowed");
+  }
+  return url.toString();
 }

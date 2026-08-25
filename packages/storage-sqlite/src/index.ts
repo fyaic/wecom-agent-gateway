@@ -11,6 +11,8 @@ import type {
   InboundMessage,
   OutboundCommand,
   PendingApproval,
+  PendingPresentationInteraction,
+  ResolvedPresentationInteraction,
 } from "@fyaic/wecom-runtime-contract";
 
 export class SqliteGatewayStore implements GatewayStore {
@@ -80,6 +82,21 @@ export class SqliteGatewayStore implements GatewayStore {
       );
       CREATE INDEX IF NOT EXISTS approvals_pending_idx
         ON approvals(status, expires_at);
+      CREATE TABLE IF NOT EXISTS presentation_interactions (
+        interaction_id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL,
+        conversation_id TEXT NOT NULL,
+        sender_id TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK(kind IN ('approval')),
+        correlation_id TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('pending', 'resolved', 'expired')),
+        action_id TEXT,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        resolved_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS presentation_interactions_pending_idx
+        ON presentation_interactions(status, expires_at);
     `);
   }
 
@@ -519,6 +536,94 @@ export class SqliteGatewayStore implements GatewayStore {
       )
       .run(now);
     return Number(result.changes);
+  }
+
+  async createPresentationInteraction(
+    interaction: PendingPresentationInteraction,
+  ): Promise<boolean> {
+    const result = this.database
+      .prepare(
+        `
+        INSERT OR IGNORE INTO presentation_interactions
+          (interaction_id, account_id, conversation_id, sender_id, kind,
+           correlation_id, status, created_at, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+      `,
+      )
+      .run(
+        interaction.interactionId,
+        interaction.accountId,
+        interaction.conversationId,
+        interaction.senderId,
+        interaction.kind,
+        interaction.correlationId,
+        interaction.createdAt,
+        interaction.expiresAt,
+      );
+    return result.changes === 1;
+  }
+
+  async resolvePresentationInteraction(options: {
+    interactionId: string;
+    accountId: string;
+    conversationId: string;
+    senderId: string;
+    actionId: string;
+    now: string;
+  }): Promise<ResolvedPresentationInteraction | undefined> {
+    return this.transaction(() => {
+      this.database
+        .prepare(
+          `
+          UPDATE presentation_interactions
+          SET status = 'expired', resolved_at = ?
+          WHERE interaction_id = ? AND status = 'pending' AND expires_at <= ?
+        `,
+        )
+        .run(options.now, options.interactionId, options.now);
+      const row = this.database
+        .prepare(
+          `
+          SELECT kind, correlation_id
+          FROM presentation_interactions
+          WHERE interaction_id = ?
+            AND account_id = ?
+            AND conversation_id = ?
+            AND sender_id = ?
+            AND status = 'pending'
+            AND expires_at > ?
+        `,
+        )
+        .get(
+          options.interactionId,
+          options.accountId,
+          options.conversationId,
+          options.senderId,
+          options.now,
+        ) as
+        | {
+            kind: ResolvedPresentationInteraction["kind"];
+            correlation_id: string;
+          }
+        | undefined;
+      if (!row) return undefined;
+      const result = this.database
+        .prepare(
+          `
+          UPDATE presentation_interactions
+          SET status = 'resolved', action_id = ?, resolved_at = ?
+          WHERE interaction_id = ? AND status = 'pending'
+        `,
+        )
+        .run(options.actionId, options.now, options.interactionId);
+      if (result.changes !== 1) return undefined;
+      return {
+        interactionId: options.interactionId,
+        kind: row.kind,
+        correlationId: row.correlation_id,
+        actionId: options.actionId,
+      };
+    });
   }
 
   close(): void {

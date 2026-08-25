@@ -18,8 +18,16 @@ changes.
 - [x] Deterministic test suite and real acceptance evidence
 - [x] Sanitize all Git refs before changing repository visibility
 - [x] Publish the first signed or provenance-backed release
+- [x] Channel-neutral five-kind card contract and durable approval-card control
+      loop
 
 ## Next
+
+- Complete real WeCom acceptance for approval-card delivery, callback scoping,
+  in-place update, rejection, expiry, and text fallback.
+- Define the guarded Agent-facing output contract for static structured
+  presentations without accepting vendor JSON or routing control interactions
+  through model reasoning.
 
 - Exercise host-level physical network loss, native WeCom video callbacks, and
   a real Linux/systemd soak. Cross-process SQLite lease recovery after

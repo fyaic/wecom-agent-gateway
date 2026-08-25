@@ -12,12 +12,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { InboundMessage } from "@fyaic/wecom-runtime-contract";
-import { WeComBotTransport } from "../src/index.js";
+import { renderWeComTemplateCard, WeComBotTransport } from "../src/index.js";
 
 class FakeClient {
   readonly listeners = new Map<string, (...args: any[]) => void>();
   readonly replies: any[][] = [];
   readonly pushes: any[][] = [];
+  readonly cardUpdates: any[][] = [];
   readonly mediaPushes: any[][] = [];
   readonly uploads: any[][] = [];
   replyError?: unknown;
@@ -36,6 +37,9 @@ class FakeClient {
   }
   async sendMessage(...args: any[]): Promise<void> {
     this.pushes.push(args);
+  }
+  async updateTemplateCard(...args: any[]): Promise<void> {
+    this.cardUpdates.push(args);
   }
   async sendMediaMessage(...args: any[]): Promise<void> {
     this.mediaPushes.push(args);
@@ -66,6 +70,84 @@ afterEach(() => {
 });
 
 describe("WeComBotTransport", () => {
+  it("maps all five neutral presentation kinds to official template cards", () => {
+    expect(
+      renderWeComTemplateCard({
+        kind: "notice",
+        id: "notice_1",
+        title: "通知",
+        body: "已完成",
+      }).card_type,
+    ).toBe("text_notice");
+    expect(
+      renderWeComTemplateCard({
+        kind: "article",
+        id: "article_1",
+        title: "更新",
+        imageUrl: "https://assets.example.com/cover.png",
+        action: { url: "https://example.com/read" },
+      }).card_type,
+    ).toBe("news_notice");
+    expect(
+      renderWeComTemplateCard({
+        kind: "actions",
+        id: "actions_1",
+        title: "请选择",
+        actions: [{ id: "ok", label: "确认", style: "primary" }],
+      }),
+    ).toMatchObject({
+      card_type: "button_interaction",
+      button_list: [{ key: "ok", text: "确认", style: 1 }],
+    });
+    expect(
+      renderWeComTemplateCard({
+        kind: "choice",
+        id: "choice_1",
+        title: "投票",
+        questionId: "topic",
+        options: [{ id: "a", label: "方案 A" }],
+      }).card_type,
+    ).toBe("vote_interaction");
+    expect(
+      renderWeComTemplateCard({
+        kind: "form",
+        id: "form_1",
+        title: "表单",
+        fields: [
+          {
+            id: "priority",
+            label: "优先级",
+            options: [{ id: "high", label: "高" }],
+          },
+        ],
+        submitId: "submit_form",
+      }).card_type,
+    ).toBe("multiple_interaction");
+  });
+
+  it("rejects unsafe or unallowlisted presentation links", () => {
+    expect(() =>
+      renderWeComTemplateCard({
+        kind: "article",
+        id: "article_1",
+        title: "更新",
+        imageUrl: "http://assets.example.com/cover.png",
+        action: { url: "https://example.com/read" },
+      }),
+    ).toThrow("HTTPS");
+    expect(() =>
+      renderWeComTemplateCard(
+        {
+          kind: "notice",
+          id: "notice_1",
+          title: "通知",
+          action: { url: "https://evil.example/read" },
+        },
+        ["trusted.example"],
+      ),
+    ).toThrow("not allowed");
+  });
+
   it("declares exact inbound and outbound media modalities", () => {
     const transport = new WeComBotTransport({
       accountId: "bot-a",
@@ -153,6 +235,72 @@ describe("WeComBotTransport", () => {
     expect(client.pushes[0]).toEqual([
       "chat-1",
       { msgtype: "markdown", markdown: { content: "提醒" } },
+    ]);
+  });
+
+  it("normalizes card callbacks and uses the official card update method", async () => {
+    const client = new FakeClient();
+    const received: InboundMessage[] = [];
+    const transport = new WeComBotTransport({
+      accountId: "bot-a",
+      botId: "id",
+      secret: "secret",
+      clientFactory: () => client,
+    });
+    await transport.start(async (message) => {
+      received.push(message);
+    });
+    client.listeners.get("event.template_card_event")?.({
+      headers: { req_id: "req-card" },
+      body: {
+        msgid: "event-1",
+        chattype: "single",
+        from: { userid: "user-1" },
+        event: {
+          eventtype: "template_card_event",
+          template_card_event: {
+            task_id: "approval_1",
+            event_key: "approve",
+            selected_items: {
+              selected_item: [
+                {
+                  question_key: "priority",
+                  option_ids: { option_id: ["high"] },
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+    await Promise.resolve();
+    expect(received[0]).toMatchObject({
+      id: "event-1",
+      conversationId: "user-1",
+      senderId: "user-1",
+      parts: [],
+      interaction: {
+        presentationId: "approval_1",
+        actionId: "approve",
+        selections: [{ fieldId: "priority", optionIds: ["high"] }],
+      },
+      replyReference: { requestId: "req-card" },
+    });
+    await transport.deliver({
+      type: "interaction-update",
+      accountId: "bot-a",
+      conversationId: "user-1",
+      replyReference: { requestId: "req-card" },
+      presentation: {
+        kind: "notice",
+        id: "approval_1",
+        title: "操作结果",
+        body: "已批准",
+      },
+    });
+    expect(client.cardUpdates[0]).toMatchObject([
+      { headers: { req_id: "req-card" } },
+      { card_type: "text_notice", task_id: "approval_1" },
     ]);
   });
 

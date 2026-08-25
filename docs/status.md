@@ -55,6 +55,8 @@
 | `wecom-cli` 单条待办创建工具                    | 完成并真实验证，默认关闭  | 精确 argv、参数二次校验、具体审批摘要、返回 ID 移除                         |
 | Kernel 审批截止与孤立审批回收                   | 完成并自动化验证          | Adapter 较短上限；turn 先结束即中断该 run 的 pending                        |
 | 独立持久审批提示                                | 完成并自动化验证          | 主动 Bot 消息不受 Agent 流覆盖；Transport 不支持时 fail closed              |
+| Channel-neutral 五类结构化卡片                  | Phase 1 完成并自动化验证  | 通知/图文/按钮/投票/表单映射官方 SDK；不接收厂商 JSON                       |
+| 审批按钮卡片与 SQLite 交互状态                  | 完成并自动化验证，待实测  | 回调 ACL/幂等/发送者/会话/失效绑定；五秒内原位更新；文本命令降级            |
 | SQLite 重启恢复                                 | 完成并自动化验证          | 入站去重、runtime session、待发送文本与投递日志跨 reopen 保留               |
 | SQLite 文件权限                                 | 完成并自动化验证          | Store 每次打开都强制主数据库为 `0600`；本机现有数据库已收紧                 |
 | SQLite 故障因果保留                             | 完成并自动化验证          | 写入/提交失败后即使回滚也失败，仍抛出原始故障而非二次回滚错误               |
@@ -220,7 +222,7 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
 
 - 已复用 SDK `downloadFile` 完成入站媒体下载/AES 解密、MIME 探测、大小限制、受保护临时物化、运行后清理和持久化脱敏。
 - 真实图片输入与输出上传/发送均已通过；Gateway 自管耐久 spool、媒体 outbox、完整性、配额、孤儿回收和重启恢复已完成自动化。下一步执行授权会话的真实媒体失败恢复；恶意内容扫描仍待部署策略。
-- 文本/媒体 outbox、Adapter、流式、session、工具、审批与主动控制面已完成 141 项自动化验证；
+- 文本/媒体 outbox、Adapter、流式、session、工具、审批、结构化卡片与主动控制面已完成 146 项自动化验证；
   OS 子进程强杀和 SQLite 原始故障保留已纳入 CI。宿主机网络故障、告警接入和多实例顺序保留为
   部署硬化，不把 Agent 推理或模型效果混入 Gateway 主线。
 - Codex App Server 与 Kimi ACP 均在不产生虚假 turn、不注入 Prompt 的前提下完成真实分层测量；同一口径继续用于后续 Kernel。

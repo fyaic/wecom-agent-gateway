@@ -385,8 +385,11 @@ pnpm smoke:codex-tool --confirm-readonly-contact-search
 
 ### 审批控制命令
 
-当启用一个明确标记为 `approval=required` 的写工具时，原可变回复只显示等待状态，Bot 另发一条
-独立审批消息，其中包含：
+当启用一个明确标记为 `approval=required` 的写工具时，原可变回复只显示等待状态。支持结构化交互
+的正式 WeCom Transport 会另发一张“批准/拒绝”按钮卡片，点击后在原位显示处理结果。卡片回调必须
+在五秒内更新；业务决定已由 SQLite 先行持久化，UI 更新失败不得重试工具。
+
+不支持结构化交互的 Transport 使用独立文本审批消息，其中包含：
 
 ```text
 /approve ABCD1234

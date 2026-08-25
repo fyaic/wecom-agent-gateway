@@ -873,6 +873,90 @@ describe("WeComAgentGateway", () => {
     });
   });
 
+  it("uses a durable button card for approval and updates it on callback", async () => {
+    class InteractiveTransport extends FakeTransport {
+      override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
+        "stream-reply-update",
+        "proactive-message",
+        "structured-presentation",
+        "interactive-presentation",
+      ]);
+    }
+    const decisions: string[] = [];
+    const runtime: AgentRuntimeAdapter = {
+      id: "card-approval-runtime",
+      contractVersion: 1,
+      capabilities: new Set(["approval"]),
+      async *run(request) {
+        decisions.push(
+          (await request.requestApproval?.({
+            toolName: "test_write",
+            effect: "write",
+            summary: "写入测试数据",
+          })) ?? "missing",
+        );
+        yield { type: "message-completed", text: "审批后完成" };
+      },
+      async health() {
+        return { ok: true };
+      },
+    };
+    const transport = new InteractiveTransport();
+    const store = new MemoryGatewayStore();
+    const gateway = new WeComAgentGateway({
+      transport,
+      adapters: [runtime],
+      router: new StaticRuntimeRouter(runtime.id),
+      store,
+      replyUpdateIntervalMs: 1,
+    });
+    await gateway.start();
+    const original = transport.receive(message("card-approval-original"));
+    await waitFor(() =>
+      transport.commands.some(
+        (command) => command.type === "proactive-presentation",
+      ),
+    );
+    const prompt = transport.commands.find(
+      (command) => command.type === "proactive-presentation",
+    );
+    expect(prompt).toMatchObject({
+      type: "proactive-presentation",
+      presentation: {
+        kind: "actions",
+        actions: [
+          { id: "approve", label: "批准" },
+          { id: "deny", label: "拒绝" },
+        ],
+      },
+    });
+    if (!prompt || prompt.type !== "proactive-presentation") {
+      throw new Error("approval card was not delivered");
+    }
+    await transport.receive({
+      ...message("card-approval-click"),
+      parts: [],
+      interaction: {
+        presentationId: prompt.presentation.id,
+        actionId: "approve",
+      },
+    });
+    await original;
+    await gateway.stop();
+
+    expect(decisions).toEqual(["approved"]);
+    expect(transport.commands).toContainEqual(
+      expect.objectContaining({
+        type: "interaction-update",
+        presentation: expect.objectContaining({
+          kind: "notice",
+          id: prompt.presentation.id,
+          body: "✅ 已批准，继续执行。",
+        }),
+      }),
+    );
+  });
+
   it("expires an unanswered approval without hanging the Agent run", async () => {
     const lifecycle: string[] = [];
     let decision = "";

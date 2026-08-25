@@ -11,7 +11,82 @@ export type ChannelCapability =
   | "media-download"
   | "media-upload"
   | "multimodal-input"
-  | "multimodal-output";
+  | "multimodal-output"
+  | "structured-presentation"
+  | "interactive-presentation";
+
+export interface PresentationLink {
+  label?: string;
+  url: string;
+}
+
+export interface PresentationAction {
+  id: string;
+  label: string;
+  style?: "default" | "primary" | "danger";
+}
+
+export interface PresentationOption {
+  id: string;
+  label: string;
+}
+
+/**
+ * Channel-neutral structured content. Transports own vendor rendering and
+ * validation; Kernels must never emit WeCom template-card JSON directly.
+ */
+export type Presentation =
+  | {
+      kind: "notice";
+      id: string;
+      title: string;
+      body?: string;
+      action?: PresentationLink;
+    }
+  | {
+      kind: "article";
+      id: string;
+      title: string;
+      description?: string;
+      imageUrl: string;
+      action: PresentationLink;
+    }
+  | {
+      kind: "actions";
+      id: string;
+      title: string;
+      body?: string;
+      actions: PresentationAction[];
+    }
+  | {
+      kind: "choice";
+      id: string;
+      title: string;
+      body?: string;
+      questionId: string;
+      options: PresentationOption[];
+      multiple?: boolean;
+      submitLabel?: string;
+    }
+  | {
+      kind: "form";
+      id: string;
+      title: string;
+      body?: string;
+      fields: Array<{
+        id: string;
+        label: string;
+        options: PresentationOption[];
+      }>;
+      submitId: string;
+      submitLabel?: string;
+    };
+
+export interface InboundInteraction {
+  presentationId: string;
+  actionId?: string;
+  selections?: Array<{ fieldId: string; optionIds: string[] }>;
+}
 
 export type MessagePart =
   | { type: "text"; text: string }
@@ -36,6 +111,7 @@ export interface InboundMessage {
   senderId: string;
   receivedAt: string;
   parts: MessagePart[];
+  interaction?: InboundInteraction;
   replyReference?: { requestId: string };
   metadata?: Record<string, unknown>;
 }
@@ -61,10 +137,27 @@ export type OutboundCommand =
       accountId: string;
       conversationId: string;
       media: AgentMediaOutput;
+    }
+  | {
+      type: "proactive-presentation";
+      accountId: string;
+      conversationId: string;
+      presentation: Presentation;
+    }
+  | {
+      /** Time-bound callback update; transports should attempt it immediately. */
+      type: "interaction-update";
+      accountId: string;
+      conversationId: string;
+      replyReference: { requestId: string };
+      presentation: Presentation;
     };
 
 export type DurableOutboundCommand =
-  | Exclude<OutboundCommand, { type: "proactive-media" }>
+  | Exclude<
+      OutboundCommand,
+      { type: "proactive-media" } | { type: "interaction-update" }
+    >
   | {
       type: "proactive-media";
       accountId: string;
@@ -196,6 +289,26 @@ export interface PendingApproval {
   summary: string;
   createdAt: string;
   expiresAt: string;
+}
+
+export type PresentationInteractionKind = "approval";
+
+export interface PendingPresentationInteraction {
+  interactionId: string;
+  accountId: string;
+  conversationId: string;
+  senderId: string;
+  kind: PresentationInteractionKind;
+  correlationId: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface ResolvedPresentationInteraction {
+  interactionId: string;
+  kind: PresentationInteractionKind;
+  correlationId: string;
+  actionId: string;
 }
 
 export type RuntimeToolContent =
@@ -367,6 +480,17 @@ export interface GatewayStore {
     now: string;
   }): Promise<boolean>;
   interruptPendingApprovals(now: string): Promise<number>;
+  createPresentationInteraction(
+    interaction: PendingPresentationInteraction,
+  ): Promise<boolean>;
+  resolvePresentationInteraction(options: {
+    interactionId: string;
+    accountId: string;
+    conversationId: string;
+    senderId: string;
+    actionId: string;
+    now: string;
+  }): Promise<ResolvedPresentationInteraction | undefined>;
 }
 
 export interface DeliveryOutboxEntry {
