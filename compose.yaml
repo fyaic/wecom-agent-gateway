@@ -1,0 +1,28 @@
+services:
+  gateway:
+    build:
+      context: .
+    init: true
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      GATEWAY_DATABASE_PATH: /var/lib/wecom-agent-gateway/gateway.db
+      GATEWAY_MEDIA_SPOOL_ROOT: /var/lib/wecom-agent-gateway/media-spool
+      GATEWAY_CONTROL_SOCKET: /var/lib/wecom-agent-gateway/gateway-control.sock
+      GATEWAY_OBSERVABILITY_ENABLED: "true"
+      GATEWAY_OBSERVABILITY_HOST: 127.0.0.1
+      GATEWAY_OBSERVABILITY_PORT: "9464"
+      WECOM_MEDIA_OUTPUT_ROOTS: /var/lib/wecom-agent-gateway/agent-output
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=256m,mode=1777
+    volumes:
+      - gateway-data:/var/lib/wecom-agent-gateway
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  gateway-data:

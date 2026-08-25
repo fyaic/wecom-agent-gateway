@@ -1,0 +1,12 @@
+{
+  "name": "@fyaic/wecom-runtime-contract",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vendor-neutral runtime contract for IM gateways and Agent kernels",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testkit": "./src/testkit.ts"
+  }
+}

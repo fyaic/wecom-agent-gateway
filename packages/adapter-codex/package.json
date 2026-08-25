@@ -1,0 +1,15 @@
+{
+  "name": "@fyaic/codex-runtime-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Codex SDK and App Server adapter for wecom-agent-gateway",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@fyaic/wecom-runtime-contract": "workspace:*",
+    "@openai/codex-sdk": "0.148.0"
+  }
+}

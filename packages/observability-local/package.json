@@ -1,0 +1,14 @@
+{
+  "name": "@fyaic/wecom-observability-local",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Loopback health, readiness, and privacy-safe Prometheus metrics for the Gateway",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@fyaic/wecom-channel-core": "workspace:*"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@fyaic/pi-runtime-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pi Agent JSONL RPC adapter with a bounded worker pool",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@fyaic/wecom-runtime-contract": "workspace:*"
+  }
+}

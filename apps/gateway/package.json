@@ -1,0 +1,23 @@
+{
+  "name": "@fyaic/wecom-agent-gateway-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Executable host for the wecom-agent-gateway monorepo",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "@fyaic/acp-runtime-adapter": "workspace:*",
+    "@fyaic/wecom-adapter-sdk": "workspace:*",
+    "@fyaic/codex-runtime-adapter": "workspace:*",
+    "@fyaic/openclaw-runtime-adapter": "workspace:*",
+    "@fyaic/pi-runtime-adapter": "workspace:*",
+    "@fyaic/wecom-local-control": "workspace:*",
+    "@fyaic/wecom-bot-transport": "workspace:*",
+    "@fyaic/wecom-channel-core": "workspace:*",
+    "@fyaic/wecom-media-spool-local": "workspace:*",
+    "@fyaic/wecom-observability-local": "workspace:*",
+    "@fyaic/wecom-runtime-contract": "workspace:*",
+    "@fyaic/wecom-storage-sqlite": "workspace:*",
+    "@fyaic/wecom-cli-tool": "workspace:*"
+  }
+}

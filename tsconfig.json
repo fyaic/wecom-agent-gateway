@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "baseUrl": ".",
+    "paths": {
+      "@fyaic/wecom-runtime-contract": [
+        "packages/runtime-contract/src/index.ts"
+      ],
+      "@fyaic/wecom-runtime-contract/testkit": [
+        "packages/runtime-contract/src/testkit.ts"
+      ]
+    },
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "apps/**/*.ts",
+    "examples/**/*.ts",
+    "packages/**/*.ts",
+    "scripts/**/*.ts"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "@fyaic/wecom-bot-transport",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Official-SDK WeCom Bot transport for wecom-agent-gateway",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@fyaic/wecom-runtime-contract": "workspace:*",
+    "@wecom/aibot-node-sdk": "1.0.7"
+  }
+}

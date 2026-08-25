@@ -1,0 +1,66 @@
+{
+  "name": "wecom-agent-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Runtime-neutral WeCom Bot IM gateway for pluggable Agent kernels",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fyaic/wecom-agent-gateway.git"
+  },
+  "homepage": "https://github.com/fyaic/wecom-agent-gateway#readme",
+  "bugs": {
+    "url": "https://github.com/fyaic/wecom-agent-gateway/issues"
+  },
+  "keywords": [
+    "wecom",
+    "enterprise-wechat",
+    "agent",
+    "gateway",
+    "im",
+    "openclaw",
+    "codex",
+    "acp"
+  ],
+  "type": "module",
+  "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "doctor": "tsx --env-file-if-exists=.env scripts/doctor.ts",
+    "doctor:live": "tsx --env-file-if-exists=.env scripts/doctor.ts --live",
+    "start": "tsx --env-file-if-exists=.env apps/gateway/src/index.ts",
+    "start:checked": "pnpm doctor && pnpm start",
+    "configure:allowlist": "tsx scripts/configure-allowlist.ts",
+    "enroll:direct": "tsx --env-file-if-exists=.env scripts/enroll-direct-sender.ts",
+    "dev": "tsx --env-file-if-exists=.env apps/gateway/src/index.ts",
+    "benchmark:codex-app-server": "tsx --env-file-if-exists=.env scripts/benchmark-codex-adapter.ts",
+    "smoke:codex-tool": "tsx --env-file-if-exists=.env scripts/smoke-codex-tool.ts",
+    "smoke:kimi-adapter": "tsx --env-file-if-exists=.env scripts/smoke-kimi-adapter.ts",
+    "smoke:openclaw-adapter": "tsx --env-file-if-exists=.env scripts/smoke-openclaw-adapter.ts",
+    "smoke:pi-adapter": "tsx --env-file-if-exists=.env scripts/smoke-pi-adapter.ts",
+    "smoke:pi-image-adapter": "tsx --env-file-if-exists=.env scripts/smoke-pi-image-adapter.ts",
+    "smoke:pi-pool": "tsx --env-file-if-exists=.env scripts/smoke-pi-pool.ts",
+    "smoke:media-outbox": "tsx --env-file-if-exists=.env scripts/smoke-media-outbox.ts",
+    "outbox:status": "tsx --env-file-if-exists=.env scripts/outbox-admin.ts status",
+    "outbox:replay-text": "tsx --env-file-if-exists=.env scripts/outbox-admin.ts replay-text",
+    "proactive:health": "tsx scripts/proactive-control.ts health",
+    "proactive:send": "tsx scripts/proactive-control.ts send",
+    "healthcheck": "tsx scripts/healthcheck.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "public:check": "tsx scripts/check-public-readiness.ts",
+    "public:history-check": "tsx scripts/check-public-history.ts",
+    "ci": "pnpm format:check && pnpm typecheck && pnpm test && pnpm public:check"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "prettier": "3.9.0",
+    "tsx": "4.23.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  }
+}

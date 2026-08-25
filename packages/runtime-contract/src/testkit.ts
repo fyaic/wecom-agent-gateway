@@ -1,0 +1,91 @@
+import {
+  assertRuntimeAdapterCompatible,
+  type AgentRunEvent,
+  type AgentRuntimeAdapter,
+  type InboundMessage,
+} from "./index.js";
+
+export interface RuntimeContractTranscript {
+  sessionId: string;
+  first: AgentRunEvent[];
+  resumed: AgentRunEvent[];
+}
+
+/**
+ * Runs the minimum text/session contract shared by every real Kernel adapter.
+ * It deliberately contains no vendor assumptions and throws on contract drift.
+ */
+export async function exerciseTextRuntimeContract(
+  adapter: AgentRuntimeAdapter,
+  message: InboundMessage,
+): Promise<RuntimeContractTranscript> {
+  assertRuntimeAdapterCompatible(adapter);
+  const health = await adapter.health();
+  if (!health.ok)
+    throw new Error(`Adapter is unhealthy: ${health.detail ?? "unknown"}`);
+
+  const first = await collect(adapter.run({ message }));
+  const sessions = first.filter(
+    (event): event is Extract<AgentRunEvent, { type: "session-started" }> =>
+      event.type === "session-started",
+  );
+  if (sessions.length !== 1) {
+    throw new Error(
+      `First run must start exactly one session; received ${sessions.length}`,
+    );
+  }
+  assertCompleteTextTurn(first, "first");
+
+  const resumed = await collect(
+    adapter.run({
+      message: { ...message, id: `${message.id}-resume` },
+      sessionId: sessions[0].sessionId,
+    }),
+  );
+  const unexpectedSession = resumed.find(
+    (event) =>
+      event.type === "session-started" &&
+      event.sessionId !== sessions[0].sessionId,
+  );
+  if (unexpectedSession) {
+    throw new Error("Resumed run created a different session");
+  }
+  assertCompleteTextTurn(resumed, "resumed");
+
+  return { sessionId: sessions[0].sessionId, first, resumed };
+}
+
+async function collect(
+  iterable: AsyncIterable<AgentRunEvent>,
+): Promise<AgentRunEvent[]> {
+  const events: AgentRunEvent[] = [];
+  for await (const event of iterable) events.push(event);
+  return events;
+}
+
+function assertCompleteTextTurn(events: AgentRunEvent[], label: string): void {
+  const failures = events.filter((event) => event.type === "failed");
+  if (failures.length > 0) throw new Error(`${label} run failed`);
+
+  const completed = events.filter(
+    (event): event is Extract<AgentRunEvent, { type: "message-completed" }> =>
+      event.type === "message-completed",
+  );
+  if (completed.length !== 1) {
+    throw new Error(
+      `${label} run must complete exactly once; received ${completed.length}`,
+    );
+  }
+
+  const streamed = events
+    .filter(
+      (event): event is Extract<AgentRunEvent, { type: "text-delta" }> =>
+        event.type === "text-delta",
+    )
+    .map((event) => event.text)
+    .join("");
+  if (!streamed) throw new Error(`${label} run produced no streamed text`);
+  if (completed[0].text !== streamed) {
+    throw new Error(`${label} final text does not equal the streamed text`);
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@fyaic/wecom-cli-tool",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Approval-aware wecom-cli tool bridge for Agent kernels",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@fyaic/wecom-runtime-contract": "workspace:*"
+  }
+}

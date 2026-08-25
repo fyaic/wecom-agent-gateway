@@ -1,0 +1,15 @@
+{
+  "name": "@fyaic/openclaw-runtime-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenClaw Gateway WebSocket adapter for wecom-agent-gateway",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@fyaic/wecom-runtime-contract": "workspace:*",
+    "@openclaw/gateway-client": "2026.8.1-beta.2"
+  }
+}

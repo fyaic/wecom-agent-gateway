@@ -1,0 +1,14 @@
+{
+  "name": "@fyaic/wecom-storage-sqlite",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SQLite session, outbox, and approval storage for wecom-agent-gateway",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@fyaic/wecom-runtime-contract": "workspace:*"
+  }
+}

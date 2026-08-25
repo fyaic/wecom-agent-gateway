@@ -1,0 +1,24 @@
+{
+  "providers": {
+    "zai-vision": {
+      "baseUrl": "https://api.z.ai/api/paas/v4",
+      "api": "openai-completions",
+      "models": [
+        {
+          "id": "glm-4.6v",
+          "name": "GLM-4.6V",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 128000,
+          "maxTokens": 32768,
+          "cost": {
+            "input": 0.3,
+            "output": 0.9,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
+        }
+      ]
+    }
+  }
+}

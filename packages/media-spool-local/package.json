@@ -1,0 +1,14 @@
+{
+  "name": "@fyaic/wecom-media-spool-local",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Protected durable media spool for wecom-agent-gateway",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@fyaic/wecom-runtime-contract": "workspace:*"
+  }
+}

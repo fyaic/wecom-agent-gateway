@@ -1,0 +1,14 @@
+{
+  "name": "@fyaic/wecom-adapter-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Authoring and loading SDK for external WeCom Agent Gateway runtime adapters",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@fyaic/wecom-runtime-contract": "workspace:*"
+  }
+}

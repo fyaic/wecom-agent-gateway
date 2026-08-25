@@ -1,0 +1,13 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+agent-output
+coverage
+data
+logs
+node_modules
+**/node_modules
+*.log
+.DS_Store

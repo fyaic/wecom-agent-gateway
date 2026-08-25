@@ -1,0 +1,75 @@
+name: Bug report
+description: Report a reproducible Gateway, transport, or adapter defect
+title: "[Bug]: "
+labels: [bug, triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include Bot/model credentials, internal IDs, real employee or conversation names, message contents, media URLs, or private filesystem paths. Report vulnerabilities through a private Security Advisory.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched existing issues.
+          required: true
+        - label: I removed credentials and private organizational data.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - WeCom transport
+        - Gateway Core / outbox / storage
+        - Codex adapter
+        - ACP / Kimi adapter
+        - OpenClaw adapter
+        - Pi adapter
+        - wecom-cli tool integration
+        - Documentation / deployment
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: v0.x.y or commit SHA
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Observed behavior
+      description: Describe what happened using sanitized data.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include deterministic steps or a small fake-backed test when possible.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: OS, Node.js, pnpm, selected adapter and upstream version
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs
+      render: shell

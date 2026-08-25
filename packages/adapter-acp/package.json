@@ -1,0 +1,15 @@
+{
+  "name": "@fyaic/acp-runtime-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Generic ACP v1 runtime adapter for wecom-agent-gateway",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "1.4.0",
+    "@fyaic/wecom-runtime-contract": "workspace:*"
+  }
+}

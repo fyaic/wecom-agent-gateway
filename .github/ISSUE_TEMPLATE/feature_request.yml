@@ -1,0 +1,38 @@
+name: Feature request
+description: Propose a scoped transport, Core, or adapter improvement
+title: "[Feature]: "
+labels: [enhancement, triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Explain the transport or integration problem. Agent reasoning, model policy, and business routing are intentionally outside Gateway Core.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user or operator problem should be solved?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Identify the affected transport, Runtime Contract, Core, or adapter boundary.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: invariants
+    attributes:
+      label: Project invariants
+      options:
+        - label: The proposal preserves a single WeCom Bot identity.
+          required: true
+        - label: The proposal keeps Agent reasoning and business routing outside Gateway Core.
+          required: true
+        - label: The report contains no credentials or private organizational data.
+          required: true

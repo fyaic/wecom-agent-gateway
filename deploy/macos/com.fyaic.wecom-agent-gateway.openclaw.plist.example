@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.fyaic.wecom-agent-gateway.openclaw</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>cd __PROJECT_DIR__ &amp;&amp; gateway_token=$(/usr/bin/security find-generic-password -s "$OPENCLAW_GATEWAY_KEYCHAIN_SERVICE" -a "$OPENCLAW_GATEWAY_KEYCHAIN_ACCOUNT" -w) &amp;&amp; export GATEWAY_ADAPTER=openclaw OPENCLAW_GATEWAY_TOKEN="$gateway_token" WECOM_CLI_TOOLS_ENABLED=false WECOM_CLI_WRITE_TOOLS_ENABLED=false &amp;&amp; exec __PNPM_PATH__ start:checked</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>OPENCLAW_GATEWAY_URL</key>
+    <string>__OPENCLAW_GATEWAY_URL__</string>
+    <key>OPENCLAW_GATEWAY_KEYCHAIN_SERVICE</key>
+    <string>__KEYCHAIN_SERVICE__</string>
+    <key>OPENCLAW_GATEWAY_KEYCHAIN_ACCOUNT</key>
+    <string>__KEYCHAIN_ACCOUNT__</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>StandardOutPath</key>
+  <string>__LOG_PATH__</string>
+  <key>StandardErrorPath</key>
+  <string>__LOG_PATH__</string>
+</dict>
+</plist>

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/fyaic/wecom-agent-gateway/security/advisories/new
+    about: Report vulnerabilities privately.
+  - name: Support policy
+    url: https://github.com/fyaic/wecom-agent-gateway/blob/main/SUPPORT.md
+    about: Choose the correct support channel.

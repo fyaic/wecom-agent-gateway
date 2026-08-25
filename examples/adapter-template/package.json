@@ -1,0 +1,15 @@
+{
+  "name": "@fyaic/example-runtime-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal external runtime Adapter template for wecom-agent-gateway",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@fyaic/wecom-adapter-sdk": "workspace:*",
+    "@fyaic/wecom-runtime-contract": "workspace:*"
+  }
+}

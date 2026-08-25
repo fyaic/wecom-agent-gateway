@@ -1,0 +1,14 @@
+{
+  "name": "@fyaic/wecom-channel-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kernel-neutral session, streaming, policy, and delivery core",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@fyaic/wecom-runtime-contract": "workspace:*"
+  }
+}

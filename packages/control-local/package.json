@@ -1,0 +1,15 @@
+{
+  "name": "@fyaic/wecom-local-control",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Credential-free Unix socket control plane for proactive Gateway messages",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@fyaic/wecom-channel-core": "workspace:*",
+    "@fyaic/wecom-runtime-contract": "workspace:*"
+  }
+}
