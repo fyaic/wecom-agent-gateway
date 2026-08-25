@@ -63,16 +63,18 @@ Kernel 应使用 ACP 子进程和环境 allowlist。Gateway SDK 不负责 Agent 
 
 ## Capability 语义
 
-| Capability          | v1 含义                                                           |
-| ------------------- | ----------------------------------------------------------------- |
-| `streaming`         | Adapter 实际发出有序文本增量，最终正文与增量拼接一致              |
-| `resume`            | 可用 opaque session 继续同一 Kernel 上下文                        |
-| `cancel`            | 可取消指定 session 的当前 run                                     |
-| `approval`          | 可把 Kernel 的权限请求映射到 Gateway 审批控制面                   |
-| `tools`             | 可注入并调用 Gateway 提供的 `RuntimeTool` catalog                 |
-| `status-events`     | 可忠实转发 Kernel 显式的面向用户状态；不是 Channel 推断“正在思考” |
-| `multimodal-input`  | 至少一种非文本输入可原生传入；具体类型仍由 Adapter 协商或明确拒绝 |
-| `multimodal-output` | 可产生受根目录、大小和数量约束的 `media-output`                   |
+| Capability                | v1 含义                                                           |
+| ------------------------- | ----------------------------------------------------------------- |
+| `streaming`               | Adapter 实际发出有序文本增量，最终正文与增量拼接一致              |
+| `resume`                  | 可用 opaque session 继续同一 Kernel 上下文                        |
+| `cancel`                  | 可取消指定 session 的当前 run                                     |
+| `approval`                | 可把 Kernel 的权限请求映射到 Gateway 审批控制面                   |
+| `tools`                   | 可注入并调用 Gateway 提供的 `RuntimeTool` catalog                 |
+| `status-events`           | 可忠实转发 Kernel 显式的面向用户状态；不是 Channel 推断“正在思考” |
+| `multimodal-input`        | 至少一种非文本输入可原生传入；具体类型仍由 Adapter 协商或明确拒绝 |
+| `multimodal-output`       | 可产生受根目录、大小和数量约束的 `media-output`                   |
+| `interaction-resume`      | 可接收持久化的结构化交互结果并恢复同一 Kernel session             |
+| `interaction-live-resume` | 结果是仍在等待的原生调用控制响应；允许绕过语义 turn 队列          |
 
 Kernel 自己拥有工具不等于 `tools`；模型支持图片也不等于 Adapter 已实现安全媒体输入。
 
@@ -80,14 +82,14 @@ Kernel 自己拥有工具不等于 `tools`；模型支持图片也不等于 Adap
 
 验证快照：2026-08-24。
 
-| Adapter               | 上游接口            | 固定/实测版本                                  | 已验证能力                                                     |
-| --------------------- | ------------------- | ---------------------------------------------- | -------------------------------------------------------------- |
-| Codex SDK 对照实现    | `@openai/codex-sdk` | SDK `0.148.0`                                  | 文本流式、session 恢复                                         |
-| Codex App Server      | JSONL App Server    | CLI `0.145.0`                                  | 流式、恢复、取消、状态、审批、RuntimeTool、图片/音频输入       |
-| 通用 ACP              | ACP v1 stdio        | `@agentclientprotocol/sdk 1.4.0`               | 流式/取消/权限；恢复和输入模态按 `initialize` 动态协商         |
-| Kimi Code（通用 ACP） | `kimi acp`          | Kimi `0.36.1`                                  | 流式、恢复、取消、权限、状态、图片输入；真实企业微信私聊已通过 |
-| OpenClaw Gateway      | WebSocket v4        | Client `2026.8.1-beta.2`；Gateway `2026.7.1-2` | 流式、恢复、取消、状态；image/audio/video/file 输入            |
-| Pi Agent              | 官方 JSONL RPC      | Pi `0.84.2`；GLM-5.2 文本、GLM-4.6V 图片通过   | 流式/恢复/取消/状态；动态图片输入；默认 2-worker 有界并发      |
+| Adapter               | 上游接口            | 固定/实测版本                                  | 已验证能力                                                                        |
+| --------------------- | ------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------- |
+| Codex SDK 对照实现    | `@openai/codex-sdk` | SDK `0.148.0`                                  | 文本流式、session 恢复                                                            |
+| Codex App Server      | JSONL App Server    | CLI `0.145.0`                                  | 流式、恢复、取消、状态、审批、RuntimeTool、图片/音频输入                          |
+| 通用 ACP              | ACP v1 stdio        | `@agentclientprotocol/sdk 1.4.0`               | 流式/取消/权限；恢复和输入模态按 `initialize` 动态协商                            |
+| Kimi Code（通用 ACP） | `kimi acp`          | Kimi `0.36.1`                                  | 流式、恢复、取消、权限、状态、图片输入；真实企业微信私聊已通过                    |
+| OpenClaw Gateway      | WebSocket v4        | Client `2026.8.1-beta.2`；Gateway `2026.7.1-2` | 流式、恢复、取消、状态；image/audio/video/file 输入                               |
+| Pi Agent              | 官方 JSONL RPC      | Pi `0.84.2`；GLM-5.2 文本、GLM-4.6V 图片通过   | 流式/恢复/取消/状态；动态图片输入；原生选择/确认/文本交互；默认 2-worker 有界并发 |
 
 OpenClaw 当前客户端与 Gateway 跨 release train，已通过 `agent.wait + chat.history` 终态对账覆盖事件间隙；
 升级任一侧时必须重跑 fake contract、本机两轮 smoke、企业微信私聊和群聊矩阵。
@@ -96,8 +98,11 @@ Pi 官方当前没有 ACP 接口；它提供 `pi --mode rpc` 的严格 LF JSONL 
 异步 `prompt`、base64 图片、`message_update/text_delta`、完全终态 `agent_settled`、`abort`、
 `get_state` 与 `switch_session`。因此 Pi 使用独立窄 Adapter，不能假装成 ACP wire type。当前实现以
 有上限的长期进程池承载企业微信 session，默认 `PI_MAX_WORKERS=2`；同 session keyed lock 串行，
-不同 session 可在不同 worker 并行。`agent_settled` 是唯一成功终态，阻塞式 extension UI 默认取消，
-图片以受保护本地文件读取后转 base64，文件/音频/视频明确失败。
+不同 session 可在不同 worker 并行。`agent_settled` 是唯一成功终态。Pi 原生
+`extension_ui_request` 中的 select/confirm/input/editor 会产生 `interaction-requested`；Gateway
+完成卡片或限定文本交互后，Adapter 以同 request ID 的 `extension_ui_response` 恢复原调用。自带 timeout、
+重复 pending 或无法映射的 dialog fail closed。图片以受保护本地文件读取后转 base64，文件/音频/视频
+明确失败。
 `multimodal-input` 不是静态承诺：Adapter 从 `get_state.model.input` 动态协商。当前真实
 `zai/glm-5.2` 只接受文本，因此不声明图片；自定义 `zai-vision/glm-4.6v` 声明图片输入并已完成本机
 真实截图识别。两种模型共用同一个 Adapter，没有按模型硬编码 capability。
@@ -112,3 +117,13 @@ compatibility，不是 Channel 替 Agent 思考或把媒体改写成文字。
 - 继承 Bot secret、数据库路径或全部宿主环境给 Kernel 子进程；
 - 在 Adapter 中决定业务路由、模型选择或用户意图；
 - 把 session、tool call、用户或会话内部 ID 输出到普通日志或用户消息。
+
+## ask-user / elicitation 接入规则
+
+Adapter 只在 Kernel 真实请求用户输入时发出 `{type: "interaction-requested"}`，不得从自然语言猜测。
+请求必须使用稳定的 Runtime 语义，不含企业微信卡片 JSON、callback key 或目标 ID。
+
+普通实现声明 `interaction-resume`，结束当前 run 后由 Gateway durable queue 恢复同一 session。只有当
+Kernel 的原调用仍在等待控制响应时才额外声明 `interaction-live-resume`；这条响应不会经过正常会话队列，
+Adapter 必须验证 session 仍绑定原 live worker，并按 idempotency key 忽略重复投递。任何失败都不能通过
+合成用户 Prompt 来“模拟恢复”。

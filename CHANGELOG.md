@@ -12,6 +12,10 @@ tagged.
   rendered through the official WeCom SDK's five template-card types.
 - Durable, sender- and conversation-scoped card interactions with an approval
   button-card flow, in-place callback updates, and exact-command fallback.
+- A durable Agent interaction broker with callback fast lane, TTL, scoped
+  results, leased resume delivery, and dead-letter handling.
+- Pi native select, confirm, input, and editor bridging with same-call live
+  resume, scoped plain-text input, and a side-effect-free example extension.
 
 ## [0.1.0] - 2026-08-25
 

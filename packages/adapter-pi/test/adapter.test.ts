@@ -239,7 +239,7 @@ describe("PiRuntimeAdapter", () => {
     await adapter.stop();
   });
 
-  it("fails closed on blocking extension UI dialogs", async () => {
+  it("fails closed on Pi-timed dialogs to avoid competing TTL owners", async () => {
     const fake = new FakePiClient({ extensionDialog: true });
     const adapter = createAdapter(fake);
     await adapter.start();
@@ -252,6 +252,177 @@ describe("PiRuntimeAdapter", () => {
       cancelled: true,
     });
     await adapter.stop();
+  });
+
+  it("bridges a live Pi confirm dialog without creating a synthetic prompt", async () => {
+    const fake = new FakePiClient({ settlePrompts: false });
+    const adapter = createAdapter(fake);
+    await adapter.start();
+    expect(adapter.capabilities.has("interaction-resume")).toBe(true);
+    expect(adapter.capabilities.has("interaction-live-resume")).toBe(true);
+    const iterator = adapter
+      .run({ message: message([{ type: "text", text: "hello" }]) })
+      [Symbol.asyncIterator]();
+    const started = await iterator.next();
+    expect(started.value?.type).toBe("session-started");
+    expect((await iterator.next()).value).toMatchObject({
+      type: "status",
+      phase: "accepted",
+    });
+    const thinking = iterator.next();
+    await fake.waitForPrompt();
+    expect((await thinking).value).toMatchObject({
+      type: "status",
+      phase: "thinking",
+    });
+    fake.emit({
+      type: "extension_ui_request",
+      id: "confirm-1",
+      method: "confirm",
+      title: "继续执行？",
+      message: "请确认下一步。",
+    });
+    expect((await iterator.next()).value).toEqual({
+      type: "interaction-requested",
+      request: {
+        kind: "confirm",
+        title: "继续执行？",
+        description: "请确认下一步。",
+      },
+    });
+    const sessionId =
+      started.value?.type === "session-started" ? started.value.sessionId : "";
+    await collect(
+      adapter.resumeInteraction!({
+        sessionId,
+        idempotencyKey: "interaction-resume:test-confirm",
+        result: {
+          interactionId: "interaction-test-confirm",
+          status: "submitted",
+          values: { confirmation: ["confirmed"] },
+          submittedAt: "2026-08-25T00:00:00.000Z",
+        },
+      }),
+    );
+    expect(fake.sent).toContainEqual({
+      type: "extension_ui_response",
+      id: "confirm-1",
+      confirmed: true,
+    });
+    expect(
+      fake.commands.filter((command) => command.type === "prompt"),
+    ).toHaveLength(1);
+
+    fake.lastText = "已确认并继续";
+    fake.emit({
+      type: "message_update",
+      assistantMessageEvent: {
+        type: "text_delta",
+        delta: fake.lastText,
+      },
+    });
+    fake.emit({ type: "agent_settled" });
+    expect((await iterator.next()).value).toEqual({
+      type: "text-delta",
+      text: "已确认并继续",
+    });
+    expect((await iterator.next()).value).toEqual({
+      type: "message-completed",
+      text: "已确认并继续",
+    });
+    expect((await iterator.next()).done).toBe(true);
+    await adapter.stop();
+  });
+
+  it("maps Pi select and input dialogs to neutral interaction semantics", async () => {
+    const select = new FakePiClient({ settlePrompts: false });
+    const selectAdapter = createAdapter(select);
+    await selectAdapter.start();
+    const selectIterator = selectAdapter
+      .run({ message: message([{ type: "text", text: "choose" }]) })
+      [Symbol.asyncIterator]();
+    const selectStarted = await selectIterator.next();
+    await selectIterator.next();
+    const selectThinking = selectIterator.next();
+    await select.waitForPrompt();
+    await selectThinking;
+    select.emit({
+      type: "extension_ui_request",
+      id: "select-1",
+      method: "select",
+      title: "选择环境",
+      options: ["生产", "测试"],
+    });
+    expect((await selectIterator.next()).value).toMatchObject({
+      type: "interaction-requested",
+      request: {
+        kind: "single-select",
+        fieldId: "selection",
+        options: [
+          { value: "pi-option-0", label: "生产" },
+          { value: "pi-option-1", label: "测试" },
+        ],
+      },
+    });
+    const selectSession =
+      selectStarted.value?.type === "session-started"
+        ? selectStarted.value.sessionId
+        : "";
+    await collect(
+      selectAdapter.resumeInteraction!({
+        sessionId: selectSession,
+        idempotencyKey: "interaction-resume:test-select",
+        result: {
+          interactionId: "interaction-test-select",
+          status: "submitted",
+          values: { selection: ["pi-option-1"] },
+          submittedAt: "2026-08-25T00:00:00.000Z",
+        },
+      }),
+    );
+    expect(select.sent).toContainEqual({
+      type: "extension_ui_response",
+      id: "select-1",
+      value: "测试",
+    });
+    await selectIterator.return?.();
+    await selectAdapter.stop();
+
+    const input = new FakePiClient({ settlePrompts: false });
+    const inputAdapter = createAdapter(input);
+    await inputAdapter.start();
+    const inputIterator = inputAdapter
+      .run({ message: message([{ type: "text", text: "input" }]) })
+      [Symbol.asyncIterator]();
+    await inputIterator.next();
+    await inputIterator.next();
+    const inputThinking = inputIterator.next();
+    await input.waitForPrompt();
+    await inputThinking;
+    input.emit({
+      type: "extension_ui_request",
+      id: "input-1",
+      method: "input",
+      title: "请输入名称",
+      placeholder: "项目名称",
+    });
+    expect((await inputIterator.next()).value).toEqual({
+      type: "interaction-requested",
+      request: {
+        kind: "text-input",
+        title: "请输入名称",
+        fieldId: "value",
+        placeholder: "项目名称",
+        multiline: false,
+      },
+    });
+    await inputIterator.return?.();
+    expect(input.sent).toContainEqual({
+      type: "extension_ui_response",
+      id: "input-1",
+      cancelled: true,
+    });
+    await inputAdapter.stop();
   });
 
   it("rejects session handles outside Pi's inferred storage root", async () => {
@@ -342,6 +513,37 @@ describe("PooledPiRuntimeAdapter", () => {
     await Promise.all([first, second]);
     await adapter.stop();
   });
+
+  it("routes live interaction responses to the worker holding the session", async () => {
+    const tracker = new PoolTracker();
+    const adapter = new PooledPiRuntimeAdapter({
+      maxWorkers: 1,
+      workerFactory: () => new FakePoolWorker(tracker),
+    });
+    await adapter.start();
+    const run = collect(
+      adapter.run({
+        message: message([{ type: "text", text: "one" }]),
+        sessionId: "session-a",
+      }),
+    );
+    await tracker.waitForStarted(1);
+    await collect(
+      adapter.resumeInteraction!({
+        sessionId: "session-a",
+        idempotencyKey: "interaction-resume:pool",
+        result: {
+          interactionId: "interaction-pool",
+          status: "submitted",
+          values: { confirmation: ["confirmed"] },
+          submittedAt: "2026-08-25T00:00:00.000Z",
+        },
+      }),
+    );
+    await run;
+    expect(tracker.resumes).toEqual(["interaction-resume:pool"]);
+    await adapter.stop();
+  });
 });
 
 describe("StrictJsonlDecoder", () => {
@@ -388,6 +590,7 @@ class PoolTracker {
   maxActive = 0;
   started = 0;
   readonly releases: Array<() => void> = [];
+  readonly resumes: string[] = [];
   private readonly waiters: Array<{ count: number; resolve: () => void }> = [];
 
   entered(): Promise<void> {
@@ -433,6 +636,8 @@ class FakePoolWorker implements AgentRuntimeAdapter {
     "cancel",
     "status-events",
     "multimodal-input",
+    "interaction-resume",
+    "interaction-live-resume",
   ]);
   readonly inputModalities = new Set(["image" as const]);
 
@@ -446,6 +651,14 @@ class FakePoolWorker implements AgentRuntimeAdapter {
   async *run(): AsyncIterable<AgentRunEvent> {
     await this.tracker.entered();
     yield { type: "message-completed", text: "ok" };
+  }
+  async *resumeInteraction(
+    request: Parameters<
+      NonNullable<AgentRuntimeAdapter["resumeInteraction"]>
+    >[0],
+  ): AsyncIterable<AgentRunEvent> {
+    this.tracker.resumes.push(request.idempotencyKey);
+    this.tracker.releaseNext();
   }
   async cancel(): Promise<void> {}
 }
@@ -505,6 +718,9 @@ class FakePiClient implements PiRpcClient {
             type: "extension_ui_request",
             id: "dialog-1",
             method: "confirm",
+            title: "Timed confirmation",
+            message: "Pi owns this timeout",
+            timeout: 10_000,
           });
         }
         if (this.options.settlePrompts !== false) {

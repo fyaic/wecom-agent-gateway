@@ -118,6 +118,59 @@ Adapter 可以从 Kernel 原生 ask-user/elicitation、受控 `channel_interact`
 后结束当前 run，回调结果通过耐久 resume queue 恢复相同 session。原地长时间等待 tool call 只作为
 声明过原生能力的可选优化，不能成为公共可靠性基线。
 
+M2.2 增加了 `text-input` 语义和 Kernel 主动事件：
+
+```ts
+type RuntimeInteractionRequest =
+  | /* confirm / single-select / multi-select / form / actions */
+  | {
+      kind: "text-input";
+      title: string;
+      fieldId: string;
+      description?: string;
+      placeholder?: string;
+      initialValue?: string;
+      multiline?: boolean;
+    };
+
+type AgentRunEvent =
+  | { type: "interaction-requested"; request: RuntimeInteractionRequest }
+  | /* existing runtime events */ never;
+```
+
+卡片交互继续走官方 SDK callback；`text-input` 不伪造企业微信表单，而是发送清晰提示，并只消费同一
+account、conversation、sender 下的下一条非空纯文本。该回复直接完成 pending interaction，不创建
+第二个 Agent turn，也不进入模型意图识别。
+
+## Live resume 与 deferred resume
+
+```mermaid
+flowchart TD
+    R[Kernel ask-user] --> E[Adapter emits interaction-requested]
+    E --> B[Gateway persists scoped interaction]
+    B --> U{Interaction type}
+    U -->|confirm/select| C[WeCom template card]
+    U -->|input/editor| T[Scoped next-text prompt]
+    C --> A[Atomic callback resolve]
+    T --> A
+    A --> Q[Durable resume entry]
+    Q --> L{Adapter capability}
+    L -->|interaction-live-resume| N[Native response to still-live call]
+    L -->|interaction-resume| D[Deferred same-session resume]
+    N --> O[Original run continues]
+    D --> O2[New resume delivery produces output]
+```
+
+`interaction-live-resume` 是控制响应，不是新的语义 turn。它必须绕过 Gateway 的会话队列和 Agent run
+semaphore，否则原 run 等待用户、resume 又等待原 run 释放槽位，会形成死锁。它只允许路由到仍持有
+该 session 的 live worker。默认 `interaction-resume` 仍走耐久队列、租约和串行调度，供真正挂起并
+结束当前 run 的 Kernel 使用。
+
+Pi `0.84.2` 的 RPC `select/confirm/input/editor` 会发送 `extension_ui_request` 并阻塞，直至收到同 ID 的
+`extension_ui_response`。Pi Adapter 将选择/确认映射为卡片，将 input/editor 映射为上述纯文本回复；
+返回结果使用 Pi 原生 response 恢复原 tool call，而不是合成一条 Prompt。带 Pi 自身 `timeout` 的 dialog
+暂时 fail closed 并立即取消，避免 Kernel timeout 与 Gateway TTL 两套计时器竞争。
+
 ## Interaction Broker 状态机
 
 ```mermaid
@@ -205,9 +258,19 @@ namespace、状态和视觉标识，防止 Agent 生成的“确认”冒充安�
 
 ### M2.2：Agent ask-user MVP
 
-- 标准 `channel_interact` RuntimeTool/Adapter hook。
-- 单选不超过 6、投票多选和文本降级。
-- 同 session suspend → callback → resume 真实闭环。
+状态：2026-08-25 已完成 Pi 原生 hook、live resume 与文本降级的实现和自动化验证；真实企业微信
+点击/文本验收待执行。
+
+- [x] `interaction-requested` Adapter hook 和 `text-input` 中立契约。
+- [x] Pi `select/confirm/input/editor` 原生 RPC 映射，不注入 synthetic Prompt。
+- [x] `interaction-live-resume` 控制快车道，同 session、同 worker 恢复且不与原 run 死锁。
+- [x] 每 account + conversation 最多一个活跃交互；文本回复额外绑定原 sender。
+- [x] durable resume 仍作为 callback 决定和 at-least-once 投递记录。
+- [x] 本机真实 Pi RPC extension UI request/response 冒烟。
+- [ ] 授权企业微信私聊和测试群真实 choice/input 验收。
+
+可运行的无副作用 Pi 示例位于 `examples/pi-wecom-interaction.mjs`；它只在 Agent 明确调用时展示选择、
+确认或输入，不执行办公写操作。
 
 ### M2.3：回复底部快捷操作
 

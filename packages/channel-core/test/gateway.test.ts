@@ -1185,6 +1185,166 @@ describe("WeComAgentGateway", () => {
     await gateway.stop();
   });
 
+  it("bridges a live Adapter interaction without deadlocking the active conversation", async () => {
+    class InteractiveTransport extends FakeTransport {
+      override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
+        "stream-reply-update",
+        "proactive-message",
+        "structured-presentation",
+        "interactive-presentation",
+      ]);
+    }
+    const transport = new InteractiveTransport();
+    let continueRun!: () => void;
+    const interactionAnswer = new Promise<void>((resolve) => {
+      continueRun = resolve;
+    });
+    const resumed: string[] = [];
+    const runtime: AgentRuntimeAdapter = {
+      id: "live-interaction-runtime",
+      contractVersion: 1,
+      capabilities: new Set(["interaction-resume", "interaction-live-resume"]),
+      async *run() {
+        yield { type: "session-started", sessionId: "live-session" };
+        yield {
+          type: "interaction-requested",
+          request: {
+            kind: "single-select",
+            title: "选择环境",
+            fieldId: "environment",
+            options: [
+              { value: "prod", label: "生产" },
+              { value: "test", label: "测试" },
+            ],
+          },
+        };
+        await interactionAnswer;
+        yield { type: "text-delta", text: "已切换到测试环境" };
+        yield { type: "message-completed", text: "已切换到测试环境" };
+      },
+      async *resumeInteraction(request) {
+        resumed.push(request.result.values.environment?.[0] ?? "missing");
+        continueRun();
+      },
+      async health() {
+        return { ok: true };
+      },
+    };
+    const gateway = new WeComAgentGateway({
+      transport,
+      adapters: [runtime],
+      router: new StaticRuntimeRouter(runtime.id),
+      store: new MemoryGatewayStore(),
+      outboxPollIntervalMs: 2,
+      replyUpdateIntervalMs: 1,
+      maxConcurrentRuns: 1,
+    });
+    await gateway.start();
+    const original = transport.receive(message("live-interaction-original"));
+    await waitFor(() =>
+      transport.commands.some(
+        (command) => command.type === "proactive-presentation",
+      ),
+    );
+    const prompt = transport.commands.find(
+      (command) => command.type === "proactive-presentation",
+    );
+    if (!prompt || prompt.type !== "proactive-presentation") {
+      throw new Error("live interaction card was not delivered");
+    }
+    await transport.receive({
+      ...message("live-interaction-callback"),
+      parts: [],
+      interaction: {
+        presentationId: prompt.presentation.id,
+        actionId: "option_1",
+      },
+    });
+    await original;
+    expect(resumed).toEqual(["test"]);
+    expect(transport.commands.at(-1)).toMatchObject({
+      type: "reply",
+      text: "已切换到测试环境",
+      final: true,
+    });
+    await gateway.stop();
+  });
+
+  it("uses the next scoped plain-text message for a live text interaction", async () => {
+    const transport = new FakeTransport();
+    let continueRun!: () => void;
+    const interactionAnswer = new Promise<void>((resolve) => {
+      continueRun = resolve;
+    });
+    const resumed: string[] = [];
+    let runs = 0;
+    const runtime: AgentRuntimeAdapter = {
+      id: "live-text-runtime",
+      contractVersion: 1,
+      capabilities: new Set(["interaction-resume", "interaction-live-resume"]),
+      async *run() {
+        runs += 1;
+        yield { type: "session-started", sessionId: "live-text-session" };
+        yield {
+          type: "interaction-requested",
+          request: {
+            kind: "text-input",
+            title: "请输入项目名称",
+            fieldId: "name",
+            placeholder: "例如 Gateway",
+          },
+        };
+        await interactionAnswer;
+        yield { type: "message-completed", text: "名称已记录" };
+      },
+      async *resumeInteraction(request) {
+        resumed.push(request.result.values.name?.[0] ?? "missing");
+        continueRun();
+      },
+      async health() {
+        return { ok: true };
+      },
+    };
+    const gateway = new WeComAgentGateway({
+      transport,
+      adapters: [runtime],
+      router: new StaticRuntimeRouter(runtime.id),
+      store: new MemoryGatewayStore(),
+      outboxPollIntervalMs: 2,
+      replyUpdateIntervalMs: 1,
+      maxConcurrentRuns: 1,
+    });
+    await gateway.start();
+    const original = transport.receive(message("live-text-original"));
+    await waitFor(() =>
+      transport.commands.some(
+        (command) =>
+          command.type === "proactive" &&
+          command.text.includes("请输入项目名称"),
+      ),
+    );
+    await transport.receive({
+      ...message("live-text-answer"),
+      parts: [{ type: "text", text: "Agent Gateway" }],
+    });
+    await original;
+    expect(runs).toBe(1);
+    expect(resumed).toEqual(["Agent Gateway"]);
+    expect(transport.commands).toContainEqual(
+      expect.objectContaining({
+        type: "reply",
+        text: "✅ 已提交，正在继续。",
+        final: true,
+      }),
+    );
+    expect(transport.commands.at(-1)).toMatchObject({
+      type: "reply",
+      text: "名称已记录",
+      final: true,
+    });
+    await gateway.stop();
+  });
+
   it("expires an unanswered approval without hanging the Agent run", async () => {
     const lifecycle: string[] = [];
     let decision = "";

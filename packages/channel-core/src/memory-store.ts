@@ -358,6 +358,17 @@ export class MemoryGatewayStore implements GatewayStore {
     interaction: PendingRuntimeInteraction,
   ): Promise<boolean> {
     if (this.runtimeInteractions.has(interaction.interactionId)) return false;
+    if (
+      [...this.runtimeInteractions.values()].some(
+        (candidate) =>
+          candidate.status === "pending" &&
+          candidate.accountId === interaction.accountId &&
+          candidate.conversationId === interaction.conversationId &&
+          candidate.expiresAt > interaction.createdAt,
+      )
+    ) {
+      return false;
+    }
     this.runtimeInteractions.set(interaction.interactionId, {
       ...interaction,
       status: "pending",
@@ -378,11 +389,30 @@ export class MemoryGatewayStore implements GatewayStore {
       interaction.status !== "pending" ||
       interaction.accountId !== options.accountId ||
       interaction.conversationId !== options.conversationId ||
-      interaction.senderId !== options.senderId
+      interaction.senderId !== options.senderId ||
+      interaction.expiresAt <= options.now
     ) {
       return undefined;
     }
     return runtimeInteractionCopy(interaction);
+  }
+
+  async getPendingRuntimeTextInteraction(options: {
+    accountId: string;
+    conversationId: string;
+    senderId: string;
+    now: string;
+  }): Promise<PendingRuntimeInteraction | undefined> {
+    const interaction = [...this.runtimeInteractions.values()].find(
+      (candidate) =>
+        candidate.status === "pending" &&
+        candidate.request.kind === "text-input" &&
+        candidate.accountId === options.accountId &&
+        candidate.conversationId === options.conversationId &&
+        candidate.senderId === options.senderId &&
+        candidate.expiresAt > options.now,
+    );
+    return interaction ? runtimeInteractionCopy(interaction) : undefined;
   }
 
   async resolveRuntimeInteractionAndEnqueue(options: {

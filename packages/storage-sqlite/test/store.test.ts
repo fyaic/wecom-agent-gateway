@@ -871,6 +871,83 @@ describe("SqliteGatewayStore", () => {
     ]);
     store.close();
   });
+
+  it("enforces one active interaction and scopes plain-text replies", async () => {
+    const store = new SqliteGatewayStore(":memory:");
+    const interaction = {
+      interactionId: "interaction_text_1",
+      accountId: "bot",
+      conversationId: "chat",
+      conversationType: "direct" as const,
+      senderId: "user",
+      adapterId: "pi",
+      sessionId: "session-text",
+      request: {
+        kind: "text-input" as const,
+        title: "请输入名称",
+        fieldId: "name",
+      },
+      createdAt: "2026-08-25T00:00:00.000Z",
+      expiresAt: "2026-08-25T00:05:00.000Z",
+    };
+    await expect(store.createRuntimeInteraction(interaction)).resolves.toBe(
+      true,
+    );
+    await expect(
+      store.createRuntimeInteraction({
+        ...interaction,
+        interactionId: "interaction_text_2",
+        senderId: "other-user",
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      store.getPendingRuntimeTextInteraction({
+        accountId: "bot",
+        conversationId: "chat",
+        senderId: "other-user",
+        now: "2026-08-25T00:01:00.000Z",
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      store.getPendingRuntimeTextInteraction({
+        accountId: "bot",
+        conversationId: "chat",
+        senderId: "user",
+        now: "2026-08-25T00:01:00.000Z",
+      }),
+    ).resolves.toMatchObject({
+      interactionId: "interaction_text_1",
+      request: { kind: "text-input", fieldId: "name" },
+    });
+    await store.resolveRuntimeInteractionAndEnqueue({
+      interactionId: "interaction_text_1",
+      accountId: "bot",
+      conversationId: "chat",
+      senderId: "user",
+      result: {
+        interactionId: "interaction_text_1",
+        status: "submitted",
+        values: { name: ["Gateway"] },
+        submittedAt: "2026-08-25T00:01:00.000Z",
+      },
+      now: "2026-08-25T00:01:00.000Z",
+    });
+    await expect(
+      store.createRuntimeInteraction({
+        ...interaction,
+        interactionId: "interaction_text_2",
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      store.createRuntimeInteraction({
+        ...interaction,
+        interactionId: "interaction_text_3",
+        createdAt: "2026-08-25T00:06:00.000Z",
+        expiresAt: "2026-08-25T00:11:00.000Z",
+      }),
+    ).resolves.toBe(true);
+    store.close();
+  });
 });
 
 function replyCommand(text: string, final: boolean): DurableOutboundCommand {

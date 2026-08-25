@@ -25,8 +25,8 @@ changes.
 
 - [x] M2.1: durable Interaction Broker, five-second callback fast lane, and
       runtime resume queue with deterministic end-to-end tests.
-- [ ] M2.2: connect Agent-native ask-user/elicitation hooks to the completed
-      neutral request/result contract, including text fallback.
+- [x] M2.2: connect Pi native ask-user hooks to the neutral interaction contract,
+      including live same-call resume and scoped text fallback.
 - [ ] M2.3: `replyStreamWithCard` final-answer actions and proactive fallback.
 - [ ] Complete real WeCom acceptance for approval and ask-user cards, including
       callback scoping, in-place updates, rejection, expiry, and duplicates.
@@ -39,7 +39,8 @@ changes.
 
 ## Later
 
-- M2.4 interaction adapters for Codex, Pi, OpenClaw, ACP, and the external SDK.
+- M2.4 additional interaction adapters for Codex, OpenClaw, ACP, and the external
+  SDK; Pi is the completed reference implementation.
 - M2.5 multi-field forms, welcome/task cards, and a separate group-poll model.
 - Compatibility certification for additional Agent kernels.
 - Optional distributed outbox and media storage implementations.

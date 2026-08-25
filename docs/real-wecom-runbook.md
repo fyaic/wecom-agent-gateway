@@ -425,6 +425,29 @@ TTL 到期且没有 callback frame 时无法原位修改旧卡；Gateway 会把 
 详细验收矩阵见 `interaction-cards.md`；M2.1 已完成确定性闭环，但在真实企业微信完成 choice/form
 验收前不宣称其已实测通过。
 
+#### Pi 原生 ask-user 验收
+
+仓库提供无副作用的 `examples/pi-wecom-interaction.mjs`。仅在验收环境把它加入 Pi argv，保留既有
+provider/model 参数：
+
+```dotenv
+PI_ARGS_JSON=["--provider","zai-vision","--model","glm-4.6v","--thinking","low","--extension","/absolute/path/to/wecom-agent-gateway/examples/pi-wecom-interaction.mjs"]
+```
+
+重启受管 Gateway 并确认 `readyz` 后，在已授权私聊执行两个独立回合：
+
+1. “请必须调用 `wecom_interaction_demo`，kind 设为 select；收到工具结果后只回复测试完成。”
+2. “请必须调用 `wecom_interaction_demo`，kind 设为 input；收到工具结果后原样复述输入。”
+
+第一个回合应出现选择卡片；点击后卡片应在五秒内变成不可交互的“已提交/正在继续”，然后原 Pi run
+继续并发送最终回复。第二个回合应出现输入提示；原发送者的下一条非空纯文本应被消费为结果，不触发
+新的 Agent turn。再在授权测试群用 `@Bot` 重复 select，确认只有原请求人可以提交。
+
+验收时记录 callback 到卡片更新、resume 投递、Pi 首个续跑事件和最终回复的分层耗时；不得记录内部
+会话 ID、callback key 或原始 frame。还需分别确认重复点击、其他成员点击、TTL 过期均不产生第二次
+resume。示例 extension 不执行副作用；如果生产不希望暴露演示工具，验收后从 `PI_ARGS_JSON` 移除并
+重启，核心交互桥不会受影响。
+
 当前网络中 Codex Responses WebSocket 首轮会耗尽重试预算后才回退 HTTP，因此默认
 `CODEX_RESPONSES_WEBSOCKET=false`：adapter 使用 ChatGPT 登录兼容的 HTTP-only provider。
 如果部署网络已经确认可稳定连接 Responses WebSocket，可设为 `true` 使用内置 provider。

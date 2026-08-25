@@ -5,11 +5,13 @@ import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import {
   RUNTIME_CONTRACT_VERSION,
+  type AgentInteractionResumeRequest,
   type AgentRunEvent,
   type AgentRunRequest,
   type AgentRuntimeAdapter,
   type MediaType,
   type RuntimeCapability,
+  type RuntimeInteractionRequest,
 } from "@fyaic/wecom-runtime-contract";
 
 type JsonRecord = Record<string, unknown>;
@@ -62,6 +64,13 @@ interface ActiveRun {
   queue: AsyncEventQueue;
   text: string;
   settling: boolean;
+  interaction?: PendingPiInteraction;
+}
+
+interface PendingPiInteraction {
+  id: string;
+  method: "select" | "confirm" | "input" | "editor";
+  options?: string[];
 }
 
 const DIALOG_METHODS = new Set(["select", "confirm", "input", "editor"]);
@@ -84,6 +93,8 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
     "resume",
     "cancel",
     "status-events",
+    "interaction-resume",
+    "interaction-live-resume",
   ]);
   readonly capabilities: ReadonlySet<RuntimeCapability> =
     this.mutableCapabilities;
@@ -103,6 +114,7 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
   private active?: ActiveRun;
   private currentState?: PiSessionState;
   private inferredSessionRoot?: string;
+  private readonly completedInteractionResumes = new Set<string>();
 
   constructor(private readonly options: PiRuntimeAdapterOptions = {}) {
     this.inputModalities = this.mutableInputModalities;
@@ -208,6 +220,16 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
         throw error;
       } finally {
         clearTimeout(timer);
+        if (active.interaction) {
+          await this.client
+            ?.send({
+              type: "extension_ui_response",
+              id: active.interaction.id,
+              cancelled: true,
+            })
+            .catch(() => undefined);
+          active.interaction = undefined;
+        }
         if (this.active === active) this.active = undefined;
       }
     } catch (error) {
@@ -220,6 +242,30 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
   async cancel(sessionId: string): Promise<void> {
     if (this.active?.sessionId !== sessionId || !this.client) return;
     await this.command({ type: "abort" });
+  }
+
+  async *resumeInteraction(
+    request: AgentInteractionResumeRequest,
+  ): AsyncIterable<AgentRunEvent> {
+    if (this.completedInteractionResumes.has(request.idempotencyKey)) return;
+    const active = this.active;
+    const pending = active?.interaction;
+    if (!active || active.sessionId !== request.sessionId || !pending) {
+      throw new Error("Pi interaction is no longer live");
+    }
+    if (!this.client) throw new Error("Pi RPC adapter is not started");
+    const response = piInteractionResponse(pending, request);
+    await this.client.send({
+      type: "extension_ui_response",
+      id: pending.id,
+      ...response,
+    });
+    active.interaction = undefined;
+    rememberBounded(
+      this.completedInteractionResumes,
+      request.idempotencyKey,
+      1_000,
+    );
   }
 
   async health(): Promise<{ ok: boolean; detail?: string }> {
@@ -338,14 +384,29 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
     if (event.type === "extension_ui_request") {
       const id = stringValue(event.id);
       const method = stringValue(event.method);
-      if (id && method && DIALOG_METHODS.has(method)) {
-        void this.client
-          ?.send({ type: "extension_ui_response", id, cancelled: true })
-          .catch((error: unknown) => this.active?.queue.fail(asError(error)));
-      } else if (method === "setStatus") {
+      if (method === "setStatus") {
         const text = stringValue(event.statusText);
         if (text) {
           this.active?.queue.push({ type: "status", phase: "custom", text });
+        }
+      } else if (id && method && DIALOG_METHODS.has(method)) {
+        const active = this.active;
+        const mapped = piInteractionRequest(event);
+        if (
+          !active ||
+          active.interaction ||
+          event.timeout !== undefined ||
+          !mapped
+        ) {
+          void this.client
+            ?.send({ type: "extension_ui_response", id, cancelled: true })
+            .catch((error: unknown) => active?.queue.fail(asError(error)));
+        } else {
+          active.interaction = mapped.pending;
+          active.queue.push({
+            type: "interaction-requested",
+            request: mapped.request,
+          });
         }
       }
       return;
@@ -420,6 +481,113 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
     if (!roots.some((root) => isWithin(root, candidate))) {
       throw new Error("Pi session is outside configured storage roots");
     }
+  }
+}
+
+function piInteractionRequest(event: JsonRecord):
+  | {
+      pending: PendingPiInteraction;
+      request: RuntimeInteractionRequest;
+    }
+  | undefined {
+  const id = stringValue(event.id);
+  const method = stringValue(event.method);
+  if (!id || id.length > 512 || /[\r\n\0]/.test(id)) return undefined;
+  if (method === "confirm") {
+    const title = bounded(stringValue(event.title) ?? "需要确认", 200);
+    const description = boundedMultiline(stringValue(event.message), 2_000);
+    return {
+      pending: { id, method },
+      request: {
+        kind: "confirm",
+        title: title || "需要确认",
+        ...(description ? { description } : {}),
+      },
+    };
+  }
+  if (method === "select") {
+    const rawOptions = Array.isArray(event.options) ? event.options : [];
+    const options = rawOptions.flatMap((value) => {
+      const text = typeof value === "string" ? value : undefined;
+      return text?.trim() ? [text] : [];
+    });
+    if (options.length < 1 || options.length > 20) return undefined;
+    const title = bounded(stringValue(event.title) ?? "请选择", 200);
+    return {
+      pending: { id, method, options },
+      request: {
+        kind: "single-select",
+        title: title || "请选择",
+        fieldId: "selection",
+        options: options.map((label, index) => ({
+          value: `pi-option-${index}`,
+          label: bounded(label, 100),
+        })),
+      },
+    };
+  }
+  if (method === "input" || method === "editor") {
+    const title = bounded(stringValue(event.title) ?? "请输入内容", 200);
+    const placeholder = boundedMultiline(stringValue(event.placeholder), 500);
+    const initialValue = boundedMultiline(stringValue(event.prefill), 2_000);
+    return {
+      pending: { id, method },
+      request: {
+        kind: "text-input",
+        title: title || "请输入内容",
+        fieldId: "value",
+        ...(placeholder ? { placeholder } : {}),
+        ...(initialValue ? { initialValue } : {}),
+        multiline: method === "editor",
+      },
+    };
+  }
+  return undefined;
+}
+
+function piInteractionResponse(
+  pending: PendingPiInteraction,
+  request: AgentInteractionResumeRequest,
+): JsonRecord {
+  if (request.result.status === "expired") return { cancelled: true };
+  if (pending.method === "confirm") {
+    return request.result.status === "cancelled"
+      ? { confirmed: false }
+      : {
+          confirmed: request.result.values.confirmation?.[0] === "confirmed",
+        };
+  }
+  if (request.result.status === "cancelled") return { cancelled: true };
+  if (pending.method === "select") {
+    const selected = request.result.values.selection?.[0];
+    const match = /^pi-option-(\d+)$/.exec(selected ?? "");
+    const option = match ? pending.options?.[Number(match[1])] : undefined;
+    if (!option) throw new Error("Pi interaction selection is invalid");
+    return { value: option };
+  }
+  const value = request.result.values.value?.[0];
+  if (value === undefined) throw new Error("Pi interaction text is missing");
+  return { value };
+}
+
+function boundedMultiline(
+  value: string | undefined,
+  maxLength: number,
+): string | undefined {
+  if (!value?.trim()) return undefined;
+  return value.replaceAll("\0", "").trim().slice(0, maxLength);
+}
+
+function rememberBounded(
+  values: Set<string>,
+  value: string,
+  limit: number,
+): void {
+  values.add(value);
+  while (values.size > limit) {
+    const oldest = values.values().next().value as string | undefined;
+    if (oldest === undefined) break;
+    values.delete(oldest);
   }
 }
 
@@ -520,6 +688,16 @@ export class PooledPiRuntimeAdapter implements AgentRuntimeAdapter {
   async cancel(sessionId: string): Promise<void> {
     const worker = this.activeSessions.get(sessionId);
     await worker?.cancel?.(sessionId);
+  }
+
+  async *resumeInteraction(
+    request: AgentInteractionResumeRequest,
+  ): AsyncIterable<AgentRunEvent> {
+    const worker = this.activeSessions.get(request.sessionId);
+    if (!worker?.resumeInteraction) {
+      throw new Error("Pi interaction is no longer assigned to a live worker");
+    }
+    yield* worker.resumeInteraction(request);
   }
 
   async health(): Promise<{ ok: boolean; detail?: string }> {
