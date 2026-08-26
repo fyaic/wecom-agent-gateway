@@ -1611,10 +1611,13 @@ export class WeComAgentGateway {
       final,
       ...(presentation ? { presentation } : {}),
     };
-    if (
-      presentation &&
-      !this.options.transport.capabilities.has("reply-with-presentation")
-    ) {
+    if (presentation) {
+      // The official combined stream only renders a template card reliably
+      // when the card is present on the first reply frame. Final-answer
+      // actions are not known until the Agent completes, so keep the mutable
+      // text reply intact and send the card through the durable proactive
+      // path immediately afterwards. A server success ack for adding a card
+      // only on the final frame does not mean real clients display it.
       const textCommand: DurableOutboundCommand = {
         type: "reply",
         accountId: message.accountId,

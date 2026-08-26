@@ -20,10 +20,10 @@ ask-user 交互解决了 Agent 在运行中主动向用户提问，但最终回�
 - Gateway 为最终动作生成 task ID，使用现有 SQLite Runtime Interaction 保存 account、conversation、
   sender、Adapter、session、TTL 和动作集合。新快捷卡会取消同会话旧快捷卡；真正的 ask-user 请求也
   可替换旧快捷卡，但不能被快捷卡覆盖。
-- WeCom Transport 声明 `reply-with-presentation` 后，在最终更新调用官方
-  `replyStreamWithCard`。企业微信组合流从首帧起必须保持 `stream_with_template_card` 消息类型，即使
-  模板卡片只在最终帧出现；不能先用普通 `stream` 再在终态切换类型。不支持组合回复的 Transport 先完成文本再主动发送卡片；企业微信回复窗口返回
-  `846608` 时也降级为主动 Markdown 加主动模板卡片。
+- 企业微信组合流只有在首帧已经携带模板卡片时能在真实客户端稳定呈现；服务端虽然接受在最终帧首次加入
+  卡片，但桌面端会静默丢弃。最终动作来自 `message-completed`，无法在首帧确定，因此 Gateway 保持原
+  可变流式文字，终态完成后立即通过 durable proactive path 发送独立模板卡片。Transport 仍保留
+  `replyStreamWithCard` 映射，供未来首帧即可确定卡片的场景使用；不得以服务端成功回执冒充客户端可见。
 - 用户点击后，Gateway 先完成 ACL、入站去重、原子 resolve 和五秒内原位更新，再创建 durable resume。
   `resumeMode=new-turn` 明确表示这是一个真实 callback continuation：必须进入正常会话串行队列和 run
   semaphore，不得借 `interaction-live-resume` 绕过背压。
@@ -35,7 +35,7 @@ ask-user 交互解决了 Agent 在运行中主动向用户提问，但最终回�
 
 ## 结果
 
-- 最终回答和下一步动作形成一个紧凑的原生消息，点击后可继续相同 Agent session。
+- 最终回答后紧邻一张原生快捷操作卡，点击后可继续相同 Agent session。
 - ask-user、reply action、workflow 和 approval 仍是不同语义；按钮颜色不代表授权。
 - SQLite/Outbox 保留进程恢复、重试和幂等边界；新动作替换旧动作，避免旧卡长期阻塞新的 elicitation。
 - Pi、Codex SDK / App Server、OpenClaw 和支持 session load 的 ACP Adapter 均支持已结束 session 的

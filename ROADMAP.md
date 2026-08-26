@@ -29,7 +29,8 @@ changes.
       including live same-call resume and scoped text fallback.
 - [x] Complete the real WeCom ask-user acceptance matrix across private select,
       private scoped input, group select, in-place updates, and duplicate safety.
-- [ ] M2.3: `replyStreamWithCard` final-answer actions and proactive fallback
+- [ ] M2.3: final-answer actions through a durable proactive card; combined
+      streams remain reserved for cards known on the first reply frame
       (implementation complete; final real callback click is in progress).
 - [ ] Complete the remaining real WeCom approval-card rejection, expiry, and
       process-interruption acceptance checks.

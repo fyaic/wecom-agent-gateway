@@ -16,8 +16,8 @@ tagged.
   results, leased resume delivery, and dead-letter handling.
 - Pi native select, confirm, input, and editor bridging with same-call live
   resume, scoped plain-text input, and a side-effect-free example extension.
-- Final stream reply actions with official `replyStreamWithCard`, proactive
-  fallback, durable callback continuation, and same-session support across
+- Final-answer actions with official proactive template cards, durable callback
+  continuation, and same-session support across
   Codex SDK/App Server, ACP/Kimi, OpenClaw, Pi, and the external Adapter template.
 
 ### Fixed
@@ -25,8 +25,8 @@ tagged.
 - Preserve complete choice labels, render peer selections vertically without
   first-option color bias, and render updates as an inert checked result state
   instead of an invalid no-link notice.
-- Start replies with the official `stream_with_template_card` framing so a
-  card attached on the final stream update remains visible in real clients.
+- Deliver late-bound final-answer actions as a separate proactive template card;
+  real clients silently drop cards first introduced on a final stream frame.
 - Silently absorb duplicate, expired, and superseded runtime-card callbacks
   instead of emitting repeated completion cards.
 

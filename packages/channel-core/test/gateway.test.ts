@@ -1338,14 +1338,25 @@ describe("WeComAgentGateway", () => {
     await gateway.start();
     await transport.receive(message("reply-action-original"));
     const final = transport.commands.find(
-      (command) => command.type === "reply" && command.presentation,
+      (command) => command.type === "reply" && command.final,
     );
-    if (!final || final.type !== "reply" || !final.presentation) {
-      throw new Error("final reply action card was not delivered");
+    const card = transport.commands.find(
+      (command) => command.type === "proactive-presentation",
+    );
+    if (
+      !final ||
+      final.type !== "reply" ||
+      !card ||
+      card.type !== "proactive-presentation"
+    ) {
+      throw new Error("final reply and action card were not delivered");
     }
     expect(final).toMatchObject({
       text: "第一轮完成",
       final: true,
+    });
+    expect(card).toMatchObject({
+      type: "proactive-presentation",
       presentation: {
         kind: "actions",
         title: "接下来",
@@ -1356,7 +1367,7 @@ describe("WeComAgentGateway", () => {
       ...message("reply-action-callback"),
       parts: [],
       interaction: {
-        presentationId: final.presentation.id,
+        presentationId: card.presentation.id,
         actionId: "action_0",
       },
       replyReference: { requestId: "reply-action-callback-request" },
