@@ -25,6 +25,10 @@ tagged.
 - Preserve complete choice labels, render peer selections vertically without
   first-option color bias, and render updates as an inert checked result state
   instead of an invalid no-link notice.
+- Start replies with the official `stream_with_template_card` framing so a
+  card attached on the final stream update remains visible in real clients.
+- Silently absorb duplicate, expired, and superseded runtime-card callbacks
+  instead of emitting repeated completion cards.
 
 ## [0.1.0] - 2026-08-25
 
