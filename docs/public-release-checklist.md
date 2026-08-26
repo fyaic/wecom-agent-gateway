@@ -44,7 +44,7 @@ The repository must remain private until every blocking item below is complete.
 ## Repository settings — blocking
 
 - [x] Confirm the repository name, description, topics, and public contact route.
-- [ ] Upload and verify the final social preview image after the repository is
+- [x] Upload and verify the final social preview image after the repository is
       public. The reviewed 1280×640 project asset is already tracked at
       [`assets/social-preview.png`](assets/social-preview.png).
 - [x] Enable private vulnerability reporting after the repository is public and
