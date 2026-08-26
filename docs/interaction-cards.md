@@ -312,7 +312,8 @@ submit_button.text Missing or Invalid`。第四轮完成态补齐必填的“已
 
 ### M2.3：回复底部快捷操作
 
-状态：实现与自动化闭环完成，待真实企业微信客户端验收。
+状态：实现与自动化闭环完成；2026-08-26 首轮客户端验收暴露组合流首帧类型和重复完成态问题，已修复并
+进入最终复测。
 
 - [x] `message-completed.actions` 与操作员默认 action 的 Runtime-neutral 契约。
 - [x] `replyStreamWithCard` 最终回复组合；不支持或 `846608` 时主动文本 + 卡片降级。
@@ -321,6 +322,12 @@ submit_button.text Missing or Invalid`。第四轮完成态补齐必填的“已
 - [x] 过期静默失效、重复点击不重复 continuation、写工具仍走独立审批。
 - [x] Pi 已结束 session 的 action continuation 与四层 deterministic tests。
 - [ ] 授权企业微信私聊真实组合回复、点击续跑、完成态和重复点击验收。
+
+首轮实测中，最终帧携带卡片得到服务端成功回执，但此前的增量帧使用普通 `stream`，桌面端因此只显示
+最终文字而静默丢弃卡片。Transport 现从第一帧起统一使用官方 `stream_with_template_card`，未附卡片时
+仍只呈现普通流式文字，最终帧才加入模板卡片。另一个并发问题是已完成卡片的重复回调仍触发 UI 更新，
+真实客户端会出现第二张“操作结果”；Gateway 现对 `interaction_*` 的已处理、过期和被替换 callback
+静默幂等，审批卡仍通过独立 `approval_*` namespace 处理。
 
 ```mermaid
 sequenceDiagram

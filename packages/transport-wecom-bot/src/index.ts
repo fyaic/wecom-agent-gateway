@@ -48,7 +48,7 @@ interface WeComClient {
     streamId: string,
     content: string,
     finish: boolean,
-    options: { templateCard: TemplateCard },
+    options?: { templateCard?: TemplateCard },
   ): Promise<unknown>;
   sendMessage(chatId: string, message: unknown): Promise<unknown>;
   updateTemplateCard(
@@ -200,32 +200,31 @@ export class WeComBotTransport implements ChannelTransport {
         const frame = {
           headers: { req_id: command.replyReference.requestId },
         };
-        if (command.presentation) {
-          if (!command.final) {
-            throw new Error(
-              "Reply presentations are only valid on the final stream update",
-            );
-          }
-          await this.client.replyStreamWithCard(
-            frame,
-            command.streamId,
-            command.text,
-            true,
-            {
-              templateCard: renderWeComTemplateCard(
-                command.presentation,
-                this.options.presentationLinkHosts,
-              ),
-            },
-          );
-        } else {
-          await this.client.replyStream(
-            frame,
-            command.streamId,
-            command.text,
-            command.final,
+        if (command.presentation && !command.final) {
+          throw new Error(
+            "Reply presentations are only valid on the final stream update",
           );
         }
+        // A stream that may receive a template card later must use the
+        // official stream_with_template_card message type from its first
+        // frame. Switching from plain stream only on the final frame is
+        // accepted by the server but the desktop client silently drops the
+        // card. The SDK keeps templateCard optional, so ordinary replies use
+        // the same framing without rendering a card.
+        await this.client.replyStreamWithCard(
+          frame,
+          command.streamId,
+          command.text,
+          command.final,
+          command.presentation
+            ? {
+                templateCard: renderWeComTemplateCard(
+                  command.presentation,
+                  this.options.presentationLinkHosts,
+                ),
+              }
+            : undefined,
+        );
       } catch (error) {
         if (!hasErrorCode(error, 846608)) throw error;
         // The official plugin confirms 846608 means the six-minute stream update

@@ -246,11 +246,12 @@ describe("WeComBotTransport", () => {
       conversationId: "chat-1",
       text: "提醒",
     });
-    expect(client.replies[0]).toEqual([
+    expect(client.repliesWithCard[0]).toEqual([
       { headers: { req_id: "req-1" } },
       "stream-1",
       "完成",
       true,
+      undefined,
     ]);
     expect(client.pushes[0]).toEqual([
       "chat-1",
@@ -356,11 +357,27 @@ describe("WeComBotTransport", () => {
       conversationId: "chat-1",
       replyReference: { requestId: "req-1" },
       streamId: "stream-1",
+      text: "正在处理",
+      final: false,
+    });
+    await transport.deliver({
+      type: "reply",
+      accountId: "bot-a",
+      conversationId: "chat-1",
+      replyReference: { requestId: "req-1" },
+      streamId: "stream-1",
       text: "最终回答",
       final: true,
       presentation,
     });
-    expect(client.repliesWithCard[0]).toMatchObject([
+    expect(client.repliesWithCard[0]).toEqual([
+      { headers: { req_id: "req-1" } },
+      "stream-1",
+      "正在处理",
+      false,
+      undefined,
+    ]);
+    expect(client.repliesWithCard[1]).toMatchObject([
       { headers: { req_id: "req-1" } },
       "stream-1",
       "最终回答",

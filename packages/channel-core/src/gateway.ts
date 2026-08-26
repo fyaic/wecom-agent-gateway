@@ -1242,7 +1242,12 @@ export class WeComAgentGateway {
       );
       return true;
     }
-    if (!pending) return false;
+    // Runtime interaction IDs are Gateway-owned. Once one has resolved,
+    // expired, or been replaced, duplicate callbacks must be silent: replying
+    // with another update creates duplicate result cards in real WeCom
+    // clients. Approval cards use a separate approval_ namespace and still
+    // fall through to their own resolver below.
+    if (!pending) return inbound.presentationId.startsWith("interaction_");
 
     const parsed = runtimeInteractionResult(
       pending,
