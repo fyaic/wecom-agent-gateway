@@ -1391,6 +1391,12 @@ describe("WeComAgentGateway", () => {
         (command) => command.type === "interaction-update",
       ),
     ).toHaveLength(1);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(
+      transport.commands.filter(
+        (command) => command.type === "proactive-presentation",
+      ),
+    ).toHaveLength(1);
     await transport.receive({ ...callback, id: "reply-action-duplicate" });
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(resumes).toHaveLength(1);

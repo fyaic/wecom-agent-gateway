@@ -29,6 +29,8 @@ tagged.
   real clients silently drop cards first introduced on a final stream frame.
 - Silently absorb duplicate, expired, and superseded runtime-card callbacks
   instead of emitting repeated completion cards.
+- Keep operator-configured default reply actions one-shot instead of inheriting
+  them into callback continuations and generating an unbounded card chain.
 
 ## [0.1.0] - 2026-08-25
 

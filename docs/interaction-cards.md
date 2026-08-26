@@ -312,14 +312,15 @@ submit_button.text Missing or Invalid`。第四轮完成态补齐必填的“已
 
 ### M2.3：最终回复快捷操作
 
-状态：实现与自动化闭环完成；2026-08-26 首轮客户端验收暴露组合流首帧类型和重复完成态问题，已修复并
-进入最终复测。
+状态：实现与自动化闭环完成；2026-08-26 客户端验收暴露组合流首帧类型、重复完成态和默认动作自续
+循环，均已修复并进入最终复测。
 
 - [x] `message-completed.actions` 与操作员默认 action 的 Runtime-neutral 契约。
 - [x] 最终文字完成后通过 durable proactive path 紧邻发送动作卡；Transport 保留首帧组合卡能力。
 - [x] SQLite 保存发送者、会话、Adapter、session、TTL 和动作值；新卡替换同会话旧快捷卡。
 - [x] 点击后先原位更新，再以 `resumeMode=new-turn` 进入正常队列恢复相同 Agent session。
 - [x] 过期静默失效、重复点击不重复 continuation、写工具仍走独立审批。
+- [x] 操作员默认 action 只用于普通入站首轮；callback continuation 不继承默认卡，杜绝自续循环。
 - [x] Pi 已结束 session 的 action continuation 与四层 deterministic tests。
 - [ ] 授权企业微信私聊真实组合回复、点击续跑、完成态和重复点击验收。
 
@@ -349,12 +350,19 @@ sequenceDiagram
     G->>W: 五秒内禁用旧卡
     G->>A: 同 session callback continuation
     A->>G: 新一轮输出
-    G->>W: 主动可变消息 + 新快捷卡
+    G->>W: 主动可变消息
+    opt Adapter 显式给出下一步 actions
+        G->>W: 新快捷卡
+    end
 ```
 
 快捷 action value 是 Adapter 或操作员预先绑定的规范化 continuation，不是 Gateway 从 label 猜出的
 Prompt，也不是可执行命令。`interaction-live-resume` 只服务仍在等待的 ask-user；最终回复动作已经是
 新的语义 turn，必须进入正常会话队列、并发限制和背压。
+
+`GATEWAY_REPLY_ACTIONS_JSON` 是一次性默认入口：只附加于用户普通消息对应的最终回答。它不会在自身
+callback continuation 完成后再次出现，否则“点击 → 续跑 → 同卡 → 再点击”会形成没有自然终点的交互
+循环。Adapter 若确实实现向导式多步流程，必须在每一步显式返回新的 `actions`，并自行定义终止条件。
 
 ### M2.4：多 Kernel
 
