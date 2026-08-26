@@ -209,7 +209,7 @@ Adapter 提供稳定 idempotency key；不能虚假声称外部 Kernel 已具备
 2. 卡片只确认用户提交的内容，不等待 Agent 工具执行结果。
 3. callback `req_id` 被卡片更新消费后，不再用于 Agent 回复；续跑输出使用新的主动可变消息。
 4. TTL 到期但没有 callback frame 时无法原位更新旧卡，只主动发送一次简短过期提醒。
-5. `replyStreamWithCard` 仅在最终回复附一次快捷操作卡；失败或回复窗口过期时降级为主动卡片。
+5. 首帧已知的卡片才使用 `replyStreamWithCard`；最终完成时才确定的快捷动作紧随文字以主动卡片发送。
 
 目标指标：`callback → SQLite commit` p95 小于 100ms，`callback → card update` p95 小于 800ms，
 `callback → resume enqueue` p95 小于 150ms。Kernel 首事件、首文本和完成耗时继续单独统计。
@@ -310,24 +310,25 @@ submit_button.text Missing or Invalid`。第四轮完成态补齐必填的“已
 可运行的无副作用 Pi 示例位于 `examples/pi-wecom-interaction.mjs`；它只在 Agent 明确调用时展示选择、
 确认或输入，不执行办公写操作。
 
-### M2.3：回复底部快捷操作
+### M2.3：最终回复快捷操作
 
 状态：实现与自动化闭环完成；2026-08-26 首轮客户端验收暴露组合流首帧类型和重复完成态问题，已修复并
 进入最终复测。
 
 - [x] `message-completed.actions` 与操作员默认 action 的 Runtime-neutral 契约。
-- [x] `replyStreamWithCard` 最终回复组合；不支持或 `846608` 时主动文本 + 卡片降级。
+- [x] 最终文字完成后通过 durable proactive path 紧邻发送动作卡；Transport 保留首帧组合卡能力。
 - [x] SQLite 保存发送者、会话、Adapter、session、TTL 和动作值；新卡替换同会话旧快捷卡。
 - [x] 点击后先原位更新，再以 `resumeMode=new-turn` 进入正常队列恢复相同 Agent session。
 - [x] 过期静默失效、重复点击不重复 continuation、写工具仍走独立审批。
 - [x] Pi 已结束 session 的 action continuation 与四层 deterministic tests。
 - [ ] 授权企业微信私聊真实组合回复、点击续跑、完成态和重复点击验收。
 
-首轮实测中，最终帧携带卡片得到服务端成功回执，但此前的增量帧使用普通 `stream`，桌面端因此只显示
-最终文字而静默丢弃卡片。Transport 现从第一帧起统一使用官方 `stream_with_template_card`，未附卡片时
-仍只呈现普通流式文字，最终帧才加入模板卡片。另一个并发问题是已完成卡片的重复回调仍触发 UI 更新，
-真实客户端会出现第二张“操作结果”；Gateway 现对 `interaction_*` 的已处理、过期和被替换 callback
-静默幂等，审批卡仍通过独立 `approval_*` namespace 处理。
+连续两轮实测证明，最终帧首次携带卡片即使得到服务端成功回执，桌面端仍只显示文字。官方示例把模板卡
+放在首次回复，说明这不是可靠的 late-binding 接口。最终动作只有 `message-completed` 时才确定，因此
+Gateway 不再伪装成同消息组合：先完成原可变文字，再通过同一 durable Outbox 紧邻发送独立主动卡片。
+另一个并发问题是已完成卡片的重复回调仍触发 UI 更新，真实客户端会出现第二张“操作结果”；Gateway
+现对 `interaction_*` 的已处理、过期和被替换 callback 静默幂等，审批卡仍通过独立 `approval_*`
+namespace 处理。
 
 ```mermaid
 sequenceDiagram
@@ -339,8 +340,9 @@ sequenceDiagram
 
     A->>G: message-completed(text, actions)
     G->>S: 保存 scoped new-turn interaction
-    G->>W: replyStreamWithCard(text, card)
-    W->>U: 最终回答 + 快捷操作
+    G->>W: 完成可变流式文字
+    G->>W: durable proactive template card
+    W->>U: 最终回答后紧邻快捷操作卡
     U->>W: 点击 action
     W->>G: template_card_event
     G->>S: ACL + resolve + durable resume

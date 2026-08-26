@@ -60,7 +60,7 @@
 | 耐久通用 Interaction Broker                     | M2.1 完成并自动化验证       | 单选/多选/取消/TTL；五秒 fast lane；同 session resume；租约/重试/死信             |
 | Pi 原生 ask-user 交互桥                         | M2.2 真实矩阵通过           | 私聊 select/input、群聊 select；native response；live resume；限定文本回复        |
 | 单选卡片可读性与颜色语义                        | 私聊与群聊真实通过          | 完整标签、无首项偏置、显式 action style、禁用完成态、重复回调幂等                 |
-| 最终回复快捷操作                                | M2.3 自动化通过，最终复测中 | 首帧组合流、主动降级、SQLite TTL/幂等、同 session new-turn continuation           |
+| 最终回复快捷操作                                | M2.3 自动化通过，最终复测中 | 紧邻主动卡、SQLite TTL/幂等、同 session new-turn continuation                     |
 | 多 Kernel 回复动作续接                          | M2.4 自动化通过             | Codex SDK/App Server、ACP/Kimi、OpenClaw、Pi、外部模板共用 deterministic contract |
 | SQLite 重启恢复                                 | 完成并自动化验证            | 入站去重、runtime session、待发送文本与投递日志跨 reopen 保留                     |
 | SQLite 文件权限                                 | 完成并自动化验证            | Store 每次打开都强制主数据库为 `0600`；本机现有数据库已收紧                       |
