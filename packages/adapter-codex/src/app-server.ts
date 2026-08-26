@@ -4,6 +4,7 @@ import { createInterface } from "node:readline";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import {
   RUNTIME_CONTRACT_VERSION,
+  type AgentInteractionResumeRequest,
   type AgentRunEvent,
   type AgentRunRequest,
   type AgentRuntimeAdapter,
@@ -476,6 +477,8 @@ export class CodexAppServerRuntimeAdapter implements AgentRuntimeAdapter {
     "status-events",
     "tools",
     "multimodal-input",
+    "interaction-resume",
+    "reply-actions",
   ]);
   readonly inputModalities: ReadonlySet<MediaType> = new Set([
     "image",
@@ -485,6 +488,7 @@ export class CodexAppServerRuntimeAdapter implements AgentRuntimeAdapter {
   private readonly loadedThreads = new Set<string>();
   private readonly tools = new Map<string, RuntimeTool>();
   private readonly activeRequests = new Map<string, AgentRunRequest>();
+  private readonly completedInteractionResumes = new Set<string>();
 
   constructor(
     private readonly options: CodexAppServerRuntimeAdapterOptions = {},
@@ -600,6 +604,28 @@ export class CodexAppServerRuntimeAdapter implements AgentRuntimeAdapter {
     await this.client.interrupt(sessionId);
   }
 
+  async *resumeInteraction(
+    request: AgentInteractionResumeRequest,
+  ): AsyncIterable<AgentRunEvent> {
+    if (this.completedInteractionResumes.has(request.idempotencyKey)) return;
+    if (
+      request.interaction.kind !== "actions" ||
+      request.interaction.resumeMode !== "new-turn" ||
+      !request.message
+    ) {
+      throw new Error("Codex App Server only supports new-turn reply actions");
+    }
+    yield* this.run({
+      message: request.message,
+      sessionId: request.sessionId,
+    });
+    rememberBounded(
+      this.completedInteractionResumes,
+      request.idempotencyKey,
+      1_000,
+    );
+  }
+
   async health(): Promise<{ ok: boolean; detail?: string }> {
     return this.client.health();
   }
@@ -703,6 +729,17 @@ export class CodexAppServerRuntimeAdapter implements AgentRuntimeAdapter {
       elapsedMs,
     });
   }
+}
+
+function rememberBounded(
+  values: Set<string>,
+  value: string,
+  limit: number,
+): void {
+  values.add(value);
+  if (values.size <= limit) return;
+  const oldest = values.values().next().value;
+  if (oldest !== undefined) values.delete(oldest);
 }
 
 function toCodexInput(parts: MessagePart[]): CodexAppServerInput[] {

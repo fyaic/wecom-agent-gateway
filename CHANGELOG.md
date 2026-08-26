@@ -17,7 +17,8 @@ tagged.
 - Pi native select, confirm, input, and editor bridging with same-call live
   resume, scoped plain-text input, and a side-effect-free example extension.
 - Final stream reply actions with official `replyStreamWithCard`, proactive
-  fallback, durable callback continuation, and Pi same-session support.
+  fallback, durable callback continuation, and same-session support across
+  Codex SDK/App Server, ACP/Kimi, OpenClaw, Pi, and the external Adapter template.
 
 ### Fixed
 

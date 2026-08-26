@@ -36,13 +36,15 @@ ask-user 交互解决了 Agent 在运行中主动向用户提问，但最终回�
 - 最终回答和下一步动作形成一个紧凑的原生消息，点击后可继续相同 Agent session。
 - ask-user、reply action、workflow 和 approval 仍是不同语义；按钮颜色不代表授权。
 - SQLite/Outbox 保留进程恢复、重试和幂等边界；新动作替换旧动作，避免旧卡长期阻塞新的 elicitation。
-- Pi Adapter 支持已结束 session 的 reply-action continuation；其他 Adapter 需显式声明
-  `reply-actions` capability 才能启用。
+- Pi、Codex SDK / App Server、OpenClaw 和支持 session load 的 ACP Adapter 均支持已结束 session 的
+  reply-action continuation；外部 Adapter 必须同时声明 `interaction-resume`、`reply-actions` 并实现
+  `resumeInteraction()` 才能启用。
 
 ## 验证
 
 - Transport tests 覆盖组合回复、官方模板映射和 `846608` 主动降级。
 - Core/SQLite tests 覆盖最终动作、同 sender/session continuation、重复点击、旧卡替换、静默过期和
   new-turn 并发队列。
-- Pi RPC test 覆盖已完成 session 接受真实 callback action 后启动下一 turn。
+- 公共 reply-action testkit 覆盖同 session 新 turn 与进程内重复投递幂等；Pi、Codex、OpenClaw、ACP
+  和外部模板均运行该契约。
 - 真实企业微信客户端验收在 M2.3 合并部署后执行，未提前标记通过。

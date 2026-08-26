@@ -63,13 +63,13 @@ flowchart LR
 
 ## 已支持的 Kernel
 
-| Adapter   | 上游接口               | 已验证能力                                                            |
-| --------- | ---------------------- | --------------------------------------------------------------------- |
-| Codex     | SDK / App Server JSONL | 流式、恢复、取消、状态、审批、动态工具、图片/音频                     |
-| Kimi Code | ACP v1 stdio           | 流式、恢复、取消、权限、状态、图片                                    |
-| 通用 ACP  | ACP v1 stdio           | 按 `initialize` 动态协商恢复和输入模态                                |
-| OpenClaw  | Gateway WebSocket v4   | 流式、恢复、取消、状态、图片/音频/视频/文件                           |
-| Pi Agent  | 官方严格 LF JSONL RPC  | 流式、恢复、取消、状态、动态图片输入、有界 worker pool、原生 ask-user |
+| Adapter   | 上游接口               | 已验证能力                                                                      |
+| --------- | ---------------------- | ------------------------------------------------------------------------------- |
+| Codex     | SDK / App Server JSONL | 流式、恢复、回复动作、取消、状态、审批、动态工具、图片/音频                     |
+| Kimi Code | ACP v1 stdio           | 流式、恢复、回复动作、取消、权限、状态、图片                                    |
+| 通用 ACP  | ACP v1 stdio           | 按 `initialize` 动态协商恢复、回复动作和输入模态                                |
+| OpenClaw  | Gateway WebSocket v4   | 流式、恢复、回复动作、取消、状态、图片/音频/视频/文件                           |
+| Pi Agent  | 官方严格 LF JSONL RPC  | 流式、恢复、回复动作、取消、状态、动态图片输入、有界 worker pool、原生 ask-user |
 
 每个 Gateway 进程只选择一个确定的 Kernel，不根据自然语言动态切换。第三方 Kernel 可以按照
 [`docs/adapter-authoring.md`](docs/adapter-authoring.md) 使用 `@fyaic/wecom-adapter-sdk` 实现小型
@@ -93,6 +93,7 @@ Adapter，并通过 `GATEWAY_ADAPTER=external` 加载，无需修改 Gateway Reg
 - Channel-neutral 五类模板卡片，以及绑定发送者/会话的审批按钮卡片与文本降级。
 - 耐久 Interaction Broker：确认、单选、多选、表单、TTL 与同 session 异步恢复。
 - Pi 原生 select/confirm/input/editor：卡片或限定文本回复后恢复原 tool call，不注入 Prompt。
+- 最终回复快捷动作：Codex、ACP/Kimi、OpenClaw、Pi 和外部模板均以同 session 新回合续接，重复 callback 不创建第二轮。
 
 企业微信语音回调目前只提供官方转写文本时，Gateway 不会虚报原始音频输入。媒体能否被 Agent
 进一步理解取决于所选 Kernel 及其工具，而不是传输层。
@@ -188,7 +189,7 @@ allowlist 内。媒体路径还必须位于 `WECOM_MEDIA_OUTPUT_ROOTS` 允许目
 
 ## 成熟度
 
-项目处于 **Public Preview**，尚未承诺稳定的 v1 API。当前已有 155 项 deterministic tests，并完成
+项目处于 **Public Preview**，尚未承诺稳定的 v1 API。当前已有 166 项 deterministic tests，并完成
 真实企业微信私聊、群聊、流式回复、会话恢复、图片/文件/MP4、主动媒体、受管重启及四类 Kernel
 接入验证。真实 OS 子进程 `SIGKILL` 后的 SQLite Outbox 租约恢复、macOS 受管 Gateway 强杀拉起和
 重新鉴权也已通过；隔离 Linux 网络断开/恢复、持久卷只读和受限 tmpfs 容量耗尽均完成真实故障验收。

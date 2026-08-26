@@ -11,6 +11,11 @@ export interface RuntimeContractTranscript {
   resumed: AgentRunEvent[];
 }
 
+export interface ReplyActionContractTranscript {
+  resumed: AgentRunEvent[];
+  duplicate: AgentRunEvent[];
+}
+
 /**
  * Runs the minimum text/session contract shared by every real Kernel adapter.
  * It deliberately contains no vendor assumptions and throws on contract drift.
@@ -53,6 +58,48 @@ export async function exerciseTextRuntimeContract(
   assertCompleteTextTurn(resumed, "resumed");
 
   return { sessionId: sessions[0].sessionId, first, resumed };
+}
+
+/**
+ * Verifies the adapter-neutral final-reply action contract. The callback is a
+ * real new turn in the existing Kernel session and duplicate delivery is inert.
+ */
+export async function exerciseReplyActionRuntimeContract(
+  adapter: AgentRuntimeAdapter,
+  message: InboundMessage,
+  sessionId: string,
+): Promise<ReplyActionContractTranscript> {
+  if (
+    !adapter.capabilities.has("interaction-resume") ||
+    !adapter.capabilities.has("reply-actions") ||
+    !adapter.resumeInteraction
+  ) {
+    throw new Error("Adapter does not support reply action continuation");
+  }
+  const request = {
+    sessionId,
+    idempotencyKey: `reply-action:${message.id}`,
+    interaction: {
+      kind: "actions" as const,
+      title: "Next",
+      actions: [{ value: "continue", label: "Continue" }],
+      resumeMode: "new-turn" as const,
+    },
+    result: {
+      interactionId: `interaction:${message.id}`,
+      status: "submitted" as const,
+      values: { action: ["continue"] },
+      submittedAt: message.receivedAt,
+    },
+    message,
+  };
+  const resumed = await collect(adapter.resumeInteraction(request));
+  assertCompleteTextTurn(resumed, "reply action");
+  const duplicate = await collect(adapter.resumeInteraction(request));
+  if (duplicate.length !== 0) {
+    throw new Error("Duplicate reply action produced a second Kernel turn");
+  }
+  return { resumed, duplicate };
 }
 
 async function collect(

@@ -290,6 +290,10 @@ launchctl kickstart -k "gui/$(id -u)/com.fyaic.wecom-agent-gateway.pi"
 launchctl bootout "gui/$(id -u)/com.fyaic.wecom-agent-gateway.pi"
 ```
 
+`kickstart -k` 只重启 launchd 已加载的定义，不会重新读取磁盘上已修改的 plist。修改 `ProgramArguments`
+或环境变量后，必须先 `bootout` 对应 label，再对明确的 plist 路径执行 `bootstrap`；随后用
+`launchctl print` 确认新参数，并以 `/readyz` 与 `wecom_transport_state=authenticated` 验证恢复。
+
 2026-08-24 已安装并验证该 Pi LaunchAgent：`start:checked` 8/8，首次启动与强制受管重启后均完成
 Pi Adapter ready 和 Bot WebSocket 重新鉴权；重启前后均维持 2 个长期 Pi worker。旧 OpenClaw plist
 以 `.disabled` 保留在本机，避免下次
