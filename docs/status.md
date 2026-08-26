@@ -60,7 +60,7 @@
 | 耐久通用 Interaction Broker                     | M2.1 完成并自动化验证       | 单选/多选/取消/TTL；五秒 fast lane；同 session resume；租约/重试/死信             |
 | Pi 原生 ask-user 交互桥                         | M2.2 真实矩阵通过           | 私聊 select/input、群聊 select；native response；live resume；限定文本回复        |
 | 单选卡片可读性与颜色语义                        | 私聊与群聊真实通过          | 完整标签、无首项偏置、显式 action style、禁用完成态、重复回调幂等                 |
-| 最终回复快捷操作                                | M2.3 自动化通过，最终复测中 | 紧邻主动卡、SQLite TTL/幂等、同 session continuation、默认动作一次性              |
+| 最终回复快捷操作                                | M2.3 自动化与真实验证通过   | 紧邻主动卡、SQLite TTL/幂等、同 session continuation、默认动作一次性              |
 | 多 Kernel 回复动作续接                          | M2.4 自动化通过             | Codex SDK/App Server、ACP/Kimi、OpenClaw、Pi、外部模板共用 deterministic contract |
 | SQLite 重启恢复                                 | 完成并自动化验证            | 入站去重、runtime session、待发送文本与投递日志跨 reopen 保留                     |
 | SQLite 文件权限                                 | 完成并自动化验证            | Store 每次打开都强制主数据库为 `0600`；本机现有数据库已收紧                       |
@@ -137,6 +137,7 @@
 | 2026-08-25 | Pi 私聊单选交互               | 通过   | 纵向完整选项、仅提交为主色；原 run 仅恢复一次；完成态原位更新成功，重复提交不再恢复 Agent                |
 | 2026-08-25 | Pi 私聊限定文本输入           | 通过   | 下一条同范围文本被 Broker 消费；17.744s 提交、1ms 恢复原 run；未创建第二个 Agent turn                    |
 | 2026-08-25 | Pi 群聊单选交互               | 通过   | group-only ACL；440ms 回执、3.847s 首文本、16.433s 提交、1ms 恢复；更新与最终回复无错误                  |
+| 2026-08-26 | Pi 私聊最终回复快捷操作       | 通过   | 446ms 回执、9.693s 首文本；仅一张默认卡；点击后同 session 续跑且不再生成卡；Outbox 零积压/死信          |
 
 ### 延迟结论
 

@@ -312,8 +312,8 @@ submit_button.text Missing or Invalid`。第四轮完成态补齐必填的“已
 
 ### M2.3：最终回复快捷操作
 
-状态：实现与自动化闭环完成；2026-08-26 客户端验收暴露组合流首帧类型、重复完成态和默认动作自续
-循环，均已修复并进入最终复测。
+状态：完成；2026-08-26 客户端验收暴露组合流首帧类型、重复完成态和默认动作自续循环，修复后真实
+私聊复测通过。
 
 - [x] `message-completed.actions` 与操作员默认 action 的 Runtime-neutral 契约。
 - [x] 最终文字完成后通过 durable proactive path 紧邻发送动作卡；Transport 保留首帧组合卡能力。
@@ -322,7 +322,7 @@ submit_button.text Missing or Invalid`。第四轮完成态补齐必填的“已
 - [x] 过期静默失效、重复点击不重复 continuation、写工具仍走独立审批。
 - [x] 操作员默认 action 只用于普通入站首轮；callback continuation 不继承默认卡，杜绝自续循环。
 - [x] Pi 已结束 session 的 action continuation 与四层 deterministic tests。
-- [ ] 授权企业微信私聊真实组合回复、点击续跑、完成态和重复点击验收。
+- [x] 授权企业微信私聊真实独立快捷卡、点击续跑、完成态、重复点击与一次性默认动作验收。
 
 连续两轮实测证明，最终帧首次携带卡片即使得到服务端成功回执，桌面端仍只显示文字。官方示例把模板卡
 放在首次回复，说明这不是可靠的 late-binding 接口。最终动作只有 `message-completed` 时才确定，因此
@@ -363,6 +363,11 @@ Prompt，也不是可执行命令。`interaction-live-resume` 只服务仍在等
 `GATEWAY_REPLY_ACTIONS_JSON` 是一次性默认入口：只附加于用户普通消息对应的最终回答。它不会在自身
 callback continuation 完成后再次出现，否则“点击 → 续跑 → 同卡 → 再点击”会形成没有自然终点的交互
 循环。Adapter 若确实实现向导式多步流程，必须在每一步显式返回新的 `actions`，并自行定义终止条件。
+
+修复后真实私聊复测记录：普通入站在 446ms 完成 Channel 回执，9.693 秒出现 Kernel 首文本，10.812 秒
+完成回答并仅投递一张快捷卡；用户点击后 durable resume 完成同 session continuation，只投递新的主动
+文字，没有第二条 `proactive-presentation`。测试结束时 Outbox 为零 pending、零 leased、零 dead，证明
+该链路在一次点击后自然终止。
 
 ### M2.4：多 Kernel
 
