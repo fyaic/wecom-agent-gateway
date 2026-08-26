@@ -425,6 +425,23 @@ export interface ResolvedPresentationInteraction {
   actionId: string;
 }
 
+/** Durable ACL/idempotency envelope for cancelling one currently live run. */
+export interface PendingRunControl {
+  controlId: string;
+  accountId: string;
+  conversationId: string;
+  senderId: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface ResolvedRunControl {
+  controlId: string;
+  actionId: "cancel";
+  /** False means the run completed before the user acted. */
+  active: boolean;
+}
+
 export type RuntimeToolContent =
   | { type: "text"; text: string }
   | { type: "image"; url: string }
@@ -615,6 +632,19 @@ export interface GatewayStore {
     actionId: string;
     now: string;
   }): Promise<ResolvedPresentationInteraction | undefined>;
+  createRunControl(control: PendingRunControl): Promise<boolean>;
+  resolveRunControl(options: {
+    controlId: string;
+    accountId: string;
+    conversationId: string;
+    senderId: string;
+    actionId: "cancel";
+    now: string;
+  }): Promise<ResolvedRunControl | undefined>;
+  completeRunControl(options: {
+    controlId: string;
+    now: string;
+  }): Promise<boolean>;
   createRuntimeInteraction(
     interaction: PendingRuntimeInteraction,
   ): Promise<boolean>;

@@ -12,8 +12,10 @@ import type {
   OutboundCommand,
   PendingApproval,
   PendingPresentationInteraction,
+  PendingRunControl,
   PendingRuntimeInteraction,
   ResolvedPresentationInteraction,
+  ResolvedRunControl,
   RuntimeInteractionResumeEntry,
   RuntimeInteractionResult,
 } from "@fyaic/wecom-runtime-contract";
@@ -100,6 +102,19 @@ export class SqliteGatewayStore implements GatewayStore {
       );
       CREATE INDEX IF NOT EXISTS presentation_interactions_pending_idx
         ON presentation_interactions(status, expires_at);
+      CREATE TABLE IF NOT EXISTS run_controls (
+        control_id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL,
+        conversation_id TEXT NOT NULL,
+        sender_id TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('pending', 'resolved', 'expired', 'completed')),
+        action_id TEXT CHECK(action_id IS NULL OR action_id = 'cancel'),
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        resolved_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS run_controls_pending_idx
+        ON run_controls(status, expires_at);
       CREATE TABLE IF NOT EXISTS runtime_interactions (
         interaction_id TEXT PRIMARY KEY,
         account_id TEXT NOT NULL,
@@ -665,6 +680,102 @@ export class SqliteGatewayStore implements GatewayStore {
         actionId: options.actionId,
       };
     });
+  }
+
+  async createRunControl(control: PendingRunControl): Promise<boolean> {
+    const result = this.database
+      .prepare(
+        `
+        INSERT OR IGNORE INTO run_controls
+          (control_id, account_id, conversation_id, sender_id, status,
+           created_at, expires_at)
+        VALUES (?, ?, ?, ?, 'pending', ?, ?)
+      `,
+      )
+      .run(
+        control.controlId,
+        control.accountId,
+        control.conversationId,
+        control.senderId,
+        control.createdAt,
+        control.expiresAt,
+      );
+    return result.changes === 1;
+  }
+
+  async resolveRunControl(options: {
+    controlId: string;
+    accountId: string;
+    conversationId: string;
+    senderId: string;
+    actionId: "cancel";
+    now: string;
+  }): Promise<ResolvedRunControl | undefined> {
+    return this.transaction(() => {
+      this.database
+        .prepare(
+          `
+          UPDATE run_controls
+          SET status = 'expired', resolved_at = ?
+          WHERE control_id = ? AND status = 'pending' AND expires_at <= ?
+        `,
+        )
+        .run(options.now, options.controlId, options.now);
+      const row = this.database
+        .prepare(
+          `
+          SELECT control_id, status
+          FROM run_controls
+          WHERE control_id = ?
+            AND account_id = ?
+            AND conversation_id = ?
+            AND sender_id = ?
+            AND status IN ('pending', 'completed')
+            AND expires_at > ?
+        `,
+        )
+        .get(
+          options.controlId,
+          options.accountId,
+          options.conversationId,
+          options.senderId,
+          options.now,
+        ) as
+        { control_id: string; status: "pending" | "completed" } | undefined;
+      if (!row) return undefined;
+      const result = this.database
+        .prepare(
+          `
+          UPDATE run_controls
+          SET status = 'resolved', action_id = ?, resolved_at = ?
+          WHERE control_id = ? AND status = ?
+        `,
+        )
+        .run(options.actionId, options.now, options.controlId, row.status);
+      return result.changes === 1
+        ? {
+            controlId: row.control_id,
+            actionId: options.actionId,
+            active: row.status === "pending",
+          }
+        : undefined;
+    });
+  }
+
+  async completeRunControl(options: {
+    controlId: string;
+    now: string;
+  }): Promise<boolean> {
+    const result = this.database
+      .prepare(
+        `
+        UPDATE run_controls
+        SET status = 'completed', resolved_at = ?
+        WHERE control_id = ? AND status = 'pending'
+      `,
+      )
+      .run(options.now, options.controlId);
+    return result.changes === 1;
   }
 
   async createRuntimeInteraction(

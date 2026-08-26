@@ -147,6 +147,9 @@ GLM 首文本 23.05 秒，端到端 25.20 秒，多次可变回复投递成功�
    GATEWAY_MAX_CONCURRENT_RUNS=8
    GATEWAY_APPROVAL_TIMEOUT_MS=300000
    GATEWAY_INTERACTION_TIMEOUT_MS=300000
+   GATEWAY_RUN_CONTROL_ENABLED=true
+   GATEWAY_RUN_CONTROL_AFTER_MS=15000
+   GATEWAY_RUN_CONTROL_TIMEOUT_MS=300000
    CODEX_APPROVAL_WAIT_TIMEOUT_MS=90000
    GATEWAY_MEDIA_SPOOL_ROOT=data/media-spool
    GATEWAY_MEDIA_SPOOL_MAX_TOTAL_BYTES=524288000
@@ -168,6 +171,11 @@ GLM 首文本 23.05 秒，端到端 25.20 秒，多次可变回复投递成功�
 
 `.env` 会被设为 `0600`。
 Gateway 数据目录应为 `0700`；SQLite Store 每次打开主数据库时会强制收紧为 `0600`。
+
+支持原生 `cancel` 的 Adapter 在运行超过 15 秒后会收到一张独立“停止任务”卡。只有发起该任务的原
+sender、同 account 与 conversation 可以点击；Gateway 先原位确认再调用 Adapter cancel。设置
+`GATEWAY_RUN_CONTROL_ENABLED=false` 可关闭，阈值和卡片 TTL 分别由后两个变量控制。快速任务、正在
+等待 ask-user/审批的未展示阶段，以及不声明 `cancel` 的 Adapter 不产生控制卡。
 
 ## 联调顺序与通过条件
 

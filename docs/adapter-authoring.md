@@ -79,6 +79,8 @@ Kernel 应使用 ACP 子进程和环境 allowlist。Gateway SDK 不负责 Agent 
 | `reply-actions`           | 可附最终快捷动作，并把真实 callback 作为新 turn 继续同一 session  |
 
 Kernel 自己拥有工具不等于 `tools`；模型支持图片也不等于 Adapter 已实现安全媒体输入。
+声明 `cancel` 后，Gateway 可以在长任务超过阈值时提供一次通用停止卡；Adapter 的 `cancel(sessionId)` 必须
+只中断该 session 当前 run、可安全重复调用，并且不能把“停止任务”转换成新 Prompt。
 
 ## 当前兼容矩阵
 
@@ -145,3 +147,8 @@ Gateway 正常会话队列和并发限制，不能借 `interaction-live-resume` 
 SDK loader 会校验 capability 与方法的一致性：`reply-actions` 和 `interaction-live-resume` 必须同时声明
 `interaction-resume`，声明后必须实现 `resumeInteraction()`。仓库模板已经给出同 session new-turn 与
 进程内有界幂等的最小实现；Adapter 不应从按钮 label 猜 Prompt。
+
+ACP v1 的 `session/request_permission` 是工具授权，不是普通 ask-user；当前 OpenClaw Gateway v4 的公共
+schema 也没有导出可由外部客户端响应的 elicitation 请求。两者继续使用审批、取消和 new-turn 回复动作，
+但不得声明 `interaction-live-resume`。若未来上游增加正式 capability/method，必须先固定版本、验证请求
+与响应关联，再新增桥接。

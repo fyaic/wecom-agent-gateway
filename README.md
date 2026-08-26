@@ -33,6 +33,7 @@ Agent 如何思考、选择模型、调用工具或理解视频，不属于 Gate
 - **交互协调层**：卡片选择不进入模型解析；Gateway 持久校验、即时更新并按同一 session 恢复 Agent；Pi 原生 ask-user 已贯通。
 - **多 Kernel 原生提问**：Codex App Server 与 Pi 的阻塞式 ask-user 都由同一 Broker 原路恢复；多问题可表单或逐步完成，秘密输入不进入 IM。
 - **回复快捷操作**：最终流式回答可附原生 action 卡；点击经 SQLite/ACL/幂等后继续同一 Agent session，写操作仍需审批。
+- **长任务控制**：支持取消的 Kernel 超过阈值后出现一次“停止任务”卡；点击原位确认并调用原生 cancel，不把控制动作交给模型解析。
 - **可靠投递**：文本与媒体发送前进入 SQLite outbox；租约、重试、死信和媒体 spool 支持崩溃恢复。
 - **精确多模态**：Transport 与 Adapter 声明具体输入/输出类型，不支持时 fail closed，不伪造文字占位。
 - **安全默认值**：单一 Bot 身份、分域白名单、敏感字段脱敏、受保护临时媒体和写工具审批。
@@ -66,7 +67,7 @@ flowchart LR
 
 | Adapter   | 上游接口               | 已验证能力                                                                      |
 | --------- | ---------------------- | ------------------------------------------------------------------------------- |
-| Codex     | SDK / App Server JSONL | 流式、恢复、回复动作、取消、状态、审批、动态工具、图片/音频                     |
+| Codex     | SDK / App Server JSONL | 流式、恢复、回复动作、原生提问、取消、状态、审批、动态工具、图片/音频           |
 | Kimi Code | ACP v1 stdio           | 流式、恢复、回复动作、取消、权限、状态、图片                                    |
 | 通用 ACP  | ACP v1 stdio           | 按 `initialize` 动态协商恢复、回复动作和输入模态                                |
 | OpenClaw  | Gateway WebSocket v4   | 流式、恢复、回复动作、取消、状态、图片/音频/视频/文件                           |
@@ -95,6 +96,7 @@ Adapter，并通过 `GATEWAY_ADAPTER=external` 加载，无需修改 Gateway Reg
 - 耐久 Interaction Broker：确认、单选、多选、表单、TTL 与同 session 异步恢复。
 - Pi 原生 select/confirm/input/editor：卡片或限定文本回复后恢复原 tool call，不注入 Prompt。
 - 最终回复快捷动作：Codex、ACP/Kimi、OpenClaw、Pi 和外部模板均以同 session 新回合续接，重复 callback 不创建第二轮。
+- 长任务取消卡：仅对声明 `cancel` 的 Adapter 出现，按发送者/会话持久绑定，快速任务和不可取消 Kernel 不展示。
 
 企业微信语音回调目前只提供官方转写文本时，Gateway 不会虚报原始音频输入。媒体能否被 Agent
 进一步理解取决于所选 Kernel 及其工具，而不是传输层。
@@ -190,7 +192,7 @@ allowlist 内。媒体路径还必须位于 `WECOM_MEDIA_OUTPUT_ROOTS` 允许目
 
 ## 成熟度
 
-项目处于 **Public Preview**，尚未承诺稳定的 v1 API。当前已有 166 项 deterministic tests，并完成
+项目处于 **Public Preview**，尚未承诺稳定的 v1 API。当前已有 176 项 deterministic tests，并完成
 真实企业微信私聊、群聊、流式回复、会话恢复、图片/文件/MP4、主动媒体、受管重启及四类 Kernel
 接入验证。真实 OS 子进程 `SIGKILL` 后的 SQLite Outbox 租约恢复、macOS 受管 Gateway 强杀拉起和
 重新鉴权也已通过；隔离 Linux 网络断开/恢复、持久卷只读和受限 tmpfs 容量耗尽均完成真实故障验收。

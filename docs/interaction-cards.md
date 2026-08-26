@@ -371,8 +371,8 @@ callback continuation 完成后再次出现，否则“点击 → 续跑 → 同
 
 ### M2.4：多 Kernel
 
-状态：2026-08-26 已完成最终回复动作的多 Kernel deterministic 闭环；各 Kernel 原生 ask-user 仍按
-上游协议逐项接入，不以合成 Prompt 冒充。
+状态：2026-08-26 已完成最终回复动作的多 Kernel deterministic 闭环，并完成原生 ask-user 协议审计；
+只接入上游真实存在的方法，不以合成 Prompt 冒充。
 
 - [x] Codex SDK / App Server、Pi、OpenClaw、ACP 的同 session new-turn reply-action continuation。
 - [x] ACP 仅在上游声明 `loadSession` 时开放 `interaction-resume` 与 `reply-actions`。
@@ -380,10 +380,40 @@ callback continuation 完成后再次出现，否则“点击 → 续跑 → 同
 - [x] 公共 testkit 验证续接完成和同 idempotency key 重复投递不产生第二 turn。
 - [x] Codex App Server 原生 `item/tool/requestUserInput`：单选、表单、自由输入、多步续接与 secret
       fail-closed，不创建第二 turn。
-- [ ] OpenClaw、ACP 的上游原生 ask-user hook；只有协议真实提供时才实现 live resume。
+- [x] 明确上游边界：当前 ACP v1 只有工具 permission，OpenClaw Gateway v4 没有外部 elicitation
+      response；两者不虚报 `interaction-live-resume`，未来协议新增正式方法后再评估。
 
 ### M2.5：高级交互
 
-- 多字段表单、欢迎卡、主动任务卡、长任务控制卡。
+- [x] 长任务取消卡：阈值后单次展示、sender/conversation ACL、SQLite 首答、原位确认、原生 cancel、
+      正常完成/过期/重复/重启陈旧卡 fail closed。
+- [ ] 欢迎卡、主动任务卡与运行中进度阶段卡。
 - 独立群投票和多人聚合模型。
 - 卡片模板主题与 Agent 品牌标识。
+
+长任务取消切片的数据流：
+
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant W as WeCom Bot
+    participant G as Gateway Core
+    participant S as SQLite
+    participant A as Kernel Adapter
+
+    A->>G: run 持续超过阈值（capability=cancel）
+    G->>S: create run_control（scope + TTL）
+    G->>W: durable proactive 停止卡
+    W->>U: 继续等待 / 停止任务
+    U->>W: 点击停止任务
+    W->>G: template_card_event
+    G->>S: ACL + first-answer resolve
+    G->>W: 五秒内原位显示“正在停止”
+    G->>A: cancel(original session)
+    A-->>G: 当前 run 结束
+    G->>W: 原可变回复终态“任务已停止”
+```
+
+`run_control_*` 不进入 Agent 消息、不授予工具权限，也不恢复已结束 session。正常完成时 pending control
+立即标记 completed；旧卡第一次点击只收敛为“任务已经结束”，之后重复静默。进程重启只保留陈旧卡
+安全性，不尝试复活已经消失的 live run。

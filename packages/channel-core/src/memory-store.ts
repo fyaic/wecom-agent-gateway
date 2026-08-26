@@ -10,8 +10,10 @@ import type {
   OutboundCommand,
   PendingApproval,
   PendingPresentationInteraction,
+  PendingRunControl,
   PendingRuntimeInteraction,
   ResolvedPresentationInteraction,
+  ResolvedRunControl,
   RuntimeInteractionResumeEntry,
   RuntimeInteractionResult,
 } from "@fyaic/wecom-runtime-contract";
@@ -36,6 +38,12 @@ interface MemoryApproval extends PendingApproval {
 interface MemoryPresentationInteraction extends PendingPresentationInteraction {
   status: "pending" | "resolved" | "expired";
   actionId?: string;
+  resolvedAt?: string;
+}
+
+interface MemoryRunControl extends PendingRunControl {
+  status: "pending" | "resolved" | "expired" | "completed";
+  actionId?: "cancel";
   resolvedAt?: string;
 }
 
@@ -80,6 +88,7 @@ export class MemoryGatewayStore implements GatewayStore {
     string,
     MemoryPresentationInteraction
   >();
+  private readonly runControls = new Map<string, MemoryRunControl>();
   private readonly runtimeInteractions = new Map<
     string,
     MemoryRuntimeInteraction
@@ -354,6 +363,60 @@ export class MemoryGatewayStore implements GatewayStore {
       correlationId: interaction.correlationId,
       actionId: options.actionId,
     };
+  }
+
+  async createRunControl(control: PendingRunControl): Promise<boolean> {
+    if (this.runControls.has(control.controlId)) return false;
+    this.runControls.set(control.controlId, {
+      ...control,
+      status: "pending",
+    });
+    return true;
+  }
+
+  async resolveRunControl(options: {
+    controlId: string;
+    accountId: string;
+    conversationId: string;
+    senderId: string;
+    actionId: "cancel";
+    now: string;
+  }): Promise<ResolvedRunControl | undefined> {
+    const control = this.runControls.get(options.controlId);
+    if (control?.status === "pending" && control.expiresAt <= options.now) {
+      control.status = "expired";
+      control.resolvedAt = options.now;
+    }
+    if (
+      !control ||
+      (control.status !== "pending" && control.status !== "completed") ||
+      control.accountId !== options.accountId ||
+      control.conversationId !== options.conversationId ||
+      control.senderId !== options.senderId ||
+      control.expiresAt <= options.now
+    ) {
+      return undefined;
+    }
+    const active = control.status === "pending";
+    control.status = "resolved";
+    control.actionId = options.actionId;
+    control.resolvedAt = options.now;
+    return {
+      controlId: control.controlId,
+      actionId: options.actionId,
+      active,
+    };
+  }
+
+  async completeRunControl(options: {
+    controlId: string;
+    now: string;
+  }): Promise<boolean> {
+    const control = this.runControls.get(options.controlId);
+    if (!control || control.status !== "pending") return false;
+    control.status = "completed";
+    control.resolvedAt = options.now;
+    return true;
   }
 
   async createRuntimeInteraction(

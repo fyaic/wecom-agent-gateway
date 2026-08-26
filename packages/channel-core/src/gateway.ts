@@ -62,6 +62,9 @@ export interface GatewayOptions {
   /** Optional safe, operator-defined actions attached to each final Agent reply. */
   replyActions?: RuntimeInteractionAction[];
   replyActionTimeoutMs?: number;
+  /** Show a scoped cancel card after this many milliseconds; unset disables it. */
+  runControlAfterMs?: number;
+  runControlTimeoutMs?: number;
   maxProactiveTextBytes?: number;
   now?: () => number;
   wallClock?: () => number;
@@ -124,6 +127,7 @@ export interface GatewayLifecycleEvent {
     | "kernel-first-event"
     | "kernel-first-text"
     | "completed"
+    | "cancelled"
     | "failed";
   conversationType: InboundMessage["conversationType"];
   adapterId?: string;
@@ -155,6 +159,9 @@ export interface InfrastructureErrorEvent {
     | "interrupt-approval"
     | "create-interaction"
     | "resolve-interaction"
+    | "create-run-control"
+    | "resolve-run-control"
+    | "complete-run-control"
     | "create-runtime-interaction"
     | "resolve-runtime-interaction"
     | "cancel-runtime-interaction"
@@ -219,6 +226,12 @@ interface PendingApprovalResolver {
   senderId: string;
 }
 
+interface ActiveRunControlState {
+  cancelRequested: boolean;
+  finished: boolean;
+  cancel(): Promise<void>;
+}
+
 export class WeComAgentGateway {
   private readonly adapters: Map<string, AgentRuntimeAdapter>;
   private readonly queues = new Map<string, Promise<void>>();
@@ -232,6 +245,7 @@ export class WeComAgentGateway {
     string,
     PendingApprovalResolver
   >();
+  private readonly activeRunControls = new Map<string, ActiveRunControlState>();
   private pendingInboundMessages = 0;
   private activeRuns = 0;
   private starting = false;
@@ -252,6 +266,14 @@ export class WeComAgentGateway {
         actions: options.replyActions,
         resumeMode: "new-turn",
       });
+    }
+    for (const [name, value] of [
+      ["runControlAfterMs", options.runControlAfterMs],
+      ["runControlTimeoutMs", options.runControlTimeoutMs],
+    ] as const) {
+      if (value !== undefined && (!Number.isInteger(value) || value < 1)) {
+        throw new Error(`Gateway ${name} must be a positive integer`);
+      }
     }
   }
 
@@ -622,6 +644,7 @@ export class WeComAgentGateway {
     }
     if (message.interaction) {
       if (!(await this.options.store.acceptInbound(message))) return;
+      if (await this.handleRunControl(message)) return;
       await this.handlePresentationInteraction(message);
       return;
     }
@@ -794,6 +817,15 @@ export class WeComAgentGateway {
     let closed = false;
     const mediaOutputs: AgentMediaOutput[] = [];
     let releaseMedia: () => Promise<void> = async () => undefined;
+    const runControlState: ActiveRunControlState = {
+      cancelRequested: false,
+      finished: false,
+      cancel: async () => undefined,
+    };
+    let runControlId: string | undefined;
+    let runControlTimer: ReturnType<typeof setTimeout> | undefined;
+    let runControlCreation: Promise<string | undefined> | undefined;
+    let runControlSuspended = false;
 
     try {
       // Establish the mutable Bot message before waiting for the Agent. This is
@@ -819,6 +851,58 @@ export class WeComAgentGateway {
         materialized.message,
       );
       const kernelStartedAt = this.now();
+      const suspendRunControl = () => {
+        runControlSuspended = true;
+        if (runControlTimer) clearTimeout(runControlTimer);
+        runControlTimer = undefined;
+      };
+      const scheduleRunControl = () => {
+        if (
+          runControlTimer ||
+          runControlId ||
+          runControlCreation ||
+          runControlSuspended ||
+          runControlState.finished ||
+          !activeSessionId ||
+          this.options.runControlAfterMs === undefined ||
+          !adapter.capabilities.has("cancel") ||
+          !adapter.cancel ||
+          !this.options.transport.capabilities.has("structured-presentation") ||
+          !this.options.transport.capabilities.has(
+            "interactive-presentation",
+          ) ||
+          !this.options.transport.capabilities.has("proactive-message")
+        ) {
+          return;
+        }
+        const remaining = Math.max(
+          0,
+          kernelStartedAt + this.options.runControlAfterMs - this.now(),
+        );
+        const controlSessionId = activeSessionId;
+        runControlState.cancel = async () => {
+          if (runControlState.finished) return;
+          await adapter.cancel!(controlSessionId);
+        };
+        runControlTimer = setTimeout(() => {
+          runControlTimer = undefined;
+          if (runControlState.finished || runControlSuspended) return;
+          runControlCreation = this.presentRunControl({
+            message,
+            state: runControlState,
+          }).catch((error: unknown) => {
+            this.notifyInfrastructureError({
+              component: "store",
+              componentId: "gateway-store",
+              operation: "create-run-control",
+              error: asError(error),
+            });
+            return undefined;
+          });
+          void runControlCreation;
+        }, remaining);
+      };
+      scheduleRunControl();
       let sawKernelEvent = false;
       let sawKernelText = false;
       let approvalQueue = Promise.resolve();
@@ -826,6 +910,7 @@ export class WeComAgentGateway {
         message: materialized.message,
         sessionId,
         requestApproval: (request) => {
+          suspendRunControl();
           const decision = approvalQueue.then(() =>
             this.requestApproval(streamId, message, adapter, reply, request),
           );
@@ -856,16 +941,19 @@ export class WeComAgentGateway {
             adapter.id,
           );
         }
+        if (runControlState.cancelRequested) continue;
         if (event.type === "session-started") {
           activeSessionId = event.sessionId;
           await this.options.store.setSession({
             ...scope,
             sessionId: event.sessionId,
           });
+          scheduleRunControl();
         } else if (event.type === "status" || event.type === "text-delta") {
           const text = projection.apply(event);
           if (text !== undefined) reply.update(text);
         } else if (event.type === "interaction-requested") {
+          suspendRunControl();
           if (!activeSessionId) {
             throw new Error(
               `Adapter ${adapter.id} requested interaction before starting a session`,
@@ -938,37 +1026,61 @@ export class WeComAgentGateway {
         }
       }
       if (!closed) {
-        await this.closeReplyWithActions({
-          reply,
-          message,
-          adapter,
-          sessionId: activeSessionId,
-          text: projection.completed(),
-        });
+        if (runControlState.cancelRequested) {
+          await reply.close("⏹️ 任务已停止。");
+        } else {
+          await this.closeReplyWithActions({
+            reply,
+            message,
+            adapter,
+            sessionId: activeSessionId,
+            text: projection.completed(),
+          });
+        }
       }
-      for (const media of mediaOutputs) {
-        await this.deliverMedia(message, media);
+      if (!runControlState.cancelRequested) {
+        for (const media of mediaOutputs) {
+          await this.deliverMedia(message, media);
+        }
       }
       this.notifyLifecycle(
         message,
-        "completed",
+        runControlState.cancelRequested ? "cancelled" : "completed",
         this.now() - enqueuedAt,
         "enqueued",
         adapter.id,
       );
     } catch (error) {
-      this.notifyRuntimeError(
-        error instanceof Error ? error : new Error(String(error)),
-      );
-      await reply.close("Agent 处理失败，请稍后重试。");
+      if (runControlState.cancelRequested) {
+        await reply.close("⏹️ 任务已停止。");
+      } else {
+        this.notifyRuntimeError(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+        await reply.close("Agent 处理失败，请稍后重试。");
+      }
       this.notifyLifecycle(
         message,
-        "failed",
+        runControlState.cancelRequested ? "cancelled" : "failed",
         this.now() - enqueuedAt,
         "enqueued",
         adapter.id,
       );
     } finally {
+      runControlState.finished = true;
+      if (runControlTimer) clearTimeout(runControlTimer);
+      runControlId ??= await runControlCreation;
+      if (runControlId) {
+        this.activeRunControls.delete(runControlId);
+        await this.options.store
+          .completeRunControl({
+            controlId: runControlId,
+            now: this.wallClockIso(),
+          })
+          .catch((error: unknown) =>
+            this.notifyInteractionStoreError("complete-run-control", error),
+          );
+      }
       await this.interruptRunApprovals(streamId);
       try {
         await releaseMedia();
@@ -1170,6 +1282,121 @@ export class WeComAgentGateway {
         : "该审批不存在、已处理、已失效，或不属于当前会话与发送者。",
       true,
     );
+  }
+
+  private async presentRunControl(options: {
+    message: InboundMessage;
+    state: ActiveRunControlState;
+  }): Promise<string> {
+    if (options.state.finished || options.state.cancelRequested) {
+      throw new Error("Agent run ended before its control card was created");
+    }
+    const now = this.wallClock();
+    const timeoutMs = this.options.runControlTimeoutMs ?? 5 * 60_000;
+    const controlId = `run_control_${randomUUID().replaceAll("-", "")}`;
+    const created = await this.options.store.createRunControl({
+      controlId,
+      accountId: options.message.accountId,
+      conversationId: options.message.conversationId,
+      senderId: options.message.senderId,
+      createdAt: iso(now),
+      expiresAt: iso(now + timeoutMs),
+    });
+    if (!created) throw new Error("Unable to allocate a run control card");
+    this.activeRunControls.set(controlId, options.state);
+    try {
+      await this.enqueueDurableDelivery(controlId, {
+        type: "proactive-presentation",
+        accountId: options.message.accountId,
+        conversationId: options.message.conversationId,
+        presentation: {
+          kind: "actions",
+          id: controlId,
+          title: "⏳ 任务仍在执行",
+          body: "可以继续等待；如不再需要，可停止当前任务。",
+          actions: [{ id: "cancel", label: "停止任务", style: "danger" }],
+        },
+      });
+    } catch (error) {
+      this.activeRunControls.delete(controlId);
+      await this.options.store.completeRunControl({
+        controlId,
+        now: this.wallClockIso(),
+      });
+      throw error;
+    }
+    this.notifyInteractionLifecycle({
+      phase: "requested",
+      conversationType: options.message.conversationType,
+      kind: "actions",
+      elapsedMs: 0,
+    });
+    return controlId;
+  }
+
+  private async handleRunControl(message: InboundMessage): Promise<boolean> {
+    const inbound = message.interaction!;
+    if (!inbound.presentationId.startsWith("run_control_")) return false;
+    if (inbound.actionId !== "cancel") {
+      await this.updateInteraction(
+        message,
+        inbound.presentationId,
+        "操作无效，请返回原卡片重试。",
+      );
+      return true;
+    }
+    const active = this.activeRunControls.get(inbound.presentationId);
+    let resolved;
+    try {
+      resolved = await this.options.store.resolveRunControl({
+        controlId: inbound.presentationId,
+        accountId: message.accountId,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        actionId: "cancel",
+        now: this.wallClockIso(),
+      });
+    } catch (error) {
+      this.notifyInteractionStoreError("resolve-run-control", error);
+      await this.updateInteraction(
+        message,
+        inbound.presentationId,
+        "服务暂时无法确认停止操作，请稍后重试。",
+      );
+      return true;
+    }
+    // IDs in this namespace are one-shot. Completed, expired, duplicate, and
+    // post-restart callbacks stay silent so WeCom does not render duplicate
+    // result cards for one physical control card.
+    if (!resolved) return true;
+    await this.updateInteraction(
+      message,
+      inbound.presentationId,
+      resolved.active && active
+        ? "⏹️ 正在停止当前任务。"
+        : "任务已经结束，无需停止。",
+    );
+    if (!resolved.active || !active || active.finished) return true;
+    active.cancelRequested = true;
+    try {
+      await active.cancel();
+      this.notifyInteractionLifecycle({
+        phase: "cancelled",
+        conversationType: message.conversationType,
+        kind: "actions",
+        elapsedMs: 0,
+      });
+    } catch (error) {
+      active.cancelRequested = false;
+      this.notifyRuntimeError(asError(error));
+      await this.enqueueDurableDelivery(message.id, {
+        type: "proactive",
+        accountId: message.accountId,
+        conversationId: message.conversationId,
+        text: "停止请求失败，当前任务可能仍在执行。",
+      });
+    }
+    return true;
   }
 
   private async handlePresentationInteraction(
@@ -2432,6 +2659,9 @@ export class WeComAgentGateway {
       | "create-runtime-interaction"
       | "resolve-runtime-interaction"
       | "cancel-runtime-interaction"
+      | "create-run-control"
+      | "resolve-run-control"
+      | "complete-run-control"
       | "expire-runtime-interaction"
       | "claim-interaction-resume"
       | "complete-interaction-resume"

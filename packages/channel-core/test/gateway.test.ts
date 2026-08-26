@@ -128,6 +128,247 @@ const message = (id: string): InboundMessage => ({
 });
 
 describe("WeComAgentGateway", () => {
+  it("offers one scoped cancel card for a long cancellable run", async () => {
+    class InteractiveTransport extends FakeTransport {
+      override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
+        "stream-reply-update",
+        "proactive-message",
+        "structured-presentation",
+        "interactive-presentation",
+      ]);
+    }
+    const transport = new InteractiveTransport();
+    let releaseRun!: () => void;
+    const released = new Promise<void>((resolve) => {
+      releaseRun = resolve;
+    });
+    const cancelledSessions: string[] = [];
+    const runtime: AgentRuntimeAdapter = {
+      id: "cancellable-runtime",
+      contractVersion: 1,
+      capabilities: new Set(["streaming", "cancel"]),
+      async *run() {
+        yield { type: "session-started", sessionId: "session-cancel" };
+        yield { type: "status", phase: "thinking" };
+        await released;
+      },
+      async cancel(sessionId) {
+        cancelledSessions.push(sessionId);
+        releaseRun();
+      },
+      async health() {
+        return { ok: true };
+      },
+    };
+    const lifecycle: string[] = [];
+    const gateway = new WeComAgentGateway({
+      transport,
+      adapters: [runtime],
+      router: new StaticRuntimeRouter(runtime.id),
+      store: new MemoryGatewayStore(),
+      outboxPollIntervalMs: 2,
+      replyUpdateIntervalMs: 1,
+      runControlAfterMs: 1,
+      runControlTimeoutMs: 10_000,
+      onInteractionLifecycleEvent: (event) => lifecycle.push(event.phase),
+    });
+    await gateway.start();
+    const original = transport.receive(message("long-run"));
+    await waitFor(
+      () =>
+        transport.commands.filter(
+          (command) => command.type === "proactive-presentation",
+        ).length === 1,
+    );
+    const card = transport.commands.find(
+      (command) => command.type === "proactive-presentation",
+    );
+    if (!card || card.type !== "proactive-presentation") {
+      throw new Error("run control card was not delivered");
+    }
+    expect(card.presentation).toMatchObject({
+      kind: "actions",
+      title: "⏳ 任务仍在执行",
+      actions: [{ id: "cancel", label: "停止任务", style: "danger" }],
+    });
+
+    await transport.receive({
+      ...message("wrong-run-controller"),
+      senderId: "other-user",
+      parts: [],
+      interaction: {
+        presentationId: card.presentation.id,
+        actionId: "cancel",
+      },
+    });
+    expect(cancelledSessions).toEqual([]);
+
+    await transport.receive({
+      ...message("cancel-long-run"),
+      parts: [],
+      interaction: {
+        presentationId: card.presentation.id,
+        actionId: "cancel",
+      },
+    });
+    await original;
+    expect(cancelledSessions).toEqual(["session-cancel"]);
+    expect(lifecycle).toEqual(["requested", "cancelled"]);
+    expect(transport.commands).toContainEqual(
+      expect.objectContaining({
+        type: "interaction-update",
+        presentation: expect.objectContaining({
+          id: card.presentation.id,
+          body: "⏹️ 正在停止当前任务。",
+        }),
+      }),
+    );
+    expect(transport.commands.at(-1)).toMatchObject({
+      type: "reply",
+      text: "⏹️ 任务已停止。",
+      final: true,
+    });
+
+    const updateCount = transport.commands.filter(
+      (command) => command.type === "interaction-update",
+    ).length;
+    await transport.receive({
+      ...message("duplicate-cancel-long-run"),
+      parts: [],
+      interaction: {
+        presentationId: card.presentation.id,
+        actionId: "cancel",
+      },
+    });
+    expect(cancelledSessions).toHaveLength(1);
+    expect(
+      transport.commands.filter(
+        (command) => command.type === "interaction-update",
+      ),
+    ).toHaveLength(updateCount);
+    await gateway.stop();
+  });
+
+  it("does not show run controls for fast or non-cancellable runs", async () => {
+    class InteractiveTransport extends FakeTransport {
+      override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
+        "stream-reply-update",
+        "proactive-message",
+        "structured-presentation",
+        "interactive-presentation",
+      ]);
+    }
+    const transport = new InteractiveTransport();
+    const runtime = new FakeRuntime();
+    const gateway = new WeComAgentGateway({
+      transport,
+      adapters: [runtime],
+      router: new StaticRuntimeRouter(runtime.id),
+      store: new MemoryGatewayStore(),
+      outboxPollIntervalMs: 2,
+      runControlAfterMs: 1,
+    });
+    await gateway.start();
+    await transport.receive(message("no-run-control"));
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(
+      transport.commands.filter(
+        (command) => command.type === "proactive-presentation",
+      ),
+    ).toHaveLength(0);
+    await gateway.stop();
+  });
+
+  it("cannot use a completed control card to cancel a later run", async () => {
+    class InteractiveTransport extends FakeTransport {
+      override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
+        "stream-reply-update",
+        "proactive-message",
+        "structured-presentation",
+        "interactive-presentation",
+      ]);
+    }
+    const transport = new InteractiveTransport();
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    let cancellations = 0;
+    const runtime: AgentRuntimeAdapter = {
+      id: "completed-control-runtime",
+      contractVersion: 1,
+      capabilities: new Set(["cancel"]),
+      async *run() {
+        yield { type: "session-started", sessionId: "shared-session" };
+        await gate;
+        yield { type: "message-completed", text: "正常完成" };
+      },
+      async cancel() {
+        cancellations += 1;
+      },
+      async health() {
+        return { ok: true };
+      },
+    };
+    const gateway = new WeComAgentGateway({
+      transport,
+      adapters: [runtime],
+      router: new StaticRuntimeRouter(runtime.id),
+      store: new MemoryGatewayStore(),
+      outboxPollIntervalMs: 2,
+      runControlAfterMs: 1,
+    });
+    await gateway.start();
+    const original = transport.receive(message("naturally-completed-run"));
+    await waitFor(() =>
+      transport.commands.some(
+        (command) => command.type === "proactive-presentation",
+      ),
+    );
+    const card = transport.commands.find(
+      (command) => command.type === "proactive-presentation",
+    );
+    if (!card || card.type !== "proactive-presentation") {
+      throw new Error("completed run control card was not delivered");
+    }
+    finish();
+    await original;
+    const updatesBefore = transport.commands.filter(
+      (command) => command.type === "interaction-update",
+    ).length;
+    await transport.receive({
+      ...message("stale-run-control"),
+      parts: [],
+      interaction: {
+        presentationId: card.presentation.id,
+        actionId: "cancel",
+      },
+    });
+    expect(cancellations).toBe(0);
+    const updates = transport.commands.filter(
+      (command) => command.type === "interaction-update",
+    );
+    expect(updates).toHaveLength(updatesBefore + 1);
+    expect(updates.at(-1)).toMatchObject({
+      type: "interaction-update",
+      presentation: { body: "任务已经结束，无需停止。" },
+    });
+    await transport.receive({
+      ...message("duplicate-stale-run-control"),
+      parts: [],
+      interaction: {
+        presentationId: card.presentation.id,
+        actionId: "cancel",
+      },
+    });
+    expect(
+      transport.commands.filter(
+        (command) => command.type === "interaction-update",
+      ),
+    ).toHaveLength(updatesBefore + 1);
+    await gateway.stop();
+  });
+
   it("reports identifier-free operational readiness and aggregate work state", async () => {
     const gateway = new WeComAgentGateway({
       transport: new FakeTransport(),
