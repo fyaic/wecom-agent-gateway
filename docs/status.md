@@ -59,6 +59,7 @@
 | 审批按钮卡片与 SQLite 交互状态                  | 完成并自动化验证，待实测  | 回调 ACL/幂等/发送者/会话/失效绑定；五秒内原位更新；文本命令降级                  |
 | 耐久通用 Interaction Broker                     | M2.1 完成并自动化验证     | 单选/多选/取消/TTL；五秒 fast lane；同 session resume；租约/重试/死信             |
 | Pi 原生 ask-user 交互桥                         | M2.2 真实矩阵通过         | 私聊 select/input、群聊 select；native response；live resume；限定文本回复        |
+| Codex App Server 原生 ask-user                  | M2.4 自动化通过           | 原 request ID 响应；单选/表单/自由输入/多步；secret fail-closed；同一 turn        |
 | 单选卡片可读性与颜色语义                        | 私聊与群聊真实通过        | 完整标签、无首项偏置、显式 action style、禁用完成态、重复回调幂等                 |
 | 最终回复快捷操作                                | M2.3 自动化与真实验证通过 | 紧邻主动卡、SQLite TTL/幂等、同 session continuation、默认动作一次性              |
 | 多 Kernel 回复动作续接                          | M2.4 自动化通过           | Codex SDK/App Server、ACP/Kimi、OpenClaw、Pi、外部模板共用 deterministic contract |

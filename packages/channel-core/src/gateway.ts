@@ -1868,6 +1868,29 @@ export class WeComAgentGateway {
           throw new Error(
             "Approval requests are not supported while resuming an interaction",
           );
+        } else if (event.type === "interaction-requested") {
+          if (
+            entry.request.kind === "actions" &&
+            entry.request.resumeMode === "new-turn"
+          ) {
+            throw new Error(
+              "Callback continuations cannot open live interactions",
+            );
+          }
+          if (!adapter.capabilities.has("interaction-live-resume")) {
+            throw new Error(
+              `Adapter ${adapter.id} emitted a nested interaction without live resume`,
+            );
+          }
+          await this.startRuntimeInteraction({
+            accountId: entry.accountId,
+            conversationId: entry.conversationId,
+            conversationType: entry.conversationType,
+            senderId: entry.senderId,
+            adapterId: entry.adapterId,
+            sessionId: entry.sessionId,
+            interaction: event.request,
+          });
         } else if (event.type === "failed") {
           throw new Error(event.message);
         }

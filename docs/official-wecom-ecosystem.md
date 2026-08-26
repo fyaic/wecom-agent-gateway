@@ -88,6 +88,20 @@ Broker 幂等消费。补齐该按钮后真实 `updateTemplateCard` 已被服务
 
 当前 transport 已按官方插件语义处理错误码 `846608`：超过六分钟的流式 partial 不再重试，最终文本改用同一个 Bot 的 `sendMessage` 主动推送。模板卡片事件已接入 SDK 专用 listener；五秒更新窗口超时按 UX 失败记录，不重放业务决定。
 
+## Kernel 协议补充：Codex App Server
+
+官方 [Codex App Server 文档](https://learn.chatgpt.com/docs/app-server) 将
+`item/tool/requestUserInput` 定义为实验性服务端 JSON-RPC 请求：一个请求包含 1–3 个短问题，可带选项、
+自由输入标记、秘密输入标记和 `autoResolutionMs`；客户端必须响应原 request ID，随后服务端发出
+`serverRequest/resolved`。本机 Codex CLI `0.145.0` 的 `app-server generate-ts --experimental` schema
+进一步确认响应为按 question ID 索引的 `{ answers: string[] }`。
+
+项目据此为持久 App Server Adapter 增加原生 live interaction bridge：选项和自由输入映射既有
+Interaction Broker，答案以原协议响应恢复同一 turn，不创建 synthetic Prompt。多问题在企业微信模板
+可完整表达时使用 `multiple_interaction`，否则顺序拆成多个 durable 步骤；秘密输入一律拒绝进入 IM。
+由于该方法仍是实验接口，Adapter 在 initialize 时明确声明 `experimentalApi`，升级 Codex CLI 必须重跑
+schema 对照与契约测试。Codex SDK 对照实现没有这条双向 host 协议，因此不声称同等能力。
+
 ## Kernel 协议补充：ACP 与 Kimi Code
 
 企业微信官方插件证明了 WeCom 与 OpenClaw 的完整集成，但它的 runtime API 绑定 OpenClaw。为验证

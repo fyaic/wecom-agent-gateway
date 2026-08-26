@@ -1280,6 +1280,122 @@ describe("WeComAgentGateway", () => {
     await gateway.stop();
   });
 
+  it("opens a follow-up interaction while the same live Kernel request waits", async () => {
+    class InteractiveTransport extends FakeTransport {
+      override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
+        "stream-reply-update",
+        "proactive-message",
+        "structured-presentation",
+        "interactive-presentation",
+      ]);
+    }
+    const transport = new InteractiveTransport();
+    let completeRun!: () => void;
+    const answered = new Promise<void>((resolve) => {
+      completeRun = resolve;
+    });
+    const resumes: string[] = [];
+    const runtime: AgentRuntimeAdapter = {
+      id: "nested-live-interaction-runtime",
+      contractVersion: 1,
+      capabilities: new Set(["interaction-resume", "interaction-live-resume"]),
+      async *run() {
+        yield { type: "session-started", sessionId: "nested-live-session" };
+        yield {
+          type: "interaction-requested",
+          request: {
+            kind: "single-select",
+            title: "选择环境",
+            fieldId: "environment",
+            options: [
+              { value: "prod", label: "生产" },
+              { value: "test", label: "测试" },
+            ],
+          },
+        };
+        await answered;
+        yield { type: "message-completed", text: "两步输入已完成" };
+      },
+      async *resumeInteraction(request) {
+        if (request.interaction.kind === "single-select") {
+          resumes.push(request.result.values.environment?.[0] ?? "missing");
+          yield {
+            type: "interaction-requested",
+            request: {
+              kind: "confirm",
+              title: "确认继续",
+            },
+          };
+          return;
+        }
+        resumes.push(request.result.status);
+        completeRun();
+      },
+      async health() {
+        return { ok: true };
+      },
+    };
+    const gateway = new WeComAgentGateway({
+      transport,
+      adapters: [runtime],
+      router: new StaticRuntimeRouter(runtime.id),
+      store: new MemoryGatewayStore(),
+      outboxPollIntervalMs: 2,
+      replyUpdateIntervalMs: 1,
+      maxConcurrentRuns: 1,
+    });
+    await gateway.start();
+    const original = transport.receive(message("nested-live-original"));
+    await waitFor(
+      () =>
+        transport.commands.filter(
+          (command) => command.type === "proactive-presentation",
+        ).length === 1,
+    );
+    const first = transport.commands.find(
+      (command) => command.type === "proactive-presentation",
+    );
+    if (!first || first.type !== "proactive-presentation") {
+      throw new Error("first live interaction was not delivered");
+    }
+    await transport.receive({
+      ...message("nested-live-first-callback"),
+      parts: [],
+      interaction: {
+        presentationId: first.presentation.id,
+        selections: [{ fieldId: "choice", optionIds: ["option_1"] }],
+      },
+    });
+    await waitFor(
+      () =>
+        transport.commands.filter(
+          (command) => command.type === "proactive-presentation",
+        ).length === 2,
+    );
+    const second = transport.commands.filter(
+      (command) => command.type === "proactive-presentation",
+    )[1];
+    if (!second || second.type !== "proactive-presentation") {
+      throw new Error("second live interaction was not delivered");
+    }
+    await transport.receive({
+      ...message("nested-live-second-callback"),
+      parts: [],
+      interaction: {
+        presentationId: second.presentation.id,
+        actionId: "confirm",
+      },
+    });
+    await original;
+    expect(resumes).toEqual(["test", "submitted"]);
+    expect(transport.commands.at(-1)).toMatchObject({
+      type: "reply",
+      text: "两步输入已完成",
+      final: true,
+    });
+    await gateway.stop();
+  });
+
   it("attaches durable final-reply actions and continues the same session once", async () => {
     class ReplyActionTransport extends FakeTransport {
       override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([

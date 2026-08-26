@@ -156,6 +156,91 @@ describe("CodexAppServerClient", () => {
     });
   });
 
+  it("surfaces native user-input requests and answers the same server request", async () => {
+    const process = new FakeProcess();
+    const client = new CodexAppServerClient({
+      processFactory: () =>
+        process as unknown as ChildProcessWithoutNullStreams,
+      requestTimeoutMs: 1_000,
+    });
+
+    const starting = client.start();
+    const initialize = await process.nextMessage();
+    expect(initialize.params.capabilities).toEqual({
+      experimentalApi: true,
+      requestAttestation: false,
+    });
+    process.respond({ id: initialize.id, result: { userAgent: "test" } });
+    await starting;
+    await process.nextMessage();
+
+    const turnStarting = client.runTurn(
+      "thread-1",
+      [{ type: "text", text: "ask", text_elements: [] }],
+      {},
+    );
+    const turnRequest = await process.nextMessage();
+    process.respond({
+      id: turnRequest.id,
+      result: { turn: { id: "turn-1", status: "inProgress" } },
+    });
+    const events = await turnStarting;
+    const iterator = events[Symbol.asyncIterator]();
+    process.respond({
+      id: "server-request-1",
+      method: "item/tool/requestUserInput",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        itemId: "item-1",
+        autoResolutionMs: 30_000,
+        questions: [
+          {
+            id: "environment",
+            header: "环境",
+            question: "选择目标环境",
+            isOther: false,
+            isSecret: false,
+            options: [
+              { label: "生产", description: "正式流量" },
+              { label: "测试", description: "测试流量" },
+            ],
+          },
+        ],
+      },
+    });
+    await expect(iterator.next()).resolves.toMatchObject({
+      done: false,
+      value: {
+        method: "item/tool/requestUserInput",
+        requestId: "server-request-1",
+      },
+    });
+
+    await client.respondToUserInput("server-request-1", {
+      answers: { environment: { answers: ["测试"] } },
+    });
+    expect(await process.nextMessage()).toEqual({
+      id: "server-request-1",
+      result: { answers: { environment: { answers: ["测试"] } } },
+    });
+    process.respond({
+      method: "turn/completed",
+      params: {
+        threadId: "thread-1",
+        turn: { id: "turn-1", status: "completed" },
+      },
+    });
+    await expect(iterator.next()).resolves.toMatchObject({
+      value: { method: "turn/completed" },
+    });
+    await expect(iterator.next()).resolves.toEqual({
+      value: undefined,
+      done: true,
+    });
+    await client.stop();
+  });
+
   it("surfaces a redacted app-server startup diagnostic", async () => {
     const process = new FakeProcess();
     const client = new CodexAppServerClient({
