@@ -99,7 +99,14 @@ Core 只认识通用 `Presentation`：notice、article、actions、choice、form
 完整的 Agent 交互卡架构、SDK/CLI 分工、状态机和里程碑见
 [`interaction-cards.md`](interaction-cards.md)。Core 的 Interaction Broker 已实现五秒 callback fast
 lane、TTL、发送者/会话绑定和 durable deferred resume；Kernel continuation 不进入 WeCom
-Transport。下一阶段只在 Adapter 侧接入各 Kernel 的原生 ask-user/elicitation hook。
+Transport。Pi 与 Codex App Server 已接入上游真实 ask-user；ACP v1 只有 permission request，OpenClaw
+Gateway v4 也没有导出通用 elicitation response，因此不会以合成 Prompt 冒充缺失协议。
+
+长任务控制属于 Core，不属于 Kernel 推理。仅当 Adapter 声明 `cancel` 且 Transport 支持主动交互卡时，
+任务超过配置阈值才生成一次 `run_control_*` 卡。SQLite 单独保存 account/conversation/sender/TTL 和
+首答状态；点击后先在企业微信回调窗口内原位确认，再调用该 session 的原生 `cancel()`。控制动作不进入
+Agent 文本队列、不创建新 turn，也不复用 ask-user、审批或最终回复 action 的 namespace。任务正常结束、
+卡片过期、错误发送者、重复点击和进程重启后的旧卡都不能取消后续任务。
 
 ## Gateway Core 与 Adapter Host
 

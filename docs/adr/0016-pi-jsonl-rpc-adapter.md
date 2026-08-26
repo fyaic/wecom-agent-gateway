@@ -21,7 +21,9 @@ RPC 已具备本项目需要的异步 prompt、图片、文本增量、完全终
   `get_last_assistant_text` 恢复可能漏掉的尾部；
 - 图片从 Channel 的受保护临时文件读取为 base64；文件、音频和视频明确失败，不生成文字占位；
 - `abort` 只作用于当前匹配的 opaque session；
-- `select`、`confirm`、`input`、`editor` 等阻塞式 extension UI 未映射为产品能力，统一回复取消。
+- `select`、`confirm` 映射 Runtime-neutral 卡片，`input`、`editor` 映射同 sender/conversation 的下一条
+  纯文本；结果按原 request ID 返回 `extension_ui_response`。无法映射、重复 pending 或自带 timeout
+  的 dialog fail closed，不合成 Prompt。
 
 ## Session 与并发
 
@@ -44,7 +46,8 @@ Pi 自己管理 provider、模型、工具与 transcript。Gateway 不复制 Ope
 ## 验证
 
 deterministic fake 覆盖 Runtime Contract 首轮/恢复、进程重启后的 `switch_session`、图片 base64、
-取消、unsupported media、阻塞 UI 取消、非法 session root、严格 LF/U+2028/U+2029 framing、
+取消、unsupported media、阻塞 UI 原生恢复与 fail-closed、非法 session root、严格 LF/U+2028/U+2029 framing、
 同 session 串行、不同 session 并行和失败 worker 替换。真实 Pi `0.84.2` 两会话并发 smoke 为
 6.373/6.876 秒，总墙钟 6.877 秒，确认发生重叠；受管服务强制重启前后均保持两个 worker，Adapter
-ready 后 Bot 重新鉴权。企业微信私聊文本、恢复和 GLM-4.6V 图片验收也已通过。
+ready 后 Bot 重新鉴权。企业微信私聊文本、恢复和 GLM-4.6V 图片验收也已通过；私聊 select/input 与
+授权群 select 已真实恢复原 Pi run，重复 callback 未产生第二次业务执行。

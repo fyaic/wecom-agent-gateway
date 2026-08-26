@@ -56,13 +56,14 @@
 | Kernel 审批截止与孤立审批回收                   | 完成并自动化验证          | Adapter 较短上限；turn 先结束即中断该 run 的 pending                              |
 | 独立持久审批提示                                | 完成并自动化验证          | 主动 Bot 消息不受 Agent 流覆盖；Transport 不支持时 fail closed                    |
 | Channel-neutral 五类结构化卡片                  | Phase 1 完成并自动化验证  | 通知/图文/按钮/投票/表单映射官方 SDK；不接收厂商 JSON                             |
-| 审批按钮卡片与 SQLite 交互状态                  | 完成并自动化验证，待实测  | 回调 ACL/幂等/发送者/会话/失效绑定；五秒内原位更新；文本命令降级                  |
+| 审批按钮卡片与 SQLite 交互状态                  | 批准链路真实通过          | 回调 ACL/幂等/发送者/会话/失效绑定；五秒内原位更新；拒绝/过期/中断仍待真实矩阵    |
 | 耐久通用 Interaction Broker                     | M2.1 完成并自动化验证     | 单选/多选/取消/TTL；五秒 fast lane；同 session resume；租约/重试/死信             |
 | Pi 原生 ask-user 交互桥                         | M2.2 真实矩阵通过         | 私聊 select/input、群聊 select；native response；live resume；限定文本回复        |
 | Codex App Server 原生 ask-user                  | M2.4 自动化通过           | 原 request ID 响应；单选/表单/自由输入/多步；secret fail-closed；同一 turn        |
 | 单选卡片可读性与颜色语义                        | 私聊与群聊真实通过        | 完整标签、无首项偏置、显式 action style、禁用完成态、重复回调幂等                 |
 | 最终回复快捷操作                                | M2.3 自动化与真实验证通过 | 紧邻主动卡、SQLite TTL/幂等、同 session continuation、默认动作一次性              |
 | 多 Kernel 回复动作续接                          | M2.4 自动化通过           | Codex SDK/App Server、ACP/Kimi、OpenClaw、Pi、外部模板共用 deterministic contract |
+| 长任务原生取消控制卡                            | M2.5 自动化通过           | 仅 cancellable Adapter；15s 阈值；sender/conversation ACL；SQLite 首答与重复静默  |
 | SQLite 重启恢复                                 | 完成并自动化验证          | 入站去重、runtime session、待发送文本与投递日志跨 reopen 保留                     |
 | SQLite 文件权限                                 | 完成并自动化验证          | Store 每次打开都强制主数据库为 `0600`；本机现有数据库已收紧                       |
 | SQLite 故障因果保留                             | 完成并自动化验证          | 写入/提交失败后即使回滚也失败，仍抛出原始故障而非二次回滚错误                     |
@@ -191,7 +192,7 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
 - 同名发布仓库已公开并进入 Public Preview；原仓库已改名并保持 private，发布仓库由审计后的干净
   根提交重新创建。未登录 API、README、SECURITY 和 Git refs 访问均已复核。
 - 项目自有代码采用与企业微信官方核心参考项目一致的 MIT；依赖许可证和来源规则已形成独立审计文档。
-- GitHub Actions 运行格式、TypeScript、166 项 deterministic tests、公开面和依赖许可证检查。
+- GitHub Actions 运行格式、TypeScript、176 项 deterministic tests、公开面和依赖许可证检查。
 - 已完成模式 `0600` 的最终离库 Git bundle 备份、旧仓库全部 refs 与 51 次 Actions 日志审计；旧历史
   确认包含私密名称和非 noreply 作者元数据，只保留在私有归档与离线 bundle。新的同名发布仓库从
   1 个审计后的根提交建立，GitHub CI、全新 clone、141 项测试和私密词扫描均通过；Dependabot 随后
@@ -215,8 +216,8 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
   默认 deferred suspend/resume；交互结果经带租约的 durable resume queue 恢复。
 - M2.1 已实现 Agent-neutral Request/Result、`interaction-resume` capability、SQLite 原子
   resolve/enqueue、TTL sweep、租约恢复、退避重试/死信、即时卡片更新和新的主动回复边界。
-- deterministic adapter 已覆盖单选、多选、取消、过期、重复点击、跨发送者 ACL 和同 session 恢复；
-  SQLite 测试覆盖租约过期接管。真实企业微信私聊单选已通过，表单和群聊仍单独列为后续验收。
+- deterministic adapter 已覆盖单选、多选、表单、取消、过期、重复点击、跨发送者 ACL 和同 session 恢复；
+  SQLite 测试覆盖租约过期接管。真实企业微信私聊单选与授权群单选均已通过。
 
 ### M2.2：Agent ask-user 接入
 
@@ -227,7 +228,7 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
   at-least-once 投递。
 - Gateway 强制每 account + conversation 只有一个 pending interaction；开放输入只消费同 sender 的
   下一条非空纯文本，不创建第二个 Agent turn。
-- 166 项 deterministic tests 已通过；本机 Pi `0.84.2` 加载仓库示例后真实产生 select request，接受
+- 176 项 deterministic tests 已通过；本机 Pi `0.84.2` 加载仓库示例后真实产生 select request，接受
   “测试环境”的 native response，原 tool result 得到该值且同一 run 最终回复“测试完成”。授权私聊
   单选与限定文本输入已完成真实闭环；授权测试群的单选也已通过 group-only ACL 和完整交互链路。
 - 首轮真实私聊 select 已证明 Pi 原 run 完成且多次点击只产生一次 resume，但结果 notice 的
@@ -242,6 +243,29 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
 - 授权测试群 select 的 Channel 回执 440ms、Pi 首文本 3.847 秒、用户提交 16.433 秒、live resume 1ms；
   两次完成态更新与最终回复均无错误，整个回合 25.676 秒完成且 resume 恰好一次。跨发送者拒绝继续由
   deterministic ACL 覆盖，不把缺少第二位真人的测试环境伪装成真实跨成员验收。
+
+### M2.3：最终回复快捷操作
+
+- 最终流式正文完成后通过 durable proactive path 紧邻发送 action card；真实客户端不会稳定显示只在
+  最后一帧首次加入的组合卡，因此不以服务端成功回执冒充可见。
+- 私聊真实复测已确认普通回合只投递一张快捷卡，点击后同 session new-turn continuation 成功；默认
+  action 不继承到自己的 callback 回合，链路自然终止，Outbox 零积压/死信。
+
+### M2.4：多 Kernel 交互
+
+- Codex SDK/App Server、ACP/Kimi、OpenClaw、Pi 与外部 Adapter 模板共用 reply-action contract。
+- Codex App Server 原生 `item/tool/requestUserInput` 已覆盖单选、表单、自由输入、多步同 turn 恢复和
+  secret fail-closed；Pi 使用原生 extension UI response。
+- 固定版本协议审计确认 ACP v1 只有工具 permission，OpenClaw Gateway v4 没有导出外部 elicitation
+  response；这两个 Adapter 不虚报 live ask-user，也不使用 synthetic Prompt。
+
+### M2.5：高级交互
+
+- 第一切片已实现长任务取消卡：应用默认 15 秒阈值，只对同时具备原生 `cancel` 和可交互 Transport 的
+  run 展示；SQLite 持久绑定 account/conversation/sender/TTL，首次点击原位确认后取消原 session。
+- 自动化覆盖快速/不可取消任务不展示、跨 sender 拒绝、重复静默、正常结束旧卡收敛和 SQLite 过期。
+  真实企业微信客户端点击仍待合并部署后验收。
+- 后续保留欢迎/主动任务卡、进度阶段卡、主题与独立群投票聚合；它们不阻塞 Gateway 主链路。
 
 ### M5：生产运行与韧性
 

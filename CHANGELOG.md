@@ -21,6 +21,9 @@ tagged.
   Codex SDK/App Server, ACP/Kimi, OpenClaw, Pi, and the external Adapter template.
 - Native Codex App Server `item/tool/requestUserInput` bridging for choices,
   forms, free text, and multi-step live continuation, with secret input rejected.
+- Sender-scoped long-run control cards that appear only for cancellable
+  adapters, atomically accept one stop request, and call the Kernel's native
+  cancel path without creating another semantic turn.
 
 ### Fixed
 

@@ -53,4 +53,5 @@ ask-user 交互解决了 Agent 在运行中主动向用户提问，但最终回�
   new-turn 并发队列。
 - 公共 reply-action testkit 覆盖同 session 新 turn 与进程内重复投递幂等；Pi、Codex、OpenClaw、ACP
   和外部模板均运行该契约。
-- 真实企业微信客户端验收在 M2.3 合并部署后执行，未提前标记通过。
+- 真实企业微信私聊已验证最终文字后只出现一张主动快捷卡；点击后同 session continuation 成功，且
+  没有再次继承默认动作形成循环。Outbox 最终零 pending、零 leased、零 dead。

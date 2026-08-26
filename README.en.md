@@ -44,6 +44,9 @@ model selection, tool policy, and media understanding stay in the Kernel.
 - **Final reply actions** — a streamed answer can carry native quick actions;
   scoped, idempotent callbacks continue the same Agent session while write
   tools still require approval.
+- **Long-run controls** — cancellable Kernels get one sender-scoped stop card
+  after a threshold; the callback invokes native cancel without becoming a
+  model prompt or a second semantic turn.
 - **Durable delivery** — SQLite outbox leases, retries, dead letters, and a
   protected media spool survive process failure.
 - **Exact modalities** — transports and adapters declare concrete media types
@@ -81,7 +84,7 @@ flowchart LR
 
 | Adapter     | Upstream interface           | Validated capabilities                                                                       |
 | ----------- | ---------------------------- | -------------------------------------------------------------------------------------------- |
-| Codex       | SDK / App Server JSONL       | Streaming, resume, cancel, status, approvals, tools, image/audio                             |
+| Codex       | SDK / App Server JSONL       | Streaming, resume, native ask-user, cancel, status, approvals, tools, image/audio            |
 | Kimi Code   | ACP v1 stdio                 | Streaming, resume, cancel, permissions, status, image                                        |
 | Generic ACP | ACP v1 stdio                 | Resume and media negotiated through `initialize`                                             |
 | OpenClaw    | Gateway WebSocket v4         | Streaming, resume, cancel, status, image/audio/video/file                                    |
@@ -170,7 +173,7 @@ and [ADRs](docs/README.md) for the complete contract.
 ## Maturity
 
 The project is in **Public Preview**; a stable v1 API is not promised yet. The
-current baseline has 155 deterministic tests and real acceptance evidence for
+current baseline has 176 deterministic tests and real acceptance evidence for
 direct and group conversations, mutable streaming, session recovery,
 image/file/MP4 transfer, proactive media, managed restarts, and four Kernel
 families. Cross-process SQLite outbox lease recovery after `SIGKILL` and a

@@ -675,6 +675,113 @@ describe("SqliteGatewayStore", () => {
     store.close();
   });
 
+  it("atomically scopes and completes long-run controls", async () => {
+    const store = new SqliteGatewayStore(":memory:");
+    expect(
+      await store.createRunControl({
+        controlId: "run_control_1",
+        accountId: "bot",
+        conversationId: "chat",
+        senderId: "user",
+        createdAt: "2026-08-20T00:00:00.000Z",
+        expiresAt: "2026-08-20T00:05:00.000Z",
+      }),
+    ).toBe(true);
+    await expect(
+      store.resolveRunControl({
+        controlId: "run_control_1",
+        accountId: "bot",
+        conversationId: "chat",
+        senderId: "other-user",
+        actionId: "cancel",
+        now: "2026-08-20T00:01:00.000Z",
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      store.resolveRunControl({
+        controlId: "run_control_1",
+        accountId: "bot",
+        conversationId: "chat",
+        senderId: "user",
+        actionId: "cancel",
+        now: "2026-08-20T00:01:00.000Z",
+      }),
+    ).resolves.toEqual({
+      controlId: "run_control_1",
+      actionId: "cancel",
+      active: true,
+    });
+    await expect(
+      store.resolveRunControl({
+        controlId: "run_control_1",
+        accountId: "bot",
+        conversationId: "chat",
+        senderId: "user",
+        actionId: "cancel",
+        now: "2026-08-20T00:02:00.000Z",
+      }),
+    ).resolves.toBeUndefined();
+
+    await store.createRunControl({
+      controlId: "run_control_2",
+      accountId: "bot",
+      conversationId: "chat",
+      senderId: "user",
+      createdAt: "2026-08-20T00:00:00.000Z",
+      expiresAt: "2026-08-20T00:05:00.000Z",
+    });
+    await expect(
+      store.completeRunControl({
+        controlId: "run_control_2",
+        now: "2026-08-20T00:01:00.000Z",
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      store.resolveRunControl({
+        controlId: "run_control_2",
+        accountId: "bot",
+        conversationId: "chat",
+        senderId: "user",
+        actionId: "cancel",
+        now: "2026-08-20T00:02:00.000Z",
+      }),
+    ).resolves.toEqual({
+      controlId: "run_control_2",
+      actionId: "cancel",
+      active: false,
+    });
+    await expect(
+      store.resolveRunControl({
+        controlId: "run_control_2",
+        accountId: "bot",
+        conversationId: "chat",
+        senderId: "user",
+        actionId: "cancel",
+        now: "2026-08-20T00:02:30.000Z",
+      }),
+    ).resolves.toBeUndefined();
+
+    await store.createRunControl({
+      controlId: "run_control_3",
+      accountId: "bot",
+      conversationId: "chat",
+      senderId: "user",
+      createdAt: "2026-08-20T00:00:00.000Z",
+      expiresAt: "2026-08-20T00:01:00.000Z",
+    });
+    await expect(
+      store.resolveRunControl({
+        controlId: "run_control_3",
+        accountId: "bot",
+        conversationId: "chat",
+        senderId: "user",
+        actionId: "cancel",
+        now: "2026-08-20T00:02:00.000Z",
+      }),
+    ).resolves.toBeUndefined();
+    store.close();
+  });
+
   it("atomically resolves runtime interactions into a recoverable resume lease", async () => {
     const store = new SqliteGatewayStore(":memory:");
     expect(

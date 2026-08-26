@@ -29,9 +29,8 @@ changes.
       including live same-call resume and scoped text fallback.
 - [x] Complete the real WeCom ask-user acceptance matrix across private select,
       private scoped input, group select, in-place updates, and duplicate safety.
-- [ ] M2.3: final-answer actions through a durable proactive card; combined
-      streams remain reserved for cards known on the first reply frame
-      (implementation complete; final real callback click is in progress).
+- [x] M2.3: final-answer actions through a durable proactive card, including a
+      real callback click, same-session continuation, and one-shot termination.
 - [ ] Complete the remaining real WeCom approval-card rejection, expiry, and
       process-interruption acceptance checks.
 
@@ -44,9 +43,13 @@ changes.
 ## Later
 
 - [x] M2.4 reply-action continuation adapters for Codex, OpenClaw, ACP, Pi, and
-      the external SDK, with one shared deterministic contract. Native live
-      ask-user hooks remain protocol-dependent follow-up work.
-- M2.5 multi-field forms, welcome/task cards, and a separate group-poll model.
+      the external SDK, with one shared deterministic contract. Codex App
+      Server and Pi expose native live ask-user; current ACP v1 and OpenClaw
+      Gateway v4 do not expose an equivalent client response method.
+- [x] M2.5 first slice: durable, sender-scoped long-run cancel cards backed by
+      each Adapter's native cancel capability.
+- M2.5 follow-up: welcome/proactive task cards, card themes, and a separate
+  group-poll aggregation model.
 - Compatibility certification for additional Agent kernels.
 - Optional distributed outbox and media storage implementations.
 - A documented extension model for additional IM transports without weakening

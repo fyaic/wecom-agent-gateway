@@ -126,7 +126,7 @@ stdin/stdout 严格 LF JSONL 协议，适合进程隔离集成；官方
 RPC 已覆盖本项目最小需要：异步 `prompt`、base64 图片、`message_update` 文本增量、完全 settled
 终态、`abort`、session state 和 session file 切换。独立 Pi Adapter 已按这些官方语义实现：严格只按
 LF 分帧，等待 `agent_settled`，以 `get_last_assistant_text` 补齐终态，并在有界 worker pool 内串行
-切换单 worker 的 session，对未映射的阻塞式 extension UI 显式取消。当前 fake contract、本机 Pi
+切换单 worker 的 session，把可映射的阻塞式 extension UI 交给 Interaction Broker。当前 fake contract、本机 Pi
 `0.84.2` 真实 RPC Doctor、ZAI/GLM-5.2
 两轮和企业微信私聊/重启恢复均已通过。GLM-5.2 模型目录明确声明 `images=no`；Adapter 从
 `get_state.model.input` 动态协商，不把协议能力误报成当前模型能力。切换到声明
@@ -142,7 +142,7 @@ Pi 官方 RPC 同时定义了
 也明确展示宿主 UI 负责应答。项目已据此实现 Pi M2.2 原生桥：选择/确认映射官方企业微信模板卡片，
 输入映射发送者与会话绑定的下一条纯文本，最后以原生 response 恢复同一 tool call，不生成 synthetic
 Prompt。本机 Pi `0.84.2` 已用仓库内无副作用 extension 真实产生 select request、回传 value 并继续原
-run；企业微信端真实点击仍单列验收，不把本地 RPC 冒烟混写成 Channel E2E。
+run；企业微信私聊 select/input 和授权群 select 均已完成真实点击、原 run 恢复与重复 callback 幂等验收。
 
 ## Kernel 协议补充：OpenClaw Gateway Client
 
@@ -157,3 +157,13 @@ OpenClaw 官方将外部应用边界定义为
 仍由官方 WeCom SDK 和本项目 Core 承担；OpenClaw 侧只使用其公共 Gateway 控制面。OpenClaw 继续
 管理模型、provider 凭据、工具、工作区和 transcript。实际本机验证沿用了既有 `zai/glm-5.2`，没有
 登录 Codex，也没有将模型 API Key 复制到本项目。
+
+2026-08-26 对固定的 `@openclaw/gateway-protocol 2026.8.1-beta.2` schema 与官方
+[Gateway protocol](https://docs.openclaw.ai/gateway/protocol) 再核对：外部客户端可见 chat、run、session、
+approval 与 `chat.abort`，但没有通用 ask-user/elicitation request-response 方法。OpenClaw 进程内部虽可
+处理 MCP/Codex elicitation，不代表 Gateway Client 能接管该阻塞请求；本项目因此不伪造 live resume。
+
+官方 [ACP v1 Overview](https://github.com/agentclientprotocol/agent-client-protocol/blob/main/docs/protocol/v1/overview.mdx)
+列出的 Agent→Client 基线请求是 `session/request_permission`，语义明确为工具调用授权；普通输入仍由
+Client→Agent 的 `session/prompt` 发起。当前协议没有独立用户澄清方法，所以 ACP Adapter 维持审批映射，
+不把 permission 或第二条 Prompt 冒充 ask-user。
