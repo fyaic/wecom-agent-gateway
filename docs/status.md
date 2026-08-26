@@ -60,7 +60,7 @@
 | 耐久通用 Interaction Broker                     | M2.1 完成并自动化验证       | 单选/多选/取消/TTL；五秒 fast lane；同 session resume；租约/重试/死信             |
 | Pi 原生 ask-user 交互桥                         | M2.2 真实矩阵通过           | 私聊 select/input、群聊 select；native response；live resume；限定文本回复        |
 | 单选卡片可读性与颜色语义                        | 私聊与群聊真实通过          | 完整标签、无首项偏置、显式 action style、禁用完成态、重复回调幂等                 |
-| 最终回复快捷操作                                | M2.3 自动化通过，最终复测中 | 紧邻主动卡、SQLite TTL/幂等、同 session new-turn continuation                     |
+| 最终回复快捷操作                                | M2.3 自动化通过，最终复测中 | 紧邻主动卡、SQLite TTL/幂等、同 session continuation、默认动作一次性              |
 | 多 Kernel 回复动作续接                          | M2.4 自动化通过             | Codex SDK/App Server、ACP/Kimi、OpenClaw、Pi、外部模板共用 deterministic contract |
 | SQLite 重启恢复                                 | 完成并自动化验证            | 入站去重、runtime session、待发送文本与投递日志跨 reopen 保留                     |
 | SQLite 文件权限                                 | 完成并自动化验证            | Store 每次打开都强制主数据库为 `0600`；本机现有数据库已收紧                       |
@@ -266,7 +266,7 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
 
 - 已复用 SDK `downloadFile` 完成入站媒体下载/AES 解密、MIME 探测、大小限制、受保护临时物化、运行后清理和持久化脱敏。
 - 真实图片输入与输出上传/发送均已通过；Gateway 自管耐久 spool、媒体 outbox、完整性、配额、孤儿回收和重启恢复已完成自动化。下一步执行授权会话的真实媒体失败恢复；恶意内容扫描仍待部署策略。
-- 文本/媒体 outbox、Adapter、流式、session、工具、审批、结构化卡片与主动控制面已完成 166 项自动化验证；
+- 文本/媒体 outbox、Adapter、流式、session、工具、审批、结构化卡片与主动控制面已完成自动化验证；
   OS 子进程强杀和 SQLite 原始故障保留已纳入 CI。宿主机网络故障、告警接入和多实例顺序保留为
   部署硬化，不把 Agent 推理或模型效果混入 Gateway 主线。
 - Codex App Server 与 Kimi ACP 均在不产生虚假 turn、不注入 Prompt 的前提下完成真实分层测量；同一口径继续用于后续 Kernel。

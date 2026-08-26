@@ -1885,7 +1885,12 @@ export class WeComAgentGateway {
           `interaction-resume:${entry.interactionId}:text`,
         );
       }
-      const replyActions = completedActions ?? this.options.replyActions;
+      // Operator defaults are a one-shot affordance for ordinary inbound
+      // turns. Reattaching them to their own callback continuation would make
+      // every click create another identical card and allow an unbounded loop.
+      // An Adapter can still explicitly emit actions for a deliberate next
+      // step in a multi-step interaction.
+      const replyActions = completedActions;
       if (replyActions?.length) {
         if (!adapter.capabilities.has("reply-actions")) {
           throw new Error(

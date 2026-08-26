@@ -136,6 +136,8 @@ Adapter 必须验证 session 仍绑定原 live worker，并按 idempotency key �
 `resumeMode=new-turn` 的 callback continuation 恢复为同 session 新回合时才声明 `reply-actions`；所选
 value 是 Adapter 预先绑定的规范化输入，不得是 shell 命令或厂商卡片 JSON。该 continuation 必须经过
 Gateway 正常会话队列和并发限制，不能借 `interaction-live-resume` 绕过背压。
+操作员配置的默认 reply actions 只用于普通入站首轮，不会自动继承到 callback continuation。Adapter
+只有在有明确下一步和终止条件时才应在 continuation 的 `message-completed` 中再次显式返回 `actions`。
 
 SDK loader 会校验 capability 与方法的一致性：`reply-actions` 和 `interaction-live-resume` 必须同时声明
 `interaction-resume`，声明后必须实现 `resumeInteraction()`。仓库模板已经给出同 session new-turn 与

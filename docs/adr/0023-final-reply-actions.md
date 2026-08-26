@@ -17,6 +17,9 @@ ask-user 交互解决了 Agent 在运行中主动向用户提问，但最终回�
 - Runtime Contract 的最终 `message-completed` 可携带中立 `actions`；部署也可通过
   `GATEWAY_REPLY_ACTIONS_JSON` 配置一组安全的通用动作。两者都只有 `value`、`label` 和显式 style，
   不接受企业微信卡片 JSON。
+- 操作员默认动作只附加于普通入站消息产生的首轮终态，点击该动作后的 callback continuation 不自动
+  继承默认动作，避免一次点击再次生成相同卡片形成无界循环。多步流程只有在 Adapter 本轮显式返回
+  `message-completed.actions` 时才进入下一步；是否继续由 Kernel Adapter 明确决定，而非 Gateway 猜测。
 - Gateway 为最终动作生成 task ID，使用现有 SQLite Runtime Interaction 保存 account、conversation、
   sender、Adapter、session、TTL 和动作集合。新快捷卡会取消同会话旧快捷卡；真正的 ask-user 请求也
   可替换旧快捷卡，但不能被快捷卡覆盖。
@@ -38,6 +41,7 @@ ask-user 交互解决了 Agent 在运行中主动向用户提问，但最终回�
 - 最终回答后紧邻一张原生快捷操作卡，点击后可继续相同 Agent session。
 - ask-user、reply action、workflow 和 approval 仍是不同语义；按钮颜色不代表授权。
 - SQLite/Outbox 保留进程恢复、重试和幂等边界；新动作替换旧动作，避免旧卡长期阻塞新的 elicitation。
+- 操作员默认卡是一次性快捷入口，不是自动重复菜单；一次点击最多产生一次 continuation。
 - Pi、Codex SDK / App Server、OpenClaw 和支持 session load 的 ACP Adapter 均支持已结束 session 的
   reply-action continuation；外部 Adapter 必须同时声明 `interaction-resume`、`reply-actions` 并实现
   `resumeInteraction()` 才能启用。
