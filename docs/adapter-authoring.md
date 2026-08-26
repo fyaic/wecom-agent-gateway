@@ -87,7 +87,7 @@ Kernel 自己拥有工具不等于 `tools`；模型支持图片也不等于 Adap
 | Adapter               | 上游接口            | 固定/实测版本                                  | 已验证能力                                                                                 |
 | --------------------- | ------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | Codex SDK 对照实现    | `@openai/codex-sdk` | SDK `0.148.0`                                  | 文本流式、session 恢复、reply-action continuation                                          |
-| Codex App Server      | JSONL App Server    | CLI `0.145.0`                                  | 流式、恢复、回复动作、取消、状态、审批、RuntimeTool、图片/音频输入                         |
+| Codex App Server      | JSONL App Server    | CLI `0.145.0`                                  | 流式、恢复、回复动作、原生 ask-user、取消、状态、审批、RuntimeTool、图片/音频输入          |
 | 通用 ACP              | ACP v1 stdio        | `@agentclientprotocol/sdk 1.4.0`               | 流式/取消/权限；session load 可用时动态开放恢复、回复动作和输入模态                        |
 | Kimi Code（通用 ACP） | `kimi acp`          | Kimi `0.36.1`                                  | 流式、恢复、回复动作、取消、权限、状态、图片输入；真实企业微信私聊已通过                   |
 | OpenClaw Gateway      | WebSocket v4        | Client `2026.8.1-beta.2`；Gateway `2026.7.1-2` | 流式、恢复、回复动作、取消、状态；image/audio/video/file 输入                              |
@@ -131,6 +131,9 @@ Adapter 只在 Kernel 真实请求用户输入时发出 `{type: "interaction-req
 Kernel 的原调用仍在等待控制响应时才额外声明 `interaction-live-resume`；这条响应不会经过正常会话队列，
 Adapter 必须验证 session 仍绑定原 live worker，并按 idempotency key 忽略重复投递。任何失败都不能通过
 合成用户 Prompt 来“模拟恢复”。
+若一个上游请求包含多个 Channel 无法原子表达的字段，Adapter 可以在一次 live resume 中返回下一条
+`interaction-requested`；必须保留同一上游 request、已收集答案和明确终止条件。new-turn callback 不得
+使用这种嵌套路径。秘密输入、密码和 token 不得降级为 IM 文本交互。
 
 最终回复快捷操作与 live ask-user 不同。Adapter 只有在能把
 `resumeMode=new-turn` 的 callback continuation 恢复为同 session 新回合时才声明 `reply-actions`；所选

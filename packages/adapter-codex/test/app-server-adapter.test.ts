@@ -57,6 +57,12 @@ class FakeAppServerClient implements CodexAppServerClientLike {
     this.calls.push(["turn/start", threadId, input, options]);
     return asAsync(this.events);
   }
+  async respondToUserInput(
+    requestId: number | string,
+    response: unknown,
+  ): Promise<void> {
+    this.calls.push(["user-input/respond", requestId, response]);
+  }
   async interrupt(threadId: string): Promise<void> {
     this.calls.push(["turn/interrupt", threadId]);
   }
@@ -231,6 +237,321 @@ describe("CodexAppServerRuntimeAdapter", () => {
         (call) => Array.isArray(call) && call[0] === "turn/start",
       ),
     ).toHaveLength(1);
+  });
+
+  it("bridges a native Codex choice request through a live interaction", async () => {
+    const client = new FakeAppServerClient();
+    client.events = [
+      {
+        method: "item/tool/requestUserInput",
+        requestId: "request-1",
+        params: {
+          threadId: "thread-1",
+          turnId: "turn-1",
+          itemId: "item-1",
+          autoResolutionMs: 30_000,
+          questions: [
+            {
+              id: "environment",
+              header: "环境",
+              question: "请选择目标环境",
+              isOther: false,
+              isSecret: false,
+              options: [
+                { label: "生产环境", description: "正式流量" },
+                { label: "测试环境", description: "测试流量" },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        method: "item/completed",
+        params: {
+          threadId: "thread-1",
+          turnId: "turn-1",
+          item: { type: "agentMessage", text: "已选择测试环境" },
+        },
+      },
+      {
+        method: "turn/completed",
+        params: {
+          threadId: "thread-1",
+          turn: { id: "turn-1", status: "completed" },
+        },
+      },
+    ];
+    const adapter = new CodexAppServerRuntimeAdapter({ client });
+    const run = adapter.run({ message: inbound })[Symbol.asyncIterator]();
+
+    await expect(run.next()).resolves.toEqual({
+      value: { type: "session-started", sessionId: "thread-1" },
+      done: false,
+    });
+    const requested = await run.next();
+    expect(requested.value).toMatchObject({
+      type: "interaction-requested",
+      request: {
+        kind: "single-select",
+        title: "环境",
+        fieldId: "question_0",
+        expiresInMs: 30_000,
+        options: [
+          { value: "option_0_0", label: "生产环境" },
+          { value: "option_0_1", label: "测试环境" },
+        ],
+      },
+    });
+    if (!requested.value || requested.value.type !== "interaction-requested") {
+      throw new Error("Codex interaction was not emitted");
+    }
+    for await (const _event of adapter.resumeInteraction({
+      sessionId: "thread-1",
+      idempotencyKey: "resume-1",
+      interaction: requested.value.request,
+      result: {
+        interactionId: "interaction-1",
+        status: "submitted",
+        values: { question_0: ["option_0_1"] },
+        submittedAt: "2026-08-26T00:00:01.000Z",
+      },
+    })) {
+      void _event;
+    }
+    expect(client.calls).toContainEqual([
+      "user-input/respond",
+      "request-1",
+      { answers: { environment: { answers: ["测试环境"] } } },
+    ]);
+    expect(adapter.capabilities.has("interaction-live-resume")).toBe(true);
+    await expect(run.next()).resolves.toEqual({
+      value: { type: "message-completed", text: "已选择测试环境" },
+      done: false,
+    });
+    await expect(run.next()).resolves.toEqual({
+      value: undefined,
+      done: true,
+    });
+  });
+
+  it("collects mixed Codex questions as sequential native interactions", async () => {
+    const client = new FakeAppServerClient();
+    client.events = [
+      {
+        method: "item/tool/requestUserInput",
+        requestId: 72,
+        params: {
+          threadId: "thread-1",
+          turnId: "turn-1",
+          itemId: "item-1",
+          autoResolutionMs: null,
+          questions: [
+            {
+              id: "name",
+              header: "名称",
+              question: "请输入发布名称",
+              isOther: true,
+              isSecret: false,
+              options: [{ label: "默认名称", description: "推荐默认值" }],
+            },
+            {
+              id: "region",
+              header: "区域",
+              question: "请选择区域",
+              isOther: false,
+              isSecret: false,
+              options: [
+                { label: "上海", description: "华东" },
+                { label: "深圳", description: "华南" },
+              ],
+            },
+          ],
+        },
+      },
+    ];
+    const adapter = new CodexAppServerRuntimeAdapter({ client });
+    const run = adapter.run({ message: inbound })[Symbol.asyncIterator]();
+    await run.next();
+    const first = await run.next();
+    if (!first.value || first.value.type !== "interaction-requested") {
+      throw new Error("First Codex interaction was not emitted");
+    }
+    expect(first.value.request).toMatchObject({
+      kind: "text-input",
+      fieldId: "question_0",
+    });
+
+    const nested = [];
+    for await (const event of adapter.resumeInteraction({
+      sessionId: "thread-1",
+      idempotencyKey: "resume-text",
+      interaction: first.value.request,
+      result: {
+        interactionId: "interaction-text",
+        status: "submitted",
+        values: { question_0: ["发布候选版"] },
+        submittedAt: "2026-08-26T00:00:01.000Z",
+      },
+    })) {
+      nested.push(event);
+    }
+    expect(nested).toHaveLength(1);
+    expect(nested[0]).toMatchObject({
+      type: "interaction-requested",
+      request: { kind: "single-select", fieldId: "question_1" },
+    });
+    const next = nested[0];
+    if (!next || next.type !== "interaction-requested") {
+      throw new Error("Second Codex interaction was not emitted");
+    }
+    for await (const _event of adapter.resumeInteraction({
+      sessionId: "thread-1",
+      idempotencyKey: "resume-choice",
+      interaction: next.request,
+      result: {
+        interactionId: "interaction-choice",
+        status: "submitted",
+        values: { question_1: ["option_1_1"] },
+        submittedAt: "2026-08-26T00:00:02.000Z",
+      },
+    })) {
+      void _event;
+    }
+    expect(client.calls).toContainEqual([
+      "user-input/respond",
+      72,
+      {
+        answers: {
+          name: { answers: ["发布候选版"] },
+          region: { answers: ["深圳"] },
+        },
+      },
+    ]);
+  });
+
+  it("maps bounded multi-question choices to one native form", async () => {
+    const client = new FakeAppServerClient();
+    client.events = [
+      {
+        method: "item/tool/requestUserInput",
+        requestId: 73,
+        params: {
+          threadId: "thread-1",
+          turnId: "turn-1",
+          itemId: "item-1",
+          autoResolutionMs: null,
+          questions: [
+            {
+              id: "region",
+              header: "区域",
+              question: "请选择区域",
+              isOther: false,
+              isSecret: false,
+              options: [
+                { label: "上海", description: "华东" },
+                { label: "深圳", description: "华南" },
+              ],
+            },
+            {
+              id: "tier",
+              header: "规格",
+              question: "请选择规格",
+              isOther: false,
+              isSecret: false,
+              options: [
+                { label: "标准", description: "常规容量" },
+                { label: "高级", description: "扩展容量" },
+              ],
+            },
+          ],
+        },
+      },
+    ];
+    const adapter = new CodexAppServerRuntimeAdapter({ client });
+    const run = adapter.run({ message: inbound })[Symbol.asyncIterator]();
+    await run.next();
+    const requested = await run.next();
+    if (!requested.value || requested.value.type !== "interaction-requested") {
+      throw new Error("Codex form was not emitted");
+    }
+    expect(requested.value.request).toMatchObject({
+      kind: "form",
+      fields: [
+        { id: "question_0", label: "区域" },
+        { id: "question_1", label: "规格" },
+      ],
+    });
+    for await (const _event of adapter.resumeInteraction({
+      sessionId: "thread-1",
+      idempotencyKey: "resume-form",
+      interaction: requested.value.request,
+      result: {
+        interactionId: "interaction-form",
+        status: "submitted",
+        values: {
+          question_0: ["option_0_1"],
+          question_1: ["option_1_0"],
+        },
+        submittedAt: "2026-08-26T00:00:03.000Z",
+      },
+    })) {
+      void _event;
+    }
+    expect(client.calls).toContainEqual([
+      "user-input/respond",
+      73,
+      {
+        answers: {
+          region: { answers: ["深圳"] },
+          tier: { answers: ["标准"] },
+        },
+      },
+    ]);
+  });
+
+  it("refuses to collect Codex secret input over IM", async () => {
+    const client = new FakeAppServerClient();
+    client.events = [
+      {
+        method: "item/tool/requestUserInput",
+        requestId: 74,
+        params: {
+          threadId: "thread-1",
+          turnId: "turn-1",
+          itemId: "item-1",
+          autoResolutionMs: null,
+          questions: [
+            {
+              id: "token",
+              header: "令牌",
+              question: "请输入访问令牌",
+              isOther: true,
+              isSecret: true,
+              options: null,
+            },
+          ],
+        },
+      },
+      {
+        method: "turn/completed",
+        params: {
+          threadId: "thread-1",
+          turn: { id: "turn-1", status: "completed" },
+        },
+      },
+    ];
+    const adapter = new CodexAppServerRuntimeAdapter({ client });
+    const run = adapter.run({ message: inbound })[Symbol.asyncIterator]();
+    await run.next();
+    await expect(run.next()).resolves.toEqual({
+      value: { type: "message-completed", text: undefined },
+      done: false,
+    });
+    expect(client.calls).toContainEqual([
+      "user-input/respond",
+      74,
+      { answers: {} },
+    ]);
   });
 
   it("fails explicitly when Channel media has not been materialized", async () => {

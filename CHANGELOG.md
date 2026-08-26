@@ -19,6 +19,8 @@ tagged.
 - Final-answer actions with official proactive template cards, durable callback
   continuation, and same-session support across
   Codex SDK/App Server, ACP/Kimi, OpenClaw, Pi, and the external Adapter template.
+- Native Codex App Server `item/tool/requestUserInput` bridging for choices,
+  forms, free text, and multi-step live continuation, with secret input rejected.
 
 ### Fixed
 

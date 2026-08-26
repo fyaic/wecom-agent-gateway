@@ -126,6 +126,10 @@ Adapter 可以常驻 Kernel 进程、复用连接和恢复 opaque session，这�
 执行 `thread/start` 或 `thread/resume`、`turn/start`，并把 JSONL 事件忠实映射成通用 runtime
 事件。启动过程不创建 thread、不发送消息，也不产生虚假 turn。
 
+App Server 的原生 `item/tool/requestUserInput` 保持同一 turn 等待：Adapter 将问题映射为 Runtime-neutral
+单选、表单或限定文本交互，Gateway 持久化后把结果从 live-resume fast lane 返回原 JSON-RPC request
+ID。多步问题可以逐步发出下一条 interaction，但不能转成新用户消息；秘密输入不经过 IM。
+
 App Server adapter 默认使用一个 ChatGPT 登录兼容、关闭 Responses WebSocket 的独立 provider。
 原因是内置 `openai` provider 不允许覆盖；当前网络下它会在首轮经历 5 次 WebSocket 超时后才回退
 HTTP/SSE，造成约两分钟延迟。HTTP-only provider 只改变 Codex 与服务端的传输选择，不改模型、

@@ -11,6 +11,7 @@ import {
   type MediaType,
   type MessagePart,
   type RuntimeCapability,
+  type RuntimeInteractionRequest,
   type RuntimeJsonValue,
   type RuntimeTool,
   type RuntimeToolResult,
@@ -76,6 +77,26 @@ export type CodexAppServerInput =
 export interface CodexAppServerEvent {
   method: string;
   params: JsonObject;
+  /** Present only for server-initiated JSON-RPC requests. */
+  requestId?: number | string;
+}
+
+export interface CodexUserInputOption {
+  label: string;
+  description: string;
+}
+
+export interface CodexUserInputQuestion {
+  id: string;
+  header: string;
+  question: string;
+  isOther: boolean;
+  isSecret: boolean;
+  options: CodexUserInputOption[] | null;
+}
+
+export interface CodexUserInputResponse {
+  answers: Record<string, { answers: string[] }>;
 }
 
 export interface CodexAppServerClientLike {
@@ -92,6 +113,10 @@ export interface CodexAppServerClientLike {
     input: CodexAppServerInput[],
     options: CodexAppServerTurnOptions,
   ): Promise<AsyncIterable<CodexAppServerEvent>>;
+  respondToUserInput(
+    requestId: number | string,
+    response: CodexUserInputResponse,
+  ): Promise<void>;
   interrupt(threadId: string): Promise<void>;
 }
 
@@ -139,6 +164,10 @@ export class CodexAppServerClient implements CodexAppServerClientLike {
     }
   >();
   private readonly activeTurns = new Map<string, ActiveTurn>();
+  private readonly pendingUserInputs = new Map<
+    number | string,
+    { threadId: string; turnId: string }
+  >();
   private exitPromise?: Promise<void>;
   private resolveExit?: () => void;
   private initialized = false;
@@ -207,12 +236,13 @@ export class CodexAppServerClient implements CodexAppServerClientLike {
           title: "FYAIC WeCom Agent Gateway",
           version: this.options.clientVersion ?? "0.1.0",
         },
-        capabilities: this.options.dynamicToolHandler
-          ? {
-              experimentalApi: true,
-              requestAttestation: false,
-            }
-          : null,
+        capabilities: {
+          // item/tool/requestUserInput is currently experimental. Opt in
+          // explicitly because the Adapter handles it as a native control
+          // response, never as a fabricated semantic turn.
+          experimentalApi: true,
+          requestAttestation: false,
+        },
       });
       this.notify("initialized", {});
       this.initialized = true;
@@ -303,6 +333,17 @@ export class CodexAppServerClient implements CodexAppServerClientLike {
     });
   }
 
+  async respondToUserInput(
+    requestId: number | string,
+    response: CodexUserInputResponse,
+  ): Promise<void> {
+    if (!this.pendingUserInputs.has(requestId)) {
+      throw new Error("Codex user-input request is no longer pending");
+    }
+    this.write({ id: requestId, result: response });
+    this.pendingUserInputs.delete(requestId);
+  }
+
   private request(method: string, params: JsonObject): Promise<unknown> {
     const id = this.nextRequestId++;
     const timeoutMs = this.options.requestTimeoutMs ?? 30_000;
@@ -354,6 +395,10 @@ export class CodexAppServerClient implements CodexAppServerClientLike {
       return;
     }
     const params = asRecord(message.params);
+    if (method === "serverRequest/resolved") {
+      const resolvedId = requestId(params.requestId);
+      if (resolvedId !== undefined) this.pendingUserInputs.delete(resolvedId);
+    }
     const threadId = stringValue(params.threadId);
     if (!threadId) return;
     const active = this.activeTurns.get(threadId);
@@ -401,6 +446,27 @@ export class CodexAppServerClient implements CodexAppServerClientLike {
       void this.handleDynamicToolCall(id, params);
       return;
     }
+    if (method === "item/tool/requestUserInput") {
+      const request = parseCodexUserInputRequest(params);
+      const active = request
+        ? this.activeTurns.get(request.threadId)
+        : undefined;
+      if (
+        !request ||
+        !active ||
+        (active.turnId !== undefined && active.turnId !== request.turnId) ||
+        this.pendingUserInputs.has(id)
+      ) {
+        this.write({ id, result: { answers: {} } });
+        return;
+      }
+      this.pendingUserInputs.set(id, {
+        threadId: request.threadId,
+        turnId: request.turnId,
+      });
+      active.queue.push({ method, params, requestId: id });
+      return;
+    }
     this.write({
       id,
       error: { code: -32601, message: `Unsupported server request: ${method}` },
@@ -444,6 +510,7 @@ export class CodexAppServerClient implements CodexAppServerClientLike {
       pending.reject(error);
     }
     this.pending.clear();
+    this.pendingUserInputs.clear();
     for (const active of this.activeTurns.values()) active.queue.fail(error);
     this.activeTurns.clear();
   }
@@ -465,6 +532,16 @@ export interface CodexAppServerRuntimeAdapterOptions
   onToolLifecycle?: (event: RuntimeToolLifecycleEvent) => void;
 }
 
+interface PendingCodexUserInput {
+  requestId: number | string;
+  questions: CodexUserInputQuestion[];
+  answers: Record<string, { answers: string[] }>;
+  currentQuestion: number;
+  request: RuntimeInteractionRequest;
+  mode: "single" | "form" | "sequential";
+  expiresInMs?: number;
+}
+
 export class CodexAppServerRuntimeAdapter implements AgentRuntimeAdapter {
   readonly id = "codex-app-server";
   readonly contractVersion = RUNTIME_CONTRACT_VERSION;
@@ -478,6 +555,7 @@ export class CodexAppServerRuntimeAdapter implements AgentRuntimeAdapter {
     "tools",
     "multimodal-input",
     "interaction-resume",
+    "interaction-live-resume",
     "reply-actions",
   ]);
   readonly inputModalities: ReadonlySet<MediaType> = new Set([
@@ -489,6 +567,7 @@ export class CodexAppServerRuntimeAdapter implements AgentRuntimeAdapter {
   private readonly tools = new Map<string, RuntimeTool>();
   private readonly activeRequests = new Map<string, AgentRunRequest>();
   private readonly completedInteractionResumes = new Set<string>();
+  private readonly pendingUserInputs = new Map<string, PendingCodexUserInput>();
 
   constructor(
     private readonly options: CodexAppServerRuntimeAdapterOptions = {},
@@ -522,6 +601,7 @@ export class CodexAppServerRuntimeAdapter implements AgentRuntimeAdapter {
   async stop(): Promise<void> {
     await this.client.stop();
     this.loadedThreads.clear();
+    this.pendingUserInputs.clear();
   }
 
   async *run(request: AgentRunRequest): AsyncIterable<AgentRunEvent> {
@@ -549,6 +629,18 @@ export class CodexAppServerRuntimeAdapter implements AgentRuntimeAdapter {
         if (event.method === "item/agentMessage/delta") {
           const delta = stringValue(event.params.delta);
           if (delta) yield { type: "text-delta", text: delta };
+        } else if (event.method === "item/tool/requestUserInput") {
+          const pending = codexUserInputInteraction(event);
+          if (!pending || this.pendingUserInputs.has(threadId)) {
+            if (event.requestId !== undefined) {
+              await this.client.respondToUserInput(event.requestId, {
+                answers: {},
+              });
+            }
+            continue;
+          }
+          this.pendingUserInputs.set(threadId, pending);
+          yield { type: "interaction-requested", request: pending.request };
         } else if (event.method === "item/started") {
           const item = asRecord(event.params.item);
           const itemType = stringValue(item.type);
@@ -597,6 +689,7 @@ export class CodexAppServerRuntimeAdapter implements AgentRuntimeAdapter {
       if (this.activeRequests.get(threadId) === request) {
         this.activeRequests.delete(threadId);
       }
+      this.pendingUserInputs.delete(threadId);
     }
   }
 
@@ -613,7 +706,26 @@ export class CodexAppServerRuntimeAdapter implements AgentRuntimeAdapter {
       request.interaction.resumeMode !== "new-turn" ||
       !request.message
     ) {
-      throw new Error("Codex App Server only supports new-turn reply actions");
+      const pending = this.pendingUserInputs.get(request.sessionId);
+      if (!pending) {
+        throw new Error("Codex user-input request is no longer live");
+      }
+      const next = applyCodexUserInputResult(pending, request);
+      rememberBounded(
+        this.completedInteractionResumes,
+        request.idempotencyKey,
+        1_000,
+      );
+      if (next) {
+        pending.request = next;
+        yield { type: "interaction-requested", request: next };
+        return;
+      }
+      await this.client.respondToUserInput(pending.requestId, {
+        answers: pending.answers,
+      });
+      this.pendingUserInputs.delete(request.sessionId);
+      return;
     }
     yield* this.run({
       message: request.message,
@@ -827,6 +939,284 @@ function requestId(value: unknown): number | string | undefined {
   return typeof value === "number" || typeof value === "string"
     ? value
     : undefined;
+}
+
+function parseCodexUserInputRequest(params: JsonObject):
+  | {
+      threadId: string;
+      turnId: string;
+      itemId: string;
+      questions: CodexUserInputQuestion[];
+      autoResolutionMs: number | null;
+    }
+  | undefined {
+  const threadId = stringValue(params.threadId);
+  const turnId = stringValue(params.turnId);
+  const itemId = stringValue(params.itemId);
+  const autoResolutionMs = params.autoResolutionMs;
+  if (
+    !threadId ||
+    !turnId ||
+    !itemId ||
+    (autoResolutionMs !== null &&
+      (!Number.isInteger(autoResolutionMs) ||
+        typeof autoResolutionMs !== "number" ||
+        autoResolutionMs < 1)) ||
+    !Array.isArray(params.questions) ||
+    params.questions.length < 1 ||
+    params.questions.length > 3
+  ) {
+    return undefined;
+  }
+  const questions: CodexUserInputQuestion[] = [];
+  const ids = new Set<string>();
+  for (const value of params.questions) {
+    const question = asRecord(value);
+    const id = boundedProtocolText(question.id, 256);
+    const header = boundedProtocolText(question.header, 100);
+    const prompt = boundedProtocolText(question.question, 2_000);
+    if (
+      !id ||
+      !header ||
+      !prompt ||
+      ids.has(id) ||
+      typeof question.isOther !== "boolean" ||
+      typeof question.isSecret !== "boolean"
+    ) {
+      return undefined;
+    }
+    ids.add(id);
+    let options: CodexUserInputOption[] | null = null;
+    if (question.options !== null) {
+      if (
+        !Array.isArray(question.options) ||
+        question.options.length < 1 ||
+        question.options.length > 10
+      ) {
+        return undefined;
+      }
+      options = [];
+      const labels = new Set<string>();
+      for (const rawOption of question.options) {
+        const option = asRecord(rawOption);
+        const label = boundedProtocolText(option.label, 100);
+        const description =
+          typeof option.description === "string" &&
+          [...option.description].length <= 500 &&
+          !/[\0]/.test(option.description)
+            ? option.description.trim()
+            : undefined;
+        if (!label || description === undefined || labels.has(label)) {
+          return undefined;
+        }
+        labels.add(label);
+        options.push({ label, description });
+      }
+    }
+    questions.push({
+      id,
+      header,
+      question: prompt,
+      isOther: question.isOther,
+      isSecret: question.isSecret,
+      options,
+    });
+  }
+  return {
+    threadId,
+    turnId,
+    itemId,
+    questions,
+    autoResolutionMs,
+  };
+}
+
+function codexUserInputInteraction(
+  event: CodexAppServerEvent,
+): PendingCodexUserInput | undefined {
+  if (event.requestId === undefined) return undefined;
+  const parsed = parseCodexUserInputRequest(event.params);
+  if (!parsed || parsed.questions.some((question) => question.isSecret)) {
+    return undefined;
+  }
+  const expiresInMs = parsed.autoResolutionMs ?? undefined;
+  const allCardChoices = parsed.questions.every(
+    (question) => question.options && !question.isOther,
+  );
+  const formFitsWeCom =
+    parsed.questions.length > 1 &&
+    allCardChoices &&
+    parsed.questions.every(
+      (question) =>
+        [...question.header].length <= 13 &&
+        question.options!.every((option) => [...option.label].length <= 10),
+    );
+  const mode =
+    allCardChoices && parsed.questions.length === 1
+      ? "single"
+      : formFitsWeCom
+        ? "form"
+        : "sequential";
+  return {
+    requestId: event.requestId,
+    questions: parsed.questions,
+    answers: {},
+    currentQuestion: 0,
+    request:
+      mode === "form"
+        ? codexChoiceForm(parsed.questions, expiresInMs)
+        : codexQuestionInteraction(parsed.questions[0]!, 0, expiresInMs),
+    mode,
+    expiresInMs,
+  };
+}
+
+function codexChoiceForm(
+  questions: CodexUserInputQuestion[],
+  expiresInMs?: number,
+): RuntimeInteractionRequest {
+  return {
+    kind: "form",
+    title: "Codex 需要补充信息",
+    description: fitRuntimeText(
+      questions
+        .map((question, index) => `${index + 1}. ${question.question}`)
+        .join("\n"),
+      2_000,
+    ),
+    fields: questions.map((question, questionIndex) => ({
+      id: `question_${questionIndex}`,
+      label: question.header,
+      options: question.options!.map((option, optionIndex) => ({
+        value: `option_${questionIndex}_${optionIndex}`,
+        label: option.label,
+      })),
+    })),
+    ...(expiresInMs === undefined ? {} : { expiresInMs }),
+  };
+}
+
+function codexQuestionInteraction(
+  question: CodexUserInputQuestion,
+  questionIndex: number,
+  expiresInMs?: number,
+): RuntimeInteractionRequest {
+  const fieldId = `question_${questionIndex}`;
+  if (question.options && !question.isOther) {
+    const optionDetails = question.options
+      .filter((option) => option.description)
+      .map((option) => `${option.label}：${option.description}`)
+      .join("\n");
+    return {
+      kind: "single-select",
+      title: question.header,
+      description: fitRuntimeText(
+        [question.question, optionDetails].filter(Boolean).join("\n"),
+        2_000,
+      ),
+      fieldId,
+      options: question.options.map((option, optionIndex) => ({
+        value: `option_${questionIndex}_${optionIndex}`,
+        label: option.label,
+      })),
+      ...(expiresInMs === undefined ? {} : { expiresInMs }),
+    };
+  }
+  const choices = question.options?.map((option) => option.label).join("、");
+  return {
+    kind: "text-input",
+    title: question.header,
+    description: fitRuntimeText(
+      [
+        question.question,
+        choices
+          ? `可选：${choices}${question.isOther ? "；也可以输入其他答案。" : ""}`
+          : undefined,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      2_000,
+    ),
+    fieldId,
+    ...(expiresInMs === undefined ? {} : { expiresInMs }),
+  };
+}
+
+function applyCodexUserInputResult(
+  pending: PendingCodexUserInput,
+  resume: AgentInteractionResumeRequest,
+): RuntimeInteractionRequest | undefined {
+  if (resume.interaction.kind !== pending.request.kind) {
+    throw new Error(
+      "Codex user-input interaction does not match pending state",
+    );
+  }
+  if (resume.result.status !== "submitted") {
+    pending.answers = {};
+    return undefined;
+  }
+  if (pending.mode === "form") {
+    for (const [questionIndex, question] of pending.questions.entries()) {
+      pending.answers[question.id] = {
+        answers: [
+          selectedCodexOption(
+            question,
+            questionIndex,
+            resume.result.values[`question_${questionIndex}`]?.[0],
+          ),
+        ],
+      };
+    }
+    return undefined;
+  }
+  const questionIndex = pending.currentQuestion;
+  const question = pending.questions[questionIndex]!;
+  const selected = resume.result.values[`question_${questionIndex}`]?.[0];
+  if (selected === undefined) {
+    throw new Error("Codex user-input answer is missing");
+  }
+  pending.answers[question.id] = {
+    answers:
+      pending.request.kind === "single-select"
+        ? [selectedCodexOption(question, questionIndex, selected)]
+        : [selected],
+  };
+  if (pending.mode !== "sequential") return undefined;
+  pending.currentQuestion += 1;
+  const next = pending.questions[pending.currentQuestion];
+  return next
+    ? codexQuestionInteraction(
+        next,
+        pending.currentQuestion,
+        pending.expiresInMs,
+      )
+    : undefined;
+}
+
+function selectedCodexOption(
+  question: CodexUserInputQuestion,
+  questionIndex: number,
+  selected: string | undefined,
+): string {
+  const match = new RegExp(`^option_${questionIndex}_(\\d+)$`).exec(
+    selected ?? "",
+  );
+  const option = match ? question.options?.[Number(match[1])] : undefined;
+  if (!option) throw new Error("Codex user-input option is invalid");
+  return option.label;
+}
+
+function boundedProtocolText(value: unknown, max: number): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  const length = [...trimmed].length;
+  return length >= 1 && length <= max && !/[\0]/.test(trimmed)
+    ? trimmed
+    : undefined;
+}
+
+function fitRuntimeText(value: string, max: number): string {
+  return [...value.trim()].slice(0, max).join("");
 }
 
 function parseDynamicToolCall(params: JsonObject): CodexDynamicToolCall {

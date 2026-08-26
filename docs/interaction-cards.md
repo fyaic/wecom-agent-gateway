@@ -378,7 +378,9 @@ callback continuation 完成后再次出现，否则“点击 → 续跑 → 同
 - [x] ACP 仅在上游声明 `loadSession` 时开放 `interaction-resume` 与 `reply-actions`。
 - [x] 外部 Adapter SDK 接受并校验三项 interaction capability 与 `resumeInteraction()` 方法一致性。
 - [x] 公共 testkit 验证续接完成和同 idempotency key 重复投递不产生第二 turn。
-- [ ] Codex、OpenClaw、ACP 的上游原生 ask-user hook；只有协议真实提供时才实现 live resume。
+- [x] Codex App Server 原生 `item/tool/requestUserInput`：单选、表单、自由输入、多步续接与 secret
+      fail-closed，不创建第二 turn。
+- [ ] OpenClaw、ACP 的上游原生 ask-user hook；只有协议真实提供时才实现 live resume。
 
 ### M2.5：高级交互
 
