@@ -4,6 +4,7 @@ import { basename } from "node:path";
 import { GatewayClient } from "@openclaw/gateway-client";
 import {
   RUNTIME_CONTRACT_VERSION,
+  type AgentInteractionResumeRequest,
   type AgentRunEvent,
   type AgentRunRequest,
   type AgentRuntimeAdapter,
@@ -66,6 +67,8 @@ export class OpenClawRuntimeAdapter implements AgentRuntimeAdapter {
     "cancel",
     "status-events",
     "multimodal-input",
+    "interaction-resume",
+    "reply-actions",
   ]);
   readonly inputModalities: ReadonlySet<MediaType> = new Set([
     "image",
@@ -86,6 +89,7 @@ export class OpenClawRuntimeAdapter implements AgentRuntimeAdapter {
   private stopping = false;
   private startPromise?: Promise<void>;
   private readonly pending = new Map<string, PendingRun>();
+  private readonly completedInteractionResumes = new Set<string>();
 
   constructor(private readonly options: OpenClawRuntimeAdapterOptions = {}) {
     this.url = options.url ?? "ws://127.0.0.1:18789";
@@ -184,6 +188,13 @@ export class OpenClawRuntimeAdapter implements AgentRuntimeAdapter {
   }
 
   async *run(request: AgentRunRequest): AsyncIterable<AgentRunEvent> {
+    yield* this.runWithIdempotencyKey(request, randomUUID());
+  }
+
+  private async *runWithIdempotencyKey(
+    request: AgentRunRequest,
+    runId: string,
+  ): AsyncIterable<AgentRunEvent> {
     try {
       await this.start();
     } catch (error) {
@@ -193,7 +204,6 @@ export class OpenClawRuntimeAdapter implements AgentRuntimeAdapter {
 
     const sessionKey =
       request.sessionId ?? `wecom-agent-gateway:${randomUUID()}`;
-    const runId = randomUUID();
     const baseline = await this.readLatestAssistantSnapshot(sessionKey);
     if (!request.sessionId) {
       yield { type: "session-started", sessionId: sessionKey };
@@ -265,6 +275,31 @@ export class OpenClawRuntimeAdapter implements AgentRuntimeAdapter {
           { timeoutMs: this.requestTimeoutMs },
         ),
       ),
+    );
+  }
+
+  async *resumeInteraction(
+    request: AgentInteractionResumeRequest,
+  ): AsyncIterable<AgentRunEvent> {
+    if (this.completedInteractionResumes.has(request.idempotencyKey)) return;
+    if (
+      request.interaction.kind !== "actions" ||
+      request.interaction.resumeMode !== "new-turn" ||
+      !request.message
+    ) {
+      throw new Error("OpenClaw only supports new-turn reply actions");
+    }
+    yield* this.runWithIdempotencyKey(
+      {
+        message: request.message,
+        sessionId: request.sessionId,
+      },
+      request.idempotencyKey,
+    );
+    rememberBounded(
+      this.completedInteractionResumes,
+      request.idempotencyKey,
+      1_000,
     );
   }
 
@@ -403,6 +438,17 @@ export class OpenClawRuntimeAdapter implements AgentRuntimeAdapter {
       return undefined;
     }
   }
+}
+
+function rememberBounded(
+  values: Set<string>,
+  value: string,
+  limit: number,
+): void {
+  values.add(value);
+  if (values.size <= limit) return;
+  const oldest = values.values().next().value;
+  if (oldest !== undefined) values.delete(oldest);
 }
 
 class AsyncEventQueue implements AsyncIterable<AgentRunEvent> {

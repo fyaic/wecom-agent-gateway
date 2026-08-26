@@ -13,6 +13,7 @@ import type {
 } from "@agentclientprotocol/sdk";
 import {
   RUNTIME_CONTRACT_VERSION,
+  type AgentInteractionResumeRequest,
   type AgentRunEvent,
   type AgentRunRequest,
   type AgentRuntimeAdapter,
@@ -58,6 +59,7 @@ export class AcpRuntimeAdapter implements AgentRuntimeAdapter {
   ]);
   private readonly mutableInputModalities = new Set<MediaType>();
   private readonly activeRuns = new Map<string, ActiveRun>();
+  private readonly completedInteractionResumes = new Set<string>();
   private child?: ChildProcessWithoutNullStreams;
   private connection?: acp.ClientConnection;
   private initializeResult?: InitializeResponse;
@@ -85,6 +87,8 @@ export class AcpRuntimeAdapter implements AgentRuntimeAdapter {
     if (this.connection) return;
     this.processError = undefined;
     this.mutableCapabilities.delete("multimodal-input");
+    this.mutableCapabilities.delete("interaction-resume");
+    this.mutableCapabilities.delete("reply-actions");
     this.mutableInputModalities.clear();
     const child = spawn(this.options.executable, this.options.args ?? [], {
       cwd: resolve(this.options.cwd),
@@ -146,6 +150,8 @@ export class AcpRuntimeAdapter implements AgentRuntimeAdapter {
       this.initializeResult = initialized;
       if (initialized.agentCapabilities?.loadSession) {
         this.mutableCapabilities.add("resume");
+        this.mutableCapabilities.add("interaction-resume");
+        this.mutableCapabilities.add("reply-actions");
       }
       const prompts = initialized.agentCapabilities?.promptCapabilities;
       if (prompts?.image) this.mutableInputModalities.add("image");
@@ -266,6 +272,30 @@ export class AcpRuntimeAdapter implements AgentRuntimeAdapter {
     });
   }
 
+  async *resumeInteraction(
+    request: AgentInteractionResumeRequest,
+  ): AsyncIterable<AgentRunEvent> {
+    if (this.completedInteractionResumes.has(request.idempotencyKey)) return;
+    if (
+      request.interaction.kind !== "actions" ||
+      request.interaction.resumeMode !== "new-turn" ||
+      !request.message
+    ) {
+      throw new Error(
+        `ACP agent ${this.id} only supports new-turn reply actions`,
+      );
+    }
+    yield* this.run({
+      message: request.message,
+      sessionId: request.sessionId,
+    });
+    rememberBounded(
+      this.completedInteractionResumes,
+      request.idempotencyKey,
+      1_000,
+    );
+  }
+
   async health(): Promise<{ ok: boolean; detail?: string }> {
     if (this.processError)
       return { ok: false, detail: this.processError.message };
@@ -363,6 +393,17 @@ export class AcpRuntimeAdapter implements AgentRuntimeAdapter {
     for (const active of this.activeRuns.values()) active.queue.fail(error);
     this.activeRuns.clear();
   }
+}
+
+function rememberBounded(
+  values: Set<string>,
+  value: string,
+  limit: number,
+): void {
+  values.add(value);
+  if (values.size <= limit) return;
+  const oldest = values.values().next().value;
+  if (oldest !== undefined) values.delete(oldest);
 }
 
 function mapSessionUpdate(update: SessionUpdate): AgentRunEvent | undefined {

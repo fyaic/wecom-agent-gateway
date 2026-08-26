@@ -5,6 +5,7 @@ import {
 } from "@openai/codex-sdk";
 import {
   RUNTIME_CONTRACT_VERSION,
+  type AgentInteractionResumeRequest,
   type AgentRunEvent,
   type AgentRunRequest,
   type AgentRuntimeAdapter,
@@ -56,8 +57,11 @@ export class CodexRuntimeAdapter implements AgentRuntimeAdapter {
   readonly capabilities: ReadonlySet<RuntimeCapability> = new Set([
     "streaming",
     "resume",
+    "interaction-resume",
+    "reply-actions",
   ]);
   private readonly codex: CodexClientLike;
+  private readonly completedInteractionResumes = new Set<string>();
 
   constructor(private readonly options: CodexRuntimeAdapterOptions = {}) {
     this.codex = options.client ?? (new Codex() as CodexClientLike);
@@ -119,10 +123,50 @@ export class CodexRuntimeAdapter implements AgentRuntimeAdapter {
     }
   }
 
+  async *resumeInteraction(
+    request: AgentInteractionResumeRequest,
+  ): AsyncIterable<AgentRunEvent> {
+    if (this.completedInteractionResumes.has(request.idempotencyKey)) return;
+    assertReplyActionContinuation(request, "Codex");
+    yield* this.run({
+      message: request.message!,
+      sessionId: request.sessionId,
+    });
+    rememberBounded(
+      this.completedInteractionResumes,
+      request.idempotencyKey,
+      1_000,
+    );
+  }
+
   async health(): Promise<{ ok: boolean; detail?: string }> {
     return {
       ok: true,
       detail: "Codex SDK loaded; authentication is checked when a run starts",
     };
   }
+}
+
+function assertReplyActionContinuation(
+  request: AgentInteractionResumeRequest,
+  adapter: string,
+): void {
+  if (
+    request.interaction.kind !== "actions" ||
+    request.interaction.resumeMode !== "new-turn" ||
+    !request.message
+  ) {
+    throw new Error(`${adapter} only supports new-turn reply actions`);
+  }
+}
+
+function rememberBounded(
+  values: Set<string>,
+  value: string,
+  limit: number,
+): void {
+  values.add(value);
+  if (values.size <= limit) return;
+  const oldest = values.values().next().value;
+  if (oldest !== undefined) values.delete(oldest);
 }

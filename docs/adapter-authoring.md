@@ -15,7 +15,8 @@ Adapter 必须提供：
 - `run()`、`health()`，以及需要时的无语义 `start()`/`stop()`、`cancel()`；
 - opaque session 的首次创建和恢复；上游 session 格式变化时更新 `sessionCompatibilityId`。
 
-接入必须运行 `exerciseTextRuntimeContract()`，并以 deterministic fake 覆盖 wire protocol、错误、取消、
+接入必须运行 `exerciseTextRuntimeContract()`；声明 `reply-actions` 时还必须运行
+`exerciseReplyActionRuntimeContract()`，并以 deterministic fake 覆盖 wire protocol、错误、取消、
 多模态和事件间隙。真实 smoke 必须分开记录 Channel 回执、Kernel 首事件、首文本和最终完成，不能用
 总耗时猜测缺陷所在层。
 
@@ -81,16 +82,16 @@ Kernel 自己拥有工具不等于 `tools`；模型支持图片也不等于 Adap
 
 ## 当前兼容矩阵
 
-验证快照：2026-08-24。
+验证快照：2026-08-26。
 
-| Adapter               | 上游接口            | 固定/实测版本                                  | 已验证能力                                                                        |
-| --------------------- | ------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------- |
-| Codex SDK 对照实现    | `@openai/codex-sdk` | SDK `0.148.0`                                  | 文本流式、session 恢复                                                            |
-| Codex App Server      | JSONL App Server    | CLI `0.145.0`                                  | 流式、恢复、取消、状态、审批、RuntimeTool、图片/音频输入                          |
-| 通用 ACP              | ACP v1 stdio        | `@agentclientprotocol/sdk 1.4.0`               | 流式/取消/权限；恢复和输入模态按 `initialize` 动态协商                            |
-| Kimi Code（通用 ACP） | `kimi acp`          | Kimi `0.36.1`                                  | 流式、恢复、取消、权限、状态、图片输入；真实企业微信私聊已通过                    |
-| OpenClaw Gateway      | WebSocket v4        | Client `2026.8.1-beta.2`；Gateway `2026.7.1-2` | 流式、恢复、取消、状态；image/audio/video/file 输入                               |
-| Pi Agent              | 官方 JSONL RPC      | Pi `0.84.2`；GLM-5.2 文本、GLM-4.6V 图片通过   | 流式/恢复/取消/状态；动态图片输入；原生选择/确认/文本交互；默认 2-worker 有界并发 |
+| Adapter               | 上游接口            | 固定/实测版本                                  | 已验证能力                                                                                 |
+| --------------------- | ------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Codex SDK 对照实现    | `@openai/codex-sdk` | SDK `0.148.0`                                  | 文本流式、session 恢复、reply-action continuation                                          |
+| Codex App Server      | JSONL App Server    | CLI `0.145.0`                                  | 流式、恢复、回复动作、取消、状态、审批、RuntimeTool、图片/音频输入                         |
+| 通用 ACP              | ACP v1 stdio        | `@agentclientprotocol/sdk 1.4.0`               | 流式/取消/权限；session load 可用时动态开放恢复、回复动作和输入模态                        |
+| Kimi Code（通用 ACP） | `kimi acp`          | Kimi `0.36.1`                                  | 流式、恢复、回复动作、取消、权限、状态、图片输入；真实企业微信私聊已通过                   |
+| OpenClaw Gateway      | WebSocket v4        | Client `2026.8.1-beta.2`；Gateway `2026.7.1-2` | 流式、恢复、回复动作、取消、状态；image/audio/video/file 输入                              |
+| Pi Agent              | 官方 JSONL RPC      | Pi `0.84.2`；GLM-5.2 文本、GLM-4.6V 图片通过   | 流式/恢复/回复动作/取消/状态；动态图片输入；原生选择/确认/文本交互；默认 2-worker 有界并发 |
 
 OpenClaw 当前客户端与 Gateway 跨 release train，已通过 `agent.wait + chat.history` 终态对账覆盖事件间隙；
 升级任一侧时必须重跑 fake contract、本机两轮 smoke、企业微信私聊和群聊矩阵。
@@ -135,3 +136,7 @@ Adapter 必须验证 session 仍绑定原 live worker，并按 idempotency key �
 `resumeMode=new-turn` 的 callback continuation 恢复为同 session 新回合时才声明 `reply-actions`；所选
 value 是 Adapter 预先绑定的规范化输入，不得是 shell 命令或厂商卡片 JSON。该 continuation 必须经过
 Gateway 正常会话队列和并发限制，不能借 `interaction-live-resume` 绕过背压。
+
+SDK loader 会校验 capability 与方法的一致性：`reply-actions` 和 `interaction-live-resume` 必须同时声明
+`interaction-resume`，声明后必须实现 `resumeInteraction()`。仓库模板已经给出同 session new-turn 与
+进程内有界幂等的最小实现；Adapter 不应从按钮 label 猜 Prompt。

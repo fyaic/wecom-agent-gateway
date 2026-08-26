@@ -349,8 +349,14 @@ Prompt，也不是可执行命令。`interaction-live-resume` 只服务仍在等
 
 ### M2.4：多 Kernel
 
-- Codex、Pi、OpenClaw、ACP 的最小 interaction adapter。
-- 外部 Adapter SDK 与 testkit 暴露相同契约。
+状态：2026-08-26 已完成最终回复动作的多 Kernel deterministic 闭环；各 Kernel 原生 ask-user 仍按
+上游协议逐项接入，不以合成 Prompt 冒充。
+
+- [x] Codex SDK / App Server、Pi、OpenClaw、ACP 的同 session new-turn reply-action continuation。
+- [x] ACP 仅在上游声明 `loadSession` 时开放 `interaction-resume` 与 `reply-actions`。
+- [x] 外部 Adapter SDK 接受并校验三项 interaction capability 与 `resumeInteraction()` 方法一致性。
+- [x] 公共 testkit 验证续接完成和同 idempotency key 重复投递不产生第二 turn。
+- [ ] Codex、OpenClaw、ACP 的上游原生 ask-user hook；只有协议真实提供时才实现 live resume。
 
 ### M2.5：高级交互
 

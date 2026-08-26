@@ -42,6 +42,13 @@ describe("external Adapter SDK", () => {
 
     await expect(
       loadRuntimeAdapter({
+        moduleSpecifier: "./invalid-interaction.mjs",
+        baseDirectory: fixtures,
+      }),
+    ).rejects.toThrow("require interaction-resume");
+
+    await expect(
+      loadRuntimeAdapter({
         moduleSpecifier: "./good-adapter.mjs",
         baseDirectory: fixtures,
         tools: [

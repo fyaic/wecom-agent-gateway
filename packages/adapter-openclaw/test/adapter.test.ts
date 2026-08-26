@@ -1,7 +1,10 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { exerciseTextRuntimeContract } from "@fyaic/wecom-runtime-contract/testkit";
+import {
+  exerciseReplyActionRuntimeContract,
+  exerciseTextRuntimeContract,
+} from "@fyaic/wecom-runtime-contract/testkit";
 import { describe, expect, it } from "vitest";
 import {
   OpenClawRuntimeAdapter,
@@ -50,11 +53,42 @@ describe("OpenClawRuntimeAdapter", () => {
         "cancel",
         "status-events",
         "multimodal-input",
+        "interaction-resume",
+        "reply-actions",
       ]),
     );
     expect(adapter.inputModalities).toEqual(
       new Set(["image", "audio", "video", "file"]),
     );
+    await adapter.stop();
+  });
+
+  it("continues a reply action in the same OpenClaw session exactly once", async () => {
+    const fake = new FakeOpenClawClient();
+    const adapter = createAdapter(fake);
+    await adapter.start();
+    const transcript = await exerciseReplyActionRuntimeContract(
+      adapter,
+      {
+        ...inbound,
+        id: "reply-action",
+        parts: [{ type: "text", text: "continue" }],
+      },
+      "stored-session",
+    );
+    expect(transcript.resumed.at(-1)).toEqual({
+      type: "message-completed",
+      text: "OpenClaw",
+    });
+    expect(
+      fake.requests.filter((request) => request.method === "chat.send"),
+    ).toHaveLength(1);
+    expect(
+      (
+        fake.requests.find((request) => request.method === "chat.send")!
+          .params as { idempotencyKey: string }
+      ).idempotencyKey,
+    ).toBe("reply-action:reply-action");
     await adapter.stop();
   });
 

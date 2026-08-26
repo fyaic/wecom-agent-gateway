@@ -11,6 +11,7 @@ import {
 
 export {
   RUNTIME_CONTRACT_VERSION,
+  type AgentInteractionResumeRequest,
   type AgentMediaOutput,
   type AgentRunEvent,
   type AgentRunRequest,
@@ -168,6 +169,9 @@ function assertAdapterShape(
     "status-events",
     "multimodal-input",
     "multimodal-output",
+    "interaction-resume",
+    "interaction-live-resume",
+    "reply-actions",
   ]);
   for (const capability of capabilities as ReadonlySet<unknown>) {
     if (typeof capability !== "string" || !knownCapabilities.has(capability)) {
@@ -182,10 +186,29 @@ function assertAdapterShape(
     "stop",
     "cancel",
     "respondToApproval",
+    "resumeInteraction",
   ] as const) {
     if (value[method] !== undefined && typeof value[method] !== "function") {
       throw new Error(`External Adapter ${method} must be a function`);
     }
+  }
+  const declared = capabilities as ReadonlySet<string>;
+  if (
+    declared.has("interaction-resume") &&
+    typeof value.resumeInteraction !== "function"
+  ) {
+    throw new Error(
+      "External Adapter declares interaction-resume without resumeInteraction()",
+    );
+  }
+  if (
+    (declared.has("interaction-live-resume") ||
+      declared.has("reply-actions")) &&
+    !declared.has("interaction-resume")
+  ) {
+    throw new Error(
+      "External Adapter interaction-live-resume and reply-actions require interaction-resume",
+    );
   }
   validateModalitySet(value.inputModalities, "inputModalities");
   validateModalitySet(value.outputModalities, "outputModalities");

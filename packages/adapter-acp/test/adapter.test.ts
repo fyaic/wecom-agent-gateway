@@ -4,7 +4,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { InboundMessage } from "@fyaic/wecom-runtime-contract";
-import { exerciseTextRuntimeContract } from "@fyaic/wecom-runtime-contract/testkit";
+import {
+  exerciseReplyActionRuntimeContract,
+  exerciseTextRuntimeContract,
+} from "@fyaic/wecom-runtime-contract/testkit";
 import { AcpRuntimeAdapter } from "../src/index.js";
 
 const fixture = join(
@@ -40,8 +43,35 @@ describe("AcpRuntimeAdapter", () => {
         expect.objectContaining({ has: expect.any(Function) }),
       );
       expect(adapter.capabilities.has("resume")).toBe(true);
+      expect(adapter.capabilities.has("interaction-resume")).toBe(true);
+      expect(adapter.capabilities.has("reply-actions")).toBe(true);
       expect(adapter.capabilities.has("multimodal-input")).toBe(true);
       expect(adapter.inputModalities).toEqual(new Set(["image"]));
+    } finally {
+      await adapter.stop();
+    }
+  });
+
+  it("continues a reply action in the loaded ACP session exactly once", async () => {
+    const adapter = createAdapter();
+    await adapter.start();
+    try {
+      const session = await exerciseTextRuntimeContract(adapter, {
+        ...inbound,
+        id: "reply-action-session",
+      });
+      const transcript = await exerciseReplyActionRuntimeContract(
+        adapter,
+        {
+          ...inbound,
+          id: "reply-action",
+          parts: [{ type: "text", text: "continue" }],
+        },
+        session.sessionId,
+      );
+      expect(transcript.resumed.at(-1)).toMatchObject({
+        type: "message-completed",
+      });
     } finally {
       await adapter.stop();
     }

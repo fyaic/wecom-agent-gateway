@@ -11,6 +11,7 @@ import {
   type CodexAppServerThreadOptions,
   type CodexAppServerTurnOptions,
 } from "../src/index.js";
+import { exerciseReplyActionRuntimeContract } from "@fyaic/wecom-runtime-contract/testkit";
 
 const inbound: InboundMessage = {
   id: "m1",
@@ -182,6 +183,54 @@ describe("CodexAppServerRuntimeAdapter", () => {
       ),
     ).toHaveLength(1);
     expect(client.calls.at(-1)).toEqual(["turn/interrupt", "stored-thread"]);
+  });
+
+  it("continues a reply action in the same App Server thread exactly once", async () => {
+    const client = new FakeAppServerClient();
+    client.events = [
+      {
+        method: "item/agentMessage/delta",
+        params: {
+          threadId: "stored-thread",
+          turnId: "turn-2",
+          delta: "continued",
+        },
+      },
+      {
+        method: "item/completed",
+        params: {
+          threadId: "stored-thread",
+          turnId: "turn-2",
+          item: { type: "agentMessage", text: "continued" },
+        },
+      },
+      {
+        method: "turn/completed",
+        params: {
+          threadId: "stored-thread",
+          turn: { id: "turn-2", status: "completed" },
+        },
+      },
+    ];
+    const adapter = new CodexAppServerRuntimeAdapter({ client });
+    const transcript = await exerciseReplyActionRuntimeContract(
+      adapter,
+      {
+        ...inbound,
+        id: "reply-action",
+        parts: [{ type: "text", text: "continue" }],
+      },
+      "stored-thread",
+    );
+    expect(transcript.resumed.at(-1)).toEqual({
+      type: "message-completed",
+      text: "continued",
+    });
+    expect(
+      client.calls.filter(
+        (call) => Array.isArray(call) && call[0] === "turn/start",
+      ),
+    ).toHaveLength(1);
   });
 
   it("fails explicitly when Channel media has not been materialized", async () => {

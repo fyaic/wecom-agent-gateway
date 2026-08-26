@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ThreadEvent } from "@openai/codex-sdk";
 import type { InboundMessage } from "@fyaic/wecom-runtime-contract";
-import { exerciseTextRuntimeContract } from "@fyaic/wecom-runtime-contract/testkit";
+import {
+  exerciseReplyActionRuntimeContract,
+  exerciseTextRuntimeContract,
+} from "@fyaic/wecom-runtime-contract/testkit";
 import { CodexRuntimeAdapter } from "../src/index.js";
 
 const inbound: InboundMessage = {
@@ -35,6 +38,31 @@ describe("CodexRuntimeAdapter", () => {
     expect(transcript.resumed).toContainEqual({
       type: "message-completed",
       text: "codex-turn-2",
+    });
+  });
+
+  it("continues reply actions in the same thread exactly once", async () => {
+    const adapter = new CodexRuntimeAdapter({
+      client: {
+        startThread: () => {
+          throw new Error("unexpected new thread");
+        },
+        resumeThread: () =>
+          contractThread(textTurn("thread-1", "continued", false)),
+      },
+    });
+    const transcript = await exerciseReplyActionRuntimeContract(
+      adapter,
+      {
+        ...inbound,
+        id: "reply-action",
+        parts: [{ type: "text", text: "continue" }],
+      },
+      "thread-1",
+    );
+    expect(transcript.resumed).toContainEqual({
+      type: "message-completed",
+      text: "continued",
     });
   });
 

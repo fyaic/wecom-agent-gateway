@@ -3,6 +3,7 @@ import {
   defineRuntimeAdapter,
   type AgentRunRequest,
   type AgentRuntimeAdapter,
+  type AgentInteractionResumeRequest,
   type RuntimeAdapterFactoryContext,
 } from "@fyaic/wecom-adapter-sdk";
 
@@ -14,7 +15,13 @@ class ExampleRuntimeAdapter implements AgentRuntimeAdapter {
   readonly id = "example";
   readonly contractVersion = 1 as const;
   readonly sessionCompatibilityId = "example:v1";
-  readonly capabilities = new Set(["streaming", "resume"] as const);
+  readonly capabilities = new Set([
+    "streaming",
+    "resume",
+    "interaction-resume",
+    "reply-actions",
+  ] as const);
+  private readonly completedInteractionResumes = new Set<string>();
 
   constructor(private readonly prefix: string) {}
 
@@ -29,6 +36,26 @@ class ExampleRuntimeAdapter implements AgentRuntimeAdapter {
     const text = `${this.prefix}${input}`;
     yield { type: "text-delta", text } as const;
     yield { type: "message-completed", text } as const;
+  }
+
+  async *resumeInteraction(request: AgentInteractionResumeRequest) {
+    if (this.completedInteractionResumes.has(request.idempotencyKey)) return;
+    if (
+      request.interaction.kind !== "actions" ||
+      request.interaction.resumeMode !== "new-turn" ||
+      !request.message
+    ) {
+      throw new Error("Example Adapter only supports new-turn reply actions");
+    }
+    yield* this.run({
+      message: request.message,
+      sessionId: request.sessionId,
+    });
+    this.completedInteractionResumes.add(request.idempotencyKey);
+    if (this.completedInteractionResumes.size > 1_000) {
+      const oldest = this.completedInteractionResumes.values().next().value;
+      if (oldest !== undefined) this.completedInteractionResumes.delete(oldest);
+    }
   }
 
   async health() {
