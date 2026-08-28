@@ -19,6 +19,7 @@ import type {
   AgentMediaOutput,
   ChannelTransport,
   ChannelCapability,
+  ChannelFeedbackEvent,
   DeliveryReceipt,
   InboundMessage,
   MaterializedInboundMessage,
@@ -43,13 +44,25 @@ interface WeComClient {
     content: string,
     finish: boolean,
   ): Promise<unknown>;
+  replyStreamNonBlocking(
+    frame: WeComFrame,
+    streamId: string,
+    content: string,
+    finish: boolean,
+    msgItem?: unknown[],
+    feedback?: { id: string },
+  ): Promise<unknown | "skipped">;
   replyStreamWithCard(
     frame: WeComFrame,
     streamId: string,
     content: string,
     finish: boolean,
-    options?: { templateCard?: TemplateCard },
+    options?: {
+      templateCard?: TemplateCard;
+      streamFeedback?: { id: string };
+    },
   ): Promise<unknown>;
+  replyWelcome(frame: WeComFrame, body: unknown): Promise<unknown>;
   sendMessage(chatId: string, message: unknown): Promise<unknown>;
   updateTemplateCard(
     frame: WeComFrame,
@@ -105,6 +118,8 @@ export interface WeComBotTransportOptions {
   mediaRetentionMs?: number;
   mediaOutputRoots?: readonly string[];
   presentationLinkHosts?: readonly string[];
+  /** Static text replied directly to enter_chat; never invokes a Kernel. */
+  welcomeText?: string;
 }
 
 export class WeComBotTransport implements ChannelTransport {
@@ -119,6 +134,8 @@ export class WeComBotTransport implements ChannelTransport {
     "structured-presentation",
     "interactive-presentation",
     "reply-with-presentation",
+    "reply-feedback",
+    "static-welcome",
   ]);
   readonly inputModalities: ReadonlySet<MediaType> = new Set([
     "image",
@@ -133,8 +150,11 @@ export class WeComBotTransport implements ChannelTransport {
   ]);
   private readonly client: WeComClient;
   private connected = false;
+  private readonly replyStreamModes = new Map<string, "plain" | "combined">();
+  private readonly welcomeText?: string;
 
   constructor(private readonly options: WeComBotTransportOptions) {
+    this.welcomeText = validateWelcomeText(options.welcomeText);
     const logger = this.sdkLogger();
     this.client = options.clientFactory
       ? options.clientFactory({
@@ -151,6 +171,7 @@ export class WeComBotTransport implements ChannelTransport {
 
   async start(
     onMessage: (message: InboundMessage) => Promise<void>,
+    onFeedback?: (event: ChannelFeedbackEvent) => Promise<void>,
   ): Promise<void> {
     await this.cleanupOrphanedMedia();
     this.client.on("authenticated", () => {
@@ -180,12 +201,32 @@ export class WeComBotTransport implements ChannelTransport {
         this.reportError(error);
       }
     });
+    this.client.on("event.feedback_event", (frame: WeComFrame) => {
+      if (!onFeedback) return;
+      try {
+        void onFeedback(this.normalizeFeedback(frame)).catch((error: unknown) =>
+          this.reportError(error),
+        );
+      } catch (error) {
+        this.reportError(error);
+      }
+    });
+    this.client.on("event.enter_chat", (frame: WeComFrame) => {
+      if (!this.welcomeText) return;
+      void this.client
+        .replyWelcome(frame, {
+          msgtype: "text",
+          text: { content: this.welcomeText },
+        })
+        .catch((error: unknown) => this.reportError(error));
+    });
     await this.client.connect();
   }
 
   async stop(): Promise<void> {
     this.client.disconnect();
     this.connected = false;
+    this.replyStreamModes.clear();
   }
 
   async health(): Promise<{ ok: boolean; detail?: string }> {
@@ -196,30 +237,71 @@ export class WeComBotTransport implements ChannelTransport {
 
   async deliver(command: OutboundCommand): Promise<DeliveryReceipt> {
     if (command.type === "reply") {
+      const existingMode = this.replyStreamModes.get(command.streamId);
+      const streamMode =
+        existingMode ?? (command.presentation ? "combined" : "plain");
+      if (!existingMode && !command.final) {
+        this.replyStreamModes.set(command.streamId, streamMode);
+      }
       try {
         const frame = {
           headers: { req_id: command.replyReference.requestId },
         };
-        // A stream that may receive a template card later must use the
-        // official stream_with_template_card message type from its first frame.
-        // The official SDK permits template_card only once per message, so Core
-        // includes a presentation only on that first frame. Final actions
-        // discovered after completion use the proactive path because adding or
-        // switching a card on a later frame is not a supported operation.
-        await this.client.replyStreamWithCard(
-          frame,
-          command.streamId,
-          command.text,
-          command.final,
-          command.presentation
-            ? {
-                templateCard: renderWeComTemplateCard(
-                  command.presentation,
-                  this.options.presentationLinkHosts,
-                ),
-              }
-            : undefined,
-        );
+        if (streamMode === "combined") {
+          // Combined streams are fixed by their first frame. The official API
+          // permits exactly one template_card, so later frames omit it.
+          await this.client.replyStreamWithCard(
+            frame,
+            command.streamId,
+            command.text,
+            command.final,
+            command.presentation && !existingMode
+              ? {
+                  templateCard: renderWeComTemplateCard(
+                    command.presentation,
+                    this.options.presentationLinkHosts,
+                  ),
+                  streamFeedback: { id: command.streamId },
+                }
+              : !existingMode
+                ? { streamFeedback: { id: command.streamId } }
+                : undefined,
+          );
+          if (command.presentation && existingMode) {
+            await this.client.sendMessage(command.conversationId, {
+              msgtype: "template_card",
+              template_card: renderWeComTemplateCard(
+                command.presentation,
+                this.options.presentationLinkHosts,
+              ),
+            });
+          }
+        } else {
+          // The official helper skips a partial while the previous ack is
+          // pending, preventing stale incremental frames from queueing. Final
+          // frames are never skipped by the SDK.
+          await this.client.replyStreamNonBlocking(
+            frame,
+            command.streamId,
+            command.text,
+            command.final,
+            undefined,
+            !existingMode ? { id: command.streamId } : undefined,
+          );
+          // A presentation discovered after a plain stream started cannot be
+          // added to that stream. Preserve visibility through a separate Bot
+          // message instead of switching vendor message type mid-stream.
+          if (command.presentation) {
+            await this.client.sendMessage(command.conversationId, {
+              msgtype: "template_card",
+              template_card: renderWeComTemplateCard(
+                command.presentation,
+                this.options.presentationLinkHosts,
+              ),
+            });
+          }
+        }
+        if (command.final) this.replyStreamModes.delete(command.streamId);
       } catch (error) {
         if (!hasErrorCode(error, 846608)) throw error;
         // The official plugin confirms 846608 means the six-minute stream update
@@ -238,6 +320,7 @@ export class WeComBotTransport implements ChannelTransport {
               ),
             });
           }
+          this.replyStreamModes.delete(command.streamId);
         }
       }
     } else if (command.type === "proactive") {
@@ -288,7 +371,11 @@ export class WeComBotTransport implements ChannelTransport {
   async materializeInbound(
     message: InboundMessage,
   ): Promise<MaterializedInboundMessage> {
-    if (!message.parts.some(isDownloadableMedia)) {
+    if (
+      ![...message.parts, ...(message.quote?.parts ?? [])].some(
+        isDownloadableMedia,
+      )
+    ) {
       return { message, release: async () => undefined };
     }
 
@@ -305,39 +392,51 @@ export class WeComBotTransport implements ChannelTransport {
 
     try {
       let totalBytes = 0;
-      const parts: MessagePart[] = [];
-      for (const [index, part] of message.parts.entries()) {
-        if (!isDownloadableMedia(part)) {
-          parts.push(part);
-          continue;
-        }
-        const downloaded = await this.client.downloadFile(
-          part.url,
-          part.aesKey,
-        );
-        totalBytes += downloaded.buffer.length;
-        const maxBytes = this.options.mediaMaxBytes ?? DEFAULT_MEDIA_MAX_BYTES;
-        if (downloaded.buffer.length > maxBytes || totalBytes > maxBytes) {
-          throw new Error(
-            `Inbound ${part.type} exceeds configured media limit (${maxBytes} bytes)`,
+      let partIndex = 0;
+      const materializeParts = async (
+        source: MessagePart[],
+      ): Promise<MessagePart[]> => {
+        const parts: MessagePart[] = [];
+        for (const part of source) {
+          const index = partIndex++;
+          if (!isDownloadableMedia(part)) {
+            parts.push(part);
+            continue;
+          }
+          const downloaded = await this.client.downloadFile(
+            part.url,
+            part.aesKey,
           );
+          totalBytes += downloaded.buffer.length;
+          const maxBytes =
+            this.options.mediaMaxBytes ?? DEFAULT_MEDIA_MAX_BYTES;
+          if (downloaded.buffer.length > maxBytes || totalBytes > maxBytes) {
+            throw new Error(
+              `Inbound ${part.type} exceeds configured media limit (${maxBytes} bytes)`,
+            );
+          }
+          const name = safeMediaName(
+            downloaded.filename ?? part.name,
+            part.type,
+            index,
+          );
+          const path = join(directory, name);
+          await writeFile(path, downloaded.buffer, { mode: 0o600, flag: "wx" });
+          parts.push({
+            type: part.type,
+            path,
+            name,
+            mimeType: detectMime(downloaded.buffer, name),
+            sizeBytes: downloaded.buffer.length,
+          });
         }
-        const name = safeMediaName(
-          downloaded.filename ?? part.name,
-          part.type,
-          index,
-        );
-        const path = join(directory, name);
-        await writeFile(path, downloaded.buffer, { mode: 0o600, flag: "wx" });
-        parts.push({
-          type: part.type,
-          path,
-          name,
-          mimeType: detectMime(downloaded.buffer, name),
-          sizeBytes: downloaded.buffer.length,
-        });
-      }
-      return { message: { ...message, parts }, release };
+        return parts;
+      };
+      const parts = await materializeParts(message.parts);
+      const quote = message.quote
+        ? { parts: await materializeParts(message.quote.parts) }
+        : undefined;
+      return { message: { ...message, parts, quote }, release };
     } catch (error) {
       await release();
       throw error;
@@ -384,6 +483,7 @@ export class WeComBotTransport implements ChannelTransport {
       senderId,
       receivedAt: timestamp(body.create_time),
       parts: normalizeParts(body),
+      quote: normalizeQuote(body.quote),
       replyReference: { requestId },
       metadata: { msgtype: body.msgtype, chattype: body.chattype },
     };
@@ -424,6 +524,34 @@ export class WeComBotTransport implements ChannelTransport {
       },
       replyReference: { requestId },
       metadata: { msgtype: "event", eventtype: "template_card_event" },
+    };
+  }
+
+  private normalizeFeedback(frame: WeComFrame): ChannelFeedbackEvent {
+    const body = frame.body ?? {};
+    const eventContainer = asRecord(body.event);
+    const nested = asRecord(eventContainer.feedback_event);
+    const event = Object.keys(nested).length > 0 ? nested : eventContainer;
+    const from = asRecord(body.from);
+    const senderId =
+      stringValue(from.userid) ?? stringValue(body.userid) ?? "unknown";
+    const chatId = stringValue(body.chatid);
+    const chatType = stringValue(body.chattype);
+    const isGroup = chatType === "group" || (!chatType && Boolean(chatId));
+    if (isGroup && !chatId) {
+      throw new Error("WeCom feedback event has no chatid");
+    }
+    return {
+      id: stringValue(body.msgid) ?? generateReqId("feedback"),
+      accountId: this.options.accountId,
+      conversationId: isGroup ? chatId! : senderId,
+      conversationType: isGroup ? "group" : "direct",
+      senderId,
+      receivedAt: timestamp(body.create_time),
+      feedbackId:
+        stringValue(event.feedback_id) ??
+        stringValue(event.feedbackid) ??
+        stringValue(event.id),
     };
   }
 
@@ -550,6 +678,19 @@ export class WeComBotTransport implements ChannelTransport {
 const MEDIA_DIRECTORY_PREFIX = "wecom-agent-gateway-media-";
 const DEFAULT_MEDIA_MAX_BYTES = 50 * 1024 * 1024;
 const DEFAULT_MEDIA_RETENTION_MS = 24 * 60 * 60 * 1_000;
+const MAX_WELCOME_BYTES = 2_048;
+
+function validateWelcomeText(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const normalized = value.trim();
+  if (!normalized) throw new Error("WeCom welcome text must not be empty");
+  if (Buffer.byteLength(normalized, "utf8") > MAX_WELCOME_BYTES) {
+    throw new Error(
+      `WeCom welcome text exceeds ${MAX_WELCOME_BYTES} UTF-8 bytes`,
+    );
+  }
+  return normalized;
+}
 
 function normalizeParts(body: Record<string, unknown>): MessagePart[] {
   const msgtype = stringValue(body.msgtype);
@@ -591,6 +732,13 @@ function normalizeParts(body: Record<string, unknown>): MessagePart[] {
     return [mediaPart(msgtype, payload)];
   }
   return [{ type: "text", text: "" }];
+}
+
+function normalizeQuote(value: unknown): InboundMessage["quote"] {
+  const quote = asRecord(value);
+  if (Object.keys(quote).length === 0) return undefined;
+  const parts = normalizeParts(quote);
+  return { parts };
 }
 
 function mediaPart(

@@ -30,15 +30,15 @@
 等能力；官方插件同时实现 Bot WebSocket、Bot HTTP Webhook、Agent HTTP XML Webhook、多账号、配对/
 白名单策略和欢迎语。这些能力需要按本项目边界分层吸收，而不是整包复制。
 
-| 官方能力                                        | 本项目差距与决定                                                                            | 优先级 / 所属层                    |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------- |
-| 引用/回复消息                                   | 将被引用消息归一化为中立上下文，保持单聊、群聊和各 Adapter 一致；不得只拼接成 Prompt 字符串 | P0 / Runtime Contract + Transport  |
-| `replyStreamNonBlocking`                        | 采用有界合并、背压和可观察失败，最终正文仍经 durable outbox；不以无限并发换首字速度         | P0 / Transport + Core              |
-| `ReplyFeedback`、`feedback_event`               | 归一化为可选 channel feedback signal；默认不创建新 Agent turn，也不让赞踩改变会话文本       | P1 / Transport + Core event        |
-| `enter_chat`、`replyWelcome`                    | 允许静态欢迎或部署配置模板；不启动 Kernel、不生成模型回复                                   | P1 / optional Transport capability |
-| Bot HTTP Webhook                                | 可新增独立 Transport，共用同一中立 Core；不能把 HTTP/XML 类型泄漏到 Adapter                 | Optional Transport                 |
-| 多账号、配对、动态 Agent 路由                   | 作为部署编排/策略层参考；Core 坚持显式确定性 Kernel，不按自然语言切换 Agent                 | Out of Core                        |
-| `wecom-cli 1.2.0`、`wecom-unified` 全量办公能力 | 保持为 Kernel 拥有的工具/Skill 层；Gateway 仅保留少量精确、隔离、需审批的参考工具           | Kernel tool ecosystem              |
+| 官方能力                                        | 本项目差距与决定                                                                      | 优先级 / 所属层                          |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------- |
+| 引用/回复消息                                   | 已实现结构化 `quote.parts`、引用媒体物化、全参考 Adapter 映射和未声明能力 fail closed | Complete / Runtime Contract + Transport  |
+| `replyStreamNonBlocking`                        | 已用于普通流；官方 ack 跳帧叠加 Core 合并，最终正文仍经 durable outbox                | Complete / Transport + Core              |
+| `ReplyFeedback`、`feedback_event`               | 已在首次回复设置关联 ID，并归一化为不创建 Agent turn 的 `ChannelFeedbackEvent`        | Complete / Transport + Core event        |
+| `enter_chat`、`replyWelcome`                    | 已提供有界静态 `WECOM_WELCOME_TEXT`；不启动 Kernel、不生成模型回复                    | Complete / optional Transport capability |
+| Bot HTTP Webhook                                | 已评估为未来独立 Transport package；Public Preview 继续以官方 WebSocket 为参考实现    | Evaluated / future optional Transport    |
+| 多账号、配对、动态 Agent 路由                   | 作为部署编排/策略层参考；Core 坚持显式确定性 Kernel，不按自然语言切换 Agent           | Out of Core                              |
+| `wecom-cli 1.2.0`、`wecom-unified` 全量办公能力 | 保持为 Kernel 拥有的工具/Skill 层；Gateway 仅保留少量精确、隔离、需审批的参考工具     | Kernel tool ecosystem                    |
 
 官方插件从模型输出中提取企业微信卡片 JSON、用内存表关联 callback 的做法也不复制。本项目继续使用
 Channel-neutral Presentation、SQLite Interaction Broker 和显式 Adapter event；卡片能力关闭时，普通

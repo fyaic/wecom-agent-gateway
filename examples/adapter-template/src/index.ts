@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  agentInputParts,
   defineRuntimeAdapter,
   type AgentRunRequest,
   type AgentRuntimeAdapter,
@@ -20,6 +21,7 @@ class ExampleRuntimeAdapter implements AgentRuntimeAdapter {
     "resume",
     "interaction-resume",
     "reply-actions",
+    "quoted-context",
   ] as const);
   private readonly completedInteractionResumes = new Set<string>();
 
@@ -29,7 +31,7 @@ class ExampleRuntimeAdapter implements AgentRuntimeAdapter {
     const sessionId = request.sessionId ?? randomUUID();
     if (!request.sessionId)
       yield { type: "session-started", sessionId } as const;
-    const input = request.message.parts
+    const input = agentInputParts(request.message)
       .filter((part) => part.type === "text")
       .map((part) => part.text)
       .join("\n");

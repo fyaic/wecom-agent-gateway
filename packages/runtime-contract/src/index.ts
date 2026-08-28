@@ -14,6 +14,8 @@ export type ChannelCapability =
   | "multimodal-output"
   | "structured-presentation"
   | "interactive-presentation"
+  | "reply-feedback"
+  | "static-welcome"
   /** The first mutable reply frame can carry one channel-native presentation. */
   | "reply-with-presentation";
 
@@ -90,6 +92,11 @@ export interface InboundInteraction {
   selections?: Array<{ fieldId: string; optionIds: string[] }>;
 }
 
+export interface QuotedMessage {
+  /** Original content supplied by the Channel. Sender identity is intentionally absent unless verified. */
+  parts: MessagePart[];
+}
+
 export type MessagePart =
   | { type: "text"; text: string }
   | {
@@ -113,6 +120,8 @@ export interface InboundMessage {
   senderId: string;
   receivedAt: string;
   parts: MessagePart[];
+  /** Structured quoted/replied-to content. Adapters must not silently discard it. */
+  quote?: QuotedMessage;
   interaction?: InboundInteraction;
   replyReference?: { requestId: string };
   metadata?: Record<string, unknown>;
@@ -213,6 +222,18 @@ export interface MaterializedInboundMessage {
   release(): Promise<void>;
 }
 
+/** Channel-native feedback about a Bot reply. It is not an Agent message. */
+export interface ChannelFeedbackEvent {
+  id: string;
+  accountId: string;
+  conversationId: string;
+  conversationType: ConversationType;
+  senderId: string;
+  receivedAt: string;
+  /** Opaque correlation ID set on the original reply when the Channel returns it. */
+  feedbackId?: string;
+}
+
 export interface ChannelTransport {
   readonly id: string;
   readonly capabilities: ReadonlySet<ChannelCapability>;
@@ -220,7 +241,10 @@ export interface ChannelTransport {
   readonly inputModalities?: ReadonlySet<MediaType>;
   /** Exact outbound media types this transport can upload and deliver. */
   readonly outputModalities?: ReadonlySet<MediaType>;
-  start(onMessage: (message: InboundMessage) => Promise<void>): Promise<void>;
+  start(
+    onMessage: (message: InboundMessage) => Promise<void>,
+    onFeedback?: (event: ChannelFeedbackEvent) => Promise<void>,
+  ): Promise<void>;
   stop(): Promise<void>;
   /** Resolve Channel-specific media into protected, runtime-neutral local files. */
   materializeInbound?(
@@ -242,8 +266,25 @@ export type RuntimeCapability =
   | "interaction-resume"
   /** Resume is a control response to a still-live Kernel turn; bypass semantic turn queues. */
   | "interaction-live-resume"
+  /** The Adapter preserves Channel-supplied quoted/replied-to content. */
+  | "quoted-context"
   /** Final replies may expose actions that continue the same session after a callback. */
   | "reply-actions";
+
+/**
+ * Serializes structured quoted content at the Kernel boundary without leaking
+ * Channel-vendor fields into an Adapter. The quote remains structured in the
+ * Runtime Contract and is delimited only when a Kernel prompt is constructed.
+ */
+export function agentInputParts(message: InboundMessage): MessagePart[] {
+  if (!message.quote) return message.parts;
+  return [
+    { type: "text", text: "[Quoted message context]" },
+    ...message.quote.parts,
+    { type: "text", text: "[End quoted message context]" },
+    ...message.parts,
+  ];
+}
 
 export type AgentStatusPhase =
   | "accepted"

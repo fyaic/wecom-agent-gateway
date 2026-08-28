@@ -12,6 +12,7 @@ import type {
   StopReason,
 } from "@agentclientprotocol/sdk";
 import {
+  agentInputParts,
   RUNTIME_CONTRACT_VERSION,
   type AgentInteractionResumeRequest,
   type AgentRunEvent,
@@ -56,6 +57,7 @@ export class AcpRuntimeAdapter implements AgentRuntimeAdapter {
     "cancel",
     "approval",
     "status-events",
+    "quoted-context",
   ]);
   private readonly mutableInputModalities = new Set<MediaType>();
   private readonly activeRuns = new Map<string, ActiveRun>();
@@ -312,7 +314,7 @@ export class AcpRuntimeAdapter implements AgentRuntimeAdapter {
     const prompts =
       this.initializeResult?.agentCapabilities?.promptCapabilities;
     const blocks: ContentBlock[] = [];
-    for (const part of request.message.parts) {
+    for (const part of agentInputParts(request.message)) {
       if (part.type === "text") {
         blocks.push({ type: "text", text: part.text });
       } else if (part.type === "image" && prompts?.image && part.path) {

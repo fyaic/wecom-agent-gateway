@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import {
+  agentInputParts,
   RUNTIME_CONTRACT_VERSION,
   type AgentInteractionResumeRequest,
   type AgentRunEvent,
@@ -96,6 +97,7 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
     "interaction-resume",
     "interaction-live-resume",
     "reply-actions",
+    "quoted-context",
   ]);
   readonly capabilities: ReadonlySet<RuntimeCapability> =
     this.mutableCapabilities;
@@ -373,7 +375,7 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
   ): Promise<{ message: string; images?: JsonRecord[] }> {
     const text: string[] = [];
     const images: JsonRecord[] = [];
-    for (const part of request.message.parts) {
+    for (const part of agentInputParts(request.message)) {
       if (part.type === "text") {
         text.push(part.text);
       } else if (part.type === "image" && part.path) {

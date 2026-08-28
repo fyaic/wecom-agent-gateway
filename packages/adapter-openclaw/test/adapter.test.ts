@@ -55,6 +55,7 @@ describe("OpenClawRuntimeAdapter", () => {
         "multimodal-input",
         "interaction-resume",
         "reply-actions",
+        "quoted-context",
       ]),
     );
     expect(adapter.inputModalities).toEqual(
@@ -89,6 +90,29 @@ describe("OpenClawRuntimeAdapter", () => {
           .params as { idempotencyKey: string }
       ).idempotencyKey,
     ).toBe("reply-action:reply-action");
+    await adapter.stop();
+  });
+
+  it("preserves quoted context in chat.send", async () => {
+    const fake = new FakeOpenClawClient();
+    const adapter = createAdapter(fake);
+    await adapter.start();
+    for await (const _event of adapter.run({
+      message: {
+        ...inbound,
+        quote: { parts: [{ type: "text", text: "earlier" }] },
+        parts: [{ type: "text", text: "current" }],
+      },
+    })) {
+      // drain
+    }
+    const send = fake.requests.find(
+      (request) => request.method === "chat.send",
+    );
+    expect(send?.params).toMatchObject({
+      message:
+        "[Quoted message context]\nearlier\n[End quoted message context]\ncurrent",
+    });
     await adapter.stop();
   });
 

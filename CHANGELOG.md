@@ -8,6 +8,10 @@ tagged.
 
 ### Added
 
+- Structured quoted-message context, including protected quoted-media
+  materialization and explicit support across every reference Adapter.
+- Channel-native reply feedback events that never create a semantic Agent turn,
+  plus an optional bounded static `enter_chat` welcome.
 - A privacy-reviewed real WeCom case page covering Codex, Kimi/ACP, OpenClaw,
   and Pi, with one cropped client screenshot, representative layered latency,
   evidence boundaries, and reproducible smoke commands.
@@ -32,6 +36,10 @@ tagged.
 
 ### Fixed
 
+- Use the official non-blocking plain-stream helper so stale partial frames do
+  not queue behind an unacknowledged update while final frames remain durable.
+- Keep late presentations outside an already-started plain stream instead of
+  switching the official vendor message type mid-stream.
 - Reframe cards as an optional channel-native projection so repository
   positioning, architecture, and roadmap keep IM fidelity and the stable
   Kernel Adapter boundary ahead of additional card UX.

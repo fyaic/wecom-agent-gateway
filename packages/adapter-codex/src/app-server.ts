@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { createInterface } from "node:readline";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import {
+  agentInputParts,
   RUNTIME_CONTRACT_VERSION,
   type AgentInteractionResumeRequest,
   type AgentRunEvent,
@@ -557,6 +558,7 @@ export class CodexAppServerRuntimeAdapter implements AgentRuntimeAdapter {
     "interaction-resume",
     "interaction-live-resume",
     "reply-actions",
+    "quoted-context",
   ]);
   readonly inputModalities: ReadonlySet<MediaType> = new Set([
     "image",
@@ -621,7 +623,7 @@ export class CodexAppServerRuntimeAdapter implements AgentRuntimeAdapter {
     try {
       const events = await this.client.runTurn(
         threadId,
-        toCodexInput(request.message.parts),
+        toCodexInput(agentInputParts(request.message)),
         this.turnOptions(),
       );
       let finalText = "";

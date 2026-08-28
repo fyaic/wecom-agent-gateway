@@ -135,6 +135,8 @@ GLM 首文本 23.05 秒，端到端 25.20 秒，多次可变回复投递成功�
    CODEX_RESPONSES_WEBSOCKET=false
    WECOM_MEDIA_MAX_BYTES=52428800
    WECOM_MEDIA_RETENTION_MS=86400000
+   # 可选；enter_chat 五秒窗口内由 Transport 静态回复，不调用 Kernel
+   WECOM_WELCOME_TEXT=
    WECOM_MEDIA_OUTPUT_ROOTS=/仅允许Agent外发文件的绝对目录
    GATEWAY_OUTBOX_POLL_INTERVAL_MS=1000
    GATEWAY_OUTBOX_LEASE_MS=30000
@@ -498,6 +500,24 @@ CTA 色。2026-08-25 首轮私聊中业务 resume 恰好一次且 Pi 原 run 完
 授权测试群 select 也已真实通过：group-only ACL 放行，Channel 回执 440ms、Pi 首文本 3.847 秒，
 16.433 秒收到提交并在 1ms 内恢复原 run；两个原位更新和最终回复均无错误，25.676 秒完成。该群未安排
 第二位真人越权点击，因此跨发送者拒绝只引用 deterministic tests，不标为真实跨成员通过。
+
+#### 消息保真、非阻塞流式与反馈
+
+普通文字回复必须走官方 `replyStreamNonBlocking`，组合卡流才使用 `replyStreamWithCard`。同一个回复流的
+模式由首帧固定；普通流中后到的可选卡片必须作为独立主动消息发送，不能把已开始的文字流切换为卡片流。
+SDK 在前一帧回执尚未完成时可跳过陈旧 partial，但最终帧必须发送，并继续受 durable outbox 保护。
+
+2026-08-28 在授权私聊完成真实回归：Channel 回执 434ms、Kernel 首事件 103ms、首文本 11.265 秒、
+端到端 12.087 秒，回复正确且没有默认动作卡。点击客户端点赞后，Gateway 只产生一条脱敏
+`channel_feedback` 事件并成功关联首帧，没有创建新的 Agent turn。
+
+引用/回复消息通过中立 `quote.parts` 进入 Runtime Contract，引用媒体和当前消息媒体共用受保护物化、
+总字节上限与清理生命周期。Adapter 必须声明 `quoted-context`；未声明时 Core fail closed，禁止静默丢弃
+上下文。当前 macOS Bot 私聊界面未暴露引用操作，因此只声称自动化 frame/Adapter 合同通过，不把该项
+标为真实客户端验收。
+
+`WECOM_WELCOME_TEXT` 是可选静态欢迎语，只在官方 `event.enter_chat` 上调用 `replyWelcome`，不得启动
+Kernel。该事件通常只在用户当天首次进入会话时触发；不要通过删除/重加 Bot 人为制造验收条件。
 
 当前网络中 Codex Responses WebSocket 首轮会耗尽重试预算后才回退 HTTP，因此默认
 `CODEX_RESPONSES_WEBSOCKET=false`：adapter 使用 ChatGPT 登录兼容的 HTTP-only provider。

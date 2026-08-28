@@ -109,6 +109,7 @@ const transport = new WeComBotTransport({
     24 * 60 * 60 * 1_000,
   ),
   mediaOutputRoots: [mediaSpool.rootPath],
+  welcomeText: process.env.WECOM_WELCOME_TEXT || undefined,
 });
 const gateway = new WeComAgentGateway({
   transport,
@@ -155,6 +156,14 @@ const gateway = new WeComAgentGateway({
     operationalMetrics.recordInteraction(event);
     console.log(JSON.stringify({ event: "interaction_lifecycle", ...event }));
   },
+  onChannelFeedbackEvent: (event) =>
+    console.log(
+      JSON.stringify({
+        event: "channel_feedback",
+        conversationType: event.conversationType,
+        correlated: Boolean(event.feedbackId),
+      }),
+    ),
   onInfrastructureError: (event) => {
     operationalMetrics.recordInfrastructureError(event);
     console.error(

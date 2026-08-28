@@ -29,6 +29,16 @@ Codex / Pi Agent / Kimi Code / OpenClaw
 IM Transport，不得破坏普通文本、媒体、流式回复或 Agent session。Core 也不得为了卡片从 Agent
 自然语言中猜测意图或解析厂商 JSON。
 
+引用/回复消息使用独立 `message.quote.parts`，不会塞入 WeCom metadata。Transport 归一化并按与当前
+消息相同的临时目录、总大小和清理规则物化引用媒体；Core 要求 Adapter 声明 `quoted-context`，否则
+进入 Kernel 前拒绝，避免静默丢失被引用前文。各 Adapter 最后通过 `agentInputParts()` 在 Kernel 边界
+加入明确分隔，企业微信私有 quote 结构不会扩散到上游协议。
+
+普通流式回复使用官方 `replyStreamNonBlocking`：有同 `req_id` ack 未完成时只跳过旧 partial，最终帧
+永不跳过，且仍由 durable outbox 重试。组合卡流只能在第一帧选定；流已按 plain 开始后才出现的卡片
+改走独立主动消息。回复 feedback 是独立 `ChannelFeedbackEvent`，只供观测/产品策略订阅，默认不创建
+Agent turn。`enter_chat` 欢迎语同样由 Transport 在五秒窗口内静态回复，不经过 Core 路由或 Kernel。
+
 ## 通用工具边界
 
 `RuntimeTool` 是 Kernel-neutral 契约，只包含工具 schema、副作用等级、审批要求和执行函数。

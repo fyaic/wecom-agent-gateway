@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { GatewayClient } from "@openclaw/gateway-client";
 import {
+  agentInputParts,
   RUNTIME_CONTRACT_VERSION,
   type AgentInteractionResumeRequest,
   type AgentRunEvent,
@@ -69,6 +70,7 @@ export class OpenClawRuntimeAdapter implements AgentRuntimeAdapter {
     "multimodal-input",
     "interaction-resume",
     "reply-actions",
+    "quoted-context",
   ]);
   readonly inputModalities: ReadonlySet<MediaType> = new Set([
     "image",
@@ -232,8 +234,10 @@ export class OpenClawRuntimeAdapter implements AgentRuntimeAdapter {
         {
           sessionKey,
           ...(this.options.agentId ? { agentId: this.options.agentId } : {}),
-          message: textFromParts(request.message.parts),
-          attachments: await attachmentsFromParts(request.message.parts),
+          message: textFromParts(agentInputParts(request.message)),
+          attachments: await attachmentsFromParts(
+            agentInputParts(request.message),
+          ),
           deliver: false,
           idempotencyKey: runId,
         },

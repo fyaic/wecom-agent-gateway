@@ -34,7 +34,7 @@ export default defineRuntimeAdapter(
       id: "my-kernel",
       contractVersion,
       sessionCompatibilityId: "my-kernel:wire-v1",
-      capabilities: new Set(["streaming", "resume"]),
+      capabilities: new Set(["streaming", "resume", "quoted-context"]),
       async *run(request) {
         // 在这里忠实翻译目标 Kernel SDK/RPC，并 yield Runtime Contract 事件。
       },
@@ -64,19 +64,23 @@ Kernel 应使用 ACP 子进程和环境 allowlist。Gateway SDK 不负责 Agent 
 
 ## Capability 语义
 
-| Capability                | v1 含义                                                           |
-| ------------------------- | ----------------------------------------------------------------- |
-| `streaming`               | Adapter 实际发出有序文本增量，最终正文与增量拼接一致              |
-| `resume`                  | 可用 opaque session 继续同一 Kernel 上下文                        |
-| `cancel`                  | 可取消指定 session 的当前 run                                     |
-| `approval`                | 可把 Kernel 的权限请求映射到 Gateway 审批控制面                   |
-| `tools`                   | 可注入并调用 Gateway 提供的 `RuntimeTool` catalog                 |
-| `status-events`           | 可忠实转发 Kernel 显式的面向用户状态；不是 Channel 推断“正在思考” |
-| `multimodal-input`        | 至少一种非文本输入可原生传入；具体类型仍由 Adapter 协商或明确拒绝 |
-| `multimodal-output`       | 可产生受根目录、大小和数量约束的 `media-output`                   |
-| `interaction-resume`      | 可接收持久化的结构化交互结果并恢复同一 Kernel session             |
-| `interaction-live-resume` | 结果是仍在等待的原生调用控制响应；允许绕过语义 turn 队列          |
-| `reply-actions`           | 可附最终快捷动作，并把真实 callback 作为新 turn 继续同一 session  |
+| Capability                | v1 含义                                                                       |
+| ------------------------- | ----------------------------------------------------------------------------- |
+| `streaming`               | Adapter 实际发出有序文本增量，最终正文与增量拼接一致                          |
+| `resume`                  | 可用 opaque session 继续同一 Kernel 上下文                                    |
+| `cancel`                  | 可取消指定 session 的当前 run                                                 |
+| `approval`                | 可把 Kernel 的权限请求映射到 Gateway 审批控制面                               |
+| `tools`                   | 可注入并调用 Gateway 提供的 `RuntimeTool` catalog                             |
+| `status-events`           | 可忠实转发 Kernel 显式的面向用户状态；不是 Channel 推断“正在思考”             |
+| `multimodal-input`        | 至少一种非文本输入可原生传入；具体类型仍由 Adapter 协商或明确拒绝             |
+| `multimodal-output`       | 可产生受根目录、大小和数量约束的 `media-output`                               |
+| `interaction-resume`      | 可接收持久化的结构化交互结果并恢复同一 Kernel session                         |
+| `interaction-live-resume` | 结果是仍在等待的原生调用控制响应；允许绕过语义 turn 队列                      |
+| `reply-actions`           | 可附最终快捷动作，并把真实 callback 作为新 turn 继续同一 session              |
+| `quoted-context`          | 忠实保留 `message.quote.parts`；不声明时 Gateway 在进入 Kernel 前拒绝引用消息 |
+
+引用消息在 Runtime Contract 中保持结构化，引用媒体也已由 Channel 物化。Adapter 应使用
+`agentInputParts(message)` 生成顺序明确的 Kernel 输入，不得只读取 `message.parts` 后静默丢掉引用内容。
 
 Kernel 自己拥有工具不等于 `tools`；模型支持图片也不等于 Adapter 已实现安全媒体输入。
 声明 `cancel` 后，Gateway 可以在长任务超过阈值时提供一次通用停止卡；Adapter 的 `cancel(sessionId)` 必须
