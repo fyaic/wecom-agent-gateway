@@ -417,7 +417,7 @@ describe("WeComBotTransport", () => {
     ]);
   });
 
-  it("uses the official combined stream for a mutable progress card", async () => {
+  it("uses the official combined stream for a first-frame progress card", async () => {
     const client = new FakeClient();
     const transport = new WeComBotTransport({
       accountId: "bot-a",

@@ -202,10 +202,10 @@ export class WeComBotTransport implements ChannelTransport {
         };
         // A stream that may receive a template card later must use the
         // official stream_with_template_card message type from its first frame.
-        // Progress presentations are therefore valid on partial frames. Final
-        // actions discovered only after completion use the proactive path in
-        // Core because switching card types at the last frame is not reliably
-        // rendered by real desktop clients.
+        // The official SDK permits template_card only once per message, so Core
+        // includes a presentation only on that first frame. Final actions
+        // discovered after completion use the proactive path because adding or
+        // switching a card on a later frame is not a supported operation.
         await this.client.replyStreamWithCard(
           frame,
           command.streamId,

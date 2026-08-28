@@ -48,8 +48,8 @@ changes.
       Gateway v4 do not expose an equivalent client response method.
 - [x] M2.5 first slice: durable, sender-scoped long-run cancel cards backed by
       each Adapter's native cancel capability.
-- [x] M2.5 second slice: first-frame mutable progress cards driven only by
-      explicit Adapter status events.
+- [x] M2.5 second slice: one official first-frame presentation plus mutable
+      status text driven only by explicit Adapter events.
 - M2.5 follow-up: welcome/proactive task cards, card themes, and a separate
   group-poll aggregation model.
 - Compatibility certification for additional Agent kernels.

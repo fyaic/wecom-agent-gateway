@@ -185,11 +185,11 @@ sender、同 account 与 conversation 可以点击；Gateway 先原位确认再�
 2026-08-28 的 Pi 私聊验收在 21.045 秒取消原 run，控制记录只结算一次，Outbox 307 条均 delivered，
 Gateway 仍为 ready。
 
-动态进度卡默认开启，但只对声明 `status-events` 的 Adapter 生效。发送一条会产生至少两个显式阶段的
-无副作用测试请求，首帧应在同一条 Bot 可变回复中显示“请求已接收”卡，随后原位变为 Adapter 发出的
-emoji/状态，不能产生第二条进度消息。最终正文仍在原消息完成；若出现最终快捷 action，它应作为紧邻的
-独立主动卡发送。任务超过停止阈值时，同一张进度卡应原位变成停止按钮；正常完成后不得遗留“任务仍在
-执行”卡。验收只记录 reply 投递阶段和 Outbox 聚合，不记录正文、presentation ID 或会话 ID。
+首帧 presentation 默认开启。尚无 session 或 Adapter 不可取消时，可显示一次“请求已接收”notice；
+已有 session 且 Adapter 声明 `cancel` 时，首帧应直接显示“停止任务”action。后续 Adapter 的显式
+emoji/status 只更新同一条回复的文字，因为官方 SDK 规定 template card 在同一 stream 只能回复一次。
+最终正文仍在原消息完成，首帧卡不得残留；最终快捷 action 作为紧邻的独立主动卡发送。验收只记录
+reply 投递阶段和 Outbox 聚合，不记录正文、presentation ID 或会话 ID。
 
 ## 联调顺序与通过条件
 

@@ -39,6 +39,8 @@ SDK 下载路径；同一会话中文件下载与随后文本必须保持顺序�
 `sendMessage({msgtype: "template_card"})`、`updateTemplateCard` 和独立
 `event.template_card_event` 事件；支持 `text_notice`、`news_notice`、`button_interaction`、
 `vote_interaction`、`multiple_interaction`。更新必须使用对应回调的 `req_id` 并在五秒内完成。
+`replyStreamWithCard` 还明确规定 `template_card` 在同一流式消息中只能回复一次；它不是可在后续 partial
+frame 任意改标题或切换 card type 的动态槽位。没有 callback `req_id` 时，也不存在主动原位更新接口。
 官方 OpenClaw 插件已经实现五类卡片解析、回调和更新，但其做法是从 LLM 文本提取厂商 JSON，并用
 24 小时、最多 300 项的内存缓存保存卡片。本项目只复用已验证的 SDK 语义：采用通用 Presentation
 契约、SQLite 持久关联和即时更新，不复制 LLM JSON 抓取或仅内存状态。
