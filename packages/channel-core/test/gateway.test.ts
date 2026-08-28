@@ -230,6 +230,76 @@ describe("WeComAgentGateway", () => {
     await disabledGateway.stop();
   });
 
+  it("replaces the mutable progress card with an inline stop control and clears it on completion", async () => {
+    class InlineControlTransport extends FakeTransport {
+      override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
+        "stream-reply-update",
+        "proactive-message",
+        "structured-presentation",
+        "interactive-presentation",
+        "reply-with-presentation",
+      ]);
+    }
+    const transport = new InlineControlTransport();
+    let finishRun!: () => void;
+    const finished = new Promise<void>((resolve) => {
+      finishRun = resolve;
+    });
+    const runtime: AgentRuntimeAdapter = {
+      id: "inline-control-runtime",
+      contractVersion: 1,
+      capabilities: new Set(["streaming", "status-events", "cancel"]),
+      async *run() {
+        yield { type: "session-started", sessionId: "inline-control-session" };
+        yield { type: "status", phase: "thinking" };
+        await finished;
+        yield { type: "message-completed", text: "正常完成" };
+      },
+      async cancel() {
+        finishRun();
+      },
+      async health() {
+        return { ok: true };
+      },
+    };
+    const gateway = new WeComAgentGateway({
+      transport,
+      adapters: [runtime],
+      router: new StaticRuntimeRouter(runtime.id),
+      store: new MemoryGatewayStore(),
+      replyUpdateIntervalMs: 1,
+      outboxPollIntervalMs: 1,
+      runControlAfterMs: 1,
+      runControlTimeoutMs: 10_000,
+    });
+
+    await gateway.start();
+    const original = transport.receive(message("inline-run-control"));
+    await waitFor(() =>
+      transport.commands.some(
+        (command) =>
+          command.type === "reply" &&
+          command.presentation?.kind === "actions" &&
+          command.presentation.id.startsWith("run_control_"),
+      ),
+    );
+    expect(
+      transport.commands.filter(
+        (command) => command.type === "proactive-presentation",
+      ),
+    ).toHaveLength(0);
+
+    finishRun();
+    await original;
+    expect(transport.commands.at(-1)).toMatchObject({
+      type: "reply",
+      text: "正常完成",
+      final: true,
+    });
+    expect(transport.commands.at(-1)).not.toHaveProperty("presentation");
+    await gateway.stop();
+  });
+
   it("offers one scoped cancel card for a long cancellable run", async () => {
     class InteractiveTransport extends FakeTransport {
       override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([

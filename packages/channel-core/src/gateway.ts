@@ -236,6 +236,7 @@ interface ActiveRunControlState {
   cancelRequested: boolean;
   finished: boolean;
   cancel(): Promise<void>;
+  clearInlinePresentation?(): void;
 }
 
 export class WeComAgentGateway {
@@ -812,6 +813,10 @@ export class WeComAgentGateway {
             body: "等待 Agent 返回运行状态；回复内容会在本消息中持续更新。",
           }
         : undefined;
+    let inlineRunControlPresentation: Presentation | undefined;
+    const inlineRunControlEnabled =
+      progressPresentationEnabled &&
+      this.options.transport.capabilities.has("interactive-presentation");
     let channelAcknowledged = false;
     const reply = new MutableReply(
       async (update) => {
@@ -881,6 +886,8 @@ export class WeComAgentGateway {
         runControlTimer = undefined;
       };
       const scheduleRunControl = () => {
+        const canPresentProactively =
+          this.options.transport.capabilities.has("proactive-message");
         if (
           runControlTimer ||
           runControlId ||
@@ -895,7 +902,7 @@ export class WeComAgentGateway {
           !this.options.transport.capabilities.has(
             "interactive-presentation",
           ) ||
-          !this.options.transport.capabilities.has("proactive-message")
+          (!inlineRunControlEnabled && !canPresentProactively)
         ) {
           return;
         }
@@ -914,6 +921,18 @@ export class WeComAgentGateway {
           runControlCreation = this.presentRunControl({
             message,
             state: runControlState,
+            ...(inlineRunControlEnabled
+              ? {
+                  presentInline: (presentation: Presentation) => {
+                    inlineRunControlPresentation = presentation;
+                    runControlState.clearInlinePresentation = () => {
+                      inlineRunControlPresentation = undefined;
+                      reply.replacePresentation(progressPresentation);
+                    };
+                    reply.replacePresentation(presentation);
+                  },
+                }
+              : {}),
           }).catch((error: unknown) => {
             this.notifyInfrastructureError({
               component: "store",
@@ -985,7 +1004,12 @@ export class WeComAgentGateway {
               };
             }
           }
-          if (text !== undefined) reply.update(text, progressPresentation);
+          if (text !== undefined) {
+            reply.update(
+              text,
+              inlineRunControlPresentation ?? progressPresentation,
+            );
+          }
         } else if (event.type === "interaction-requested") {
           suspendRunControl();
           if (!activeSessionId) {
@@ -1321,6 +1345,7 @@ export class WeComAgentGateway {
   private async presentRunControl(options: {
     message: InboundMessage;
     state: ActiveRunControlState;
+    presentInline?: (presentation: Presentation) => void;
   }): Promise<string> {
     if (options.state.finished || options.state.cancelRequested) {
       throw new Error("Agent run ended before its control card was created");
@@ -1338,19 +1363,24 @@ export class WeComAgentGateway {
     });
     if (!created) throw new Error("Unable to allocate a run control card");
     this.activeRunControls.set(controlId, options.state);
+    const presentation: Presentation = {
+      kind: "actions",
+      id: controlId,
+      title: "⏳ 任务仍在执行",
+      body: "可以继续等待；如不再需要，可停止当前任务。",
+      actions: [{ id: "cancel", label: "停止任务", style: "danger" }],
+    };
     try {
-      await this.enqueueDurableDelivery(controlId, {
-        type: "proactive-presentation",
-        accountId: options.message.accountId,
-        conversationId: options.message.conversationId,
-        presentation: {
-          kind: "actions",
-          id: controlId,
-          title: "⏳ 任务仍在执行",
-          body: "可以继续等待；如不再需要，可停止当前任务。",
-          actions: [{ id: "cancel", label: "停止任务", style: "danger" }],
-        },
-      });
+      if (options.presentInline) {
+        options.presentInline(presentation);
+      } else {
+        await this.enqueueDurableDelivery(controlId, {
+          type: "proactive-presentation",
+          accountId: options.message.accountId,
+          conversationId: options.message.conversationId,
+          presentation,
+        });
+      }
     } catch (error) {
       this.activeRunControls.delete(controlId);
       await this.options.store.completeRunControl({
@@ -1422,6 +1452,7 @@ export class WeComAgentGateway {
       });
     } catch (error) {
       active.cancelRequested = false;
+      active.clearInlinePresentation?.();
       this.notifyRuntimeError(asError(error));
       await this.enqueueDurableDelivery(message.id, {
         type: "proactive",

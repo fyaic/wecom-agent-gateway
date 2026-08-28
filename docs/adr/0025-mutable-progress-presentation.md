@@ -19,8 +19,9 @@
 - 整个 run 使用同一个 presentation ID，并与文字增量共用 250ms 合并和 durable supersede key；不发送
   独立进度消息，不创建 callback、Interaction Broker 记录或新 Agent turn。
 - 标题在 Core 限制为 26 个 Unicode 字符，Transport 继续承担官方卡片的最终协议校验。
-- 最终正文关闭原 stream。完成时才获知的回复快捷 action 仍通过独立主动卡发送；长任务停止卡仍是独立、
-  有 ACL 和原生 cancel 语义的控制面，两者不得合并。
+- 最终正文关闭原 stream。完成时才获知的回复快捷 action 仍通过独立主动卡发送。超过阈值的长任务在
+  同一 stream 中把进度 notice 替换为停止 action，完成时随最终帧清除；它仍使用独立的 ACL、SQLite
+  namespace 和原生 cancel 语义，不与进度展示混成同一种业务状态。
 
 ## 结果
 
@@ -33,4 +34,5 @@
 - MutableReply tests 覆盖首帧卡、状态/文字合并、同卡延续和最终帧清理。
 - Core tests 覆盖 capability 交集、稳定 presentation ID、长标题边界、不产生主动进度卡和最终正文。
 - WeCom Transport tests 覆盖官方 `replyStreamWithCard` 的 partial-frame template card 映射。
+- Core tests 覆盖进度 notice → 停止 action 的同消息替换，以及正常完成后的无卡最终帧。
 - 真实企业微信客户端的原位显示和最终态在部署后单列记录，不用 SDK 成功回执代替目视验收。

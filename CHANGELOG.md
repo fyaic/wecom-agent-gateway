@@ -29,6 +29,9 @@ tagged.
 
 ### Fixed
 
+- Replace an in-stream progress card with the long-run stop control when the
+  transport supports mutable presentations, so normal completion clears the
+  control instead of leaving a stale “still running” card in chat history.
 - Preserve complete choice labels, render peer selections vertically without
   first-option color bias, and render updates as an inert checked result state
   instead of an invalid no-link notice.

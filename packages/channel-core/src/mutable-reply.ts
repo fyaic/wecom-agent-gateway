@@ -31,6 +31,7 @@ export class MutableReply {
   private pendingText: string | undefined;
   private pendingPresentation: Presentation | undefined;
   private currentPresentation: Presentation | undefined;
+  private currentText: string;
   private inFlight = Promise.resolve();
   private closed = false;
 
@@ -40,6 +41,7 @@ export class MutableReply {
   ) {
     this.intervalMs = options.updateIntervalMs ?? 250;
     this.initialText = options.initialText ?? "⏳ 已收到，等待 Agent 响应…";
+    this.currentText = this.initialText;
     this.currentPresentation = options.initialPresentation;
     this.setTimer =
       options.setTimer ??
@@ -62,8 +64,19 @@ export class MutableReply {
   update(text: string, presentation?: Presentation): void {
     if (this.closed) return;
     if (presentation) this.currentPresentation = presentation;
+    this.currentText = text;
     this.pendingText = text;
     this.pendingPresentation = this.currentPresentation;
+    if (this.timer === undefined) {
+      this.timer = this.setTimer(() => this.flushPending(), this.intervalMs);
+    }
+  }
+
+  replacePresentation(presentation?: Presentation): void {
+    if (this.closed) return;
+    this.currentPresentation = presentation;
+    this.pendingText = this.currentText;
+    this.pendingPresentation = presentation;
     if (this.timer === undefined) {
       this.timer = this.setTimer(() => this.flushPending(), this.intervalMs);
     }
