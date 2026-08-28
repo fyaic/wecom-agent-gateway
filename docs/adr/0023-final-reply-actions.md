@@ -17,6 +17,8 @@ ask-user 交互解决了 Agent 在运行中主动向用户提问，但最终回�
 - Runtime Contract 的最终 `message-completed` 可携带中立 `actions`；部署也可通过
   `GATEWAY_REPLY_ACTIONS_JSON` 配置一组安全的通用动作。两者都只有 `value`、`label` 和显式 style，
   不接受企业微信卡片 JSON。
+- `GATEWAY_REPLY_ACTIONS_JSON` 是 opt-in 的演示/运营菜单，正常生产部署默认未设置或为 `[]`。它不是
+  显式 Agent action、ask-user、审批或取消卡片的功能开关，避免普通回答被无差别附加操作菜单。
 - 操作员默认动作只附加于普通入站消息产生的首轮终态，点击该动作后的 callback continuation 不自动
   继承默认动作，避免一次点击再次生成相同卡片形成无界循环。多步流程只有在 Adapter 本轮显式返回
   `message-completed.actions` 时才进入下一步；是否继续由 Kernel Adapter 明确决定，而非 Gateway 猜测。

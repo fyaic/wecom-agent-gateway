@@ -360,14 +360,21 @@ sequenceDiagram
 Prompt，也不是可执行命令。`interaction-live-resume` 只服务仍在等待的 ask-user；最终回复动作已经是
 新的语义 turn，必须进入正常会话队列、并发限制和背压。
 
-`GATEWAY_REPLY_ACTIONS_JSON` 是一次性默认入口：只附加于用户普通消息对应的最终回答。它不会在自身
-callback continuation 完成后再次出现，否则“点击 → 续跑 → 同卡 → 再点击”会形成没有自然终点的交互
-循环。Adapter 若确实实现向导式多步流程，必须在每一步显式返回新的 `actions`，并自行定义终止条件。
+`GATEWAY_REPLY_ACTIONS_JSON` 是可选的一次性默认入口：配置后会附加于每条用户普通消息对应的最终
+回答，因此不应作为生产部署的常驻默认值。正常部署必须保持未设置或 `[]`；Agent 显式返回的
+`message-completed.actions`、ask-user 卡片和审批卡片都不依赖它。即使启用，它也不会在自身 callback
+continuation 完成后再次出现，否则“点击 → 续跑 → 同卡 → 再点击”会形成没有自然终点的交互循环。
+Adapter 若确实实现向导式多步流程，必须在每一步显式返回新的 `actions`，并自行定义终止条件。
 
 修复后真实私聊复测记录：普通入站在 446ms 完成 Channel 回执，9.693 秒出现 Kernel 首文本，10.812 秒
 完成回答并仅投递一张快捷卡；用户点击后 durable resume 完成同 session continuation，只投递新的主动
 文字，没有第二条 `proactive-presentation`。测试结束时 Outbox 为零 pending、零 leased、零 dead，证明
 该链路在一次点击后自然终止。
+
+2026-08-28 生产配置复核发现受管 Pi LaunchAgent 曾误设该变量，导致每条普通回答都出现“接下来”卡。
+移除该配置并重启受管服务后，真实私聊和授权测试群的普通回答均未再创建
+`proactive-presentation`；随后显式调用 `wecom_interaction_demo(kind=confirm)` 仍正常生成卡片、接收
+点击、恢复原 Pi run 并完成最终回复，证明默认菜单与按需交互卡是相互独立的能力。
 
 ### M2.4：多 Kernel
 
