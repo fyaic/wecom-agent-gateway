@@ -64,7 +64,7 @@
 | 最终回复快捷操作                                | M2.3 自动化与真实验证通过 | 紧邻主动卡、SQLite TTL/幂等、同 session continuation、默认动作一次性              |
 | 多 Kernel 回复动作续接                          | M2.4 自动化通过           | Codex SDK/App Server、ACP/Kimi、OpenClaw、Pi、外部模板共用 deterministic contract |
 | 长任务原生取消控制卡                            | M2.5 真实私聊通过         | 仅 cancellable Adapter；控制卡单次结算；Pi 原生 run 真实进入 cancelled            |
-| 同消息动态进度阶段卡                            | M2.5 自动化通过           | 首帧官方组合流；只投影显式 status/emoji；同卡 ID、250ms 合并、不额外刷屏          |
+| 首帧呈现与动态状态文字                          | M2.5 自动化/真实验证      | 官方单卡契约；显式 status/emoji 进入可变文字；已有 session 首帧可停止             |
 | SQLite 重启恢复                                 | 完成并自动化验证          | 入站去重、runtime session、待发送文本与投递日志跨 reopen 保留                     |
 | SQLite 文件权限                                 | 完成并自动化验证          | Store 每次打开都强制主数据库为 `0600`；本机现有数据库已收紧                       |
 | SQLite 故障因果保留                             | 完成并自动化验证          | 写入/提交失败后即使回滚也失败，仍抛出原始故障而非二次回滚错误                     |
@@ -142,7 +142,7 @@
 | 2026-08-25 | Pi 群聊单选交互               | 通过     | group-only ACL；440ms 回执、3.847s 首文本、16.433s 提交、1ms 恢复；更新与最终回复无错误                  |
 | 2026-08-26 | Pi 私聊最终回复快捷操作       | 通过     | 446ms 回执、9.693s 首文本；仅一张默认卡；点击后同 session 续跑且不再生成卡；Outbox 零积压/死信           |
 | 2026-08-28 | Pi 私聊长任务停止卡           | 通过     | 点击后 SQLite 控制记录仅一次 resolved/cancel；原 run 于 21.045s 进入 cancelled；Outbox 零积压/死信       |
-| 2026-08-28 | Pi 私聊动态进度卡首轮         | 部分通过 | 同消息阶段变化真实可见；18.561s 完成后独立停止卡仍残留，已改为组合流内替换，待部署复测                   |
+| 2026-08-28 | Pi 私聊首帧呈现首轮           | 部分通过 | 可变状态文字真实可见；主动停止卡残留，且 stream 内换卡不受官方协议支持，已改首帧单卡                     |
 
 ### 延迟结论
 
@@ -270,10 +270,10 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
   2026-08-28 真实企业微信私聊验收确认：控制卡一次点击后只产生一条 `resolved/cancel` 记录，Pi
   原生 run 在 21.045 秒进入 `cancelled`，没有继续完成该 run；Outbox 为 307 delivered、零
   pending/leased/dead，Gateway 保持 ready。
-- 第二切片已实现同消息动态进度卡：官方组合流第一帧建立 notice 卡，后续只使用 Adapter 明确发送的
-  `status`/emoji 原位更新；普通文本仍按 250ms 合并，最终回复和快捷 action 保持原语义。自动化已覆盖
-  Core、MutableReply 和 WeCom SDK 映射。首轮真实客户端已确认阶段变化，但暴露正常完成后独立停止卡
-  残留；已改为进度卡原位切换停止按钮、最终帧清除，待本轮部署复测。
+- 第二切片收敛为官方首帧单卡 + 动态状态文字：SDK 明确规定同一 stream 的 `template_card` 只能回复
+  一次，因此后续 Adapter `status`/emoji 只进入 250ms 合并的可变文字。已有 session 的 cancellable
+  Adapter 首帧直接附带停止 action 并在最终帧清除；首轮无 session 时只显示中性 notice。自动化已覆盖
+  Core、MutableReply 与官方 SDK 映射，待部署后由本机企业微信 UI 自动验收停止按钮和最终清理。
 - 后续保留欢迎/主动任务卡、主题与独立群投票聚合；它们不阻塞 Gateway 主链路。
 
 ### M5：生产运行与韧性

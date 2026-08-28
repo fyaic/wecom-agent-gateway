@@ -128,7 +128,7 @@ const message = (id: string): InboundMessage => ({
 });
 
 describe("WeComAgentGateway", () => {
-  it("projects explicit Agent status events into one mutable progress card", async () => {
+  it("uses one first-frame progress card and projects later status events into text", async () => {
     class ProgressTransport extends FakeTransport {
       override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
         "stream-reply-update",
@@ -188,16 +188,13 @@ describe("WeComAgentGateway", () => {
         ? [command.presentation]
         : [],
     );
-    expect(new Set(presentations.map((entry) => entry.id)).size).toBe(1);
-    expect(presentations).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ title: "🤔 Agent 正在思考…" }),
-        expect.objectContaining({ title: expect.stringMatching(/^🔎/) }),
-      ]),
-    );
-    expect(presentations.every((entry) => [...entry.title].length <= 26)).toBe(
-      true,
-    );
+    expect(presentations).toHaveLength(1);
+    expect(presentations[0]).toMatchObject({ title: "⏳ 请求已接收" });
+    expect(
+      replies.some(
+        (command) => command.type === "reply" && command.text.startsWith("🔎"),
+      ),
+    ).toBe(true);
     expect(replies.at(-1)).toMatchObject({
       text: "已完成核对",
       final: true,
@@ -230,7 +227,7 @@ describe("WeComAgentGateway", () => {
     await disabledGateway.stop();
   });
 
-  it("replaces the mutable progress card with an inline stop control and clears it on completion", async () => {
+  it("attaches a first-frame stop control to an existing session and clears it on completion", async () => {
     class InlineControlTransport extends FakeTransport {
       override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
         "stream-reply-update",
@@ -262,11 +259,18 @@ describe("WeComAgentGateway", () => {
         return { ok: true };
       },
     };
+    const store = new MemoryGatewayStore();
+    await store.setSession({
+      accountId: "bot-a",
+      conversationId: "chat-a",
+      adapterId: runtime.id,
+      sessionId: "existing-inline-session",
+    });
     const gateway = new WeComAgentGateway({
       transport,
       adapters: [runtime],
       router: new StaticRuntimeRouter(runtime.id),
-      store: new MemoryGatewayStore(),
+      store,
       replyUpdateIntervalMs: 1,
       outboxPollIntervalMs: 1,
       runControlAfterMs: 1,
@@ -283,6 +287,17 @@ describe("WeComAgentGateway", () => {
           command.presentation.id.startsWith("run_control_"),
       ),
     );
+    const firstReply = transport.commands.find(
+      (command) => command.type === "reply",
+    );
+    expect(firstReply).toMatchObject({
+      final: false,
+      presentation: {
+        kind: "actions",
+        title: "⏳ 任务处理中",
+        actions: [{ id: "cancel", style: "danger" }],
+      },
+    });
     expect(
       transport.commands.filter(
         (command) => command.type === "proactive-presentation",
@@ -297,6 +312,94 @@ describe("WeComAgentGateway", () => {
       final: true,
     });
     expect(transport.commands.at(-1)).not.toHaveProperty("presentation");
+    await gateway.stop();
+  });
+
+  it("cancels an existing session from its first-frame stop control", async () => {
+    class InlineControlTransport extends FakeTransport {
+      override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
+        "stream-reply-update",
+        "proactive-message",
+        "structured-presentation",
+        "interactive-presentation",
+        "reply-with-presentation",
+      ]);
+    }
+    const transport = new InlineControlTransport();
+    let releaseRun!: () => void;
+    const released = new Promise<void>((resolve) => {
+      releaseRun = resolve;
+    });
+    const cancelled: string[] = [];
+    const runtime: AgentRuntimeAdapter = {
+      id: "first-frame-cancel-runtime",
+      contractVersion: 1,
+      capabilities: new Set(["streaming", "status-events", "cancel"]),
+      async *run(request) {
+        yield {
+          type: "session-started",
+          sessionId: request.sessionId ?? "unexpected-session",
+        };
+        yield { type: "status", phase: "thinking" };
+        await released;
+      },
+      async cancel(sessionId) {
+        cancelled.push(sessionId);
+        releaseRun();
+      },
+      async health() {
+        return { ok: true };
+      },
+    };
+    const store = new MemoryGatewayStore();
+    await store.setSession({
+      accountId: "bot-a",
+      conversationId: "chat-a",
+      adapterId: runtime.id,
+      sessionId: "existing-cancel-session",
+    });
+    const gateway = new WeComAgentGateway({
+      transport,
+      adapters: [runtime],
+      router: new StaticRuntimeRouter(runtime.id),
+      store,
+      replyUpdateIntervalMs: 1,
+      outboxPollIntervalMs: 1,
+      runControlAfterMs: 15_000,
+      runControlTimeoutMs: 10_000,
+    });
+
+    await gateway.start();
+    const original = transport.receive(message("first-frame-cancel"));
+    await waitFor(() =>
+      transport.commands.some(
+        (command) =>
+          command.type === "reply" && command.presentation?.kind === "actions",
+      ),
+    );
+    const first = transport.commands.find(
+      (command) =>
+        command.type === "reply" && command.presentation?.kind === "actions",
+    );
+    if (!first || first.type !== "reply" || !first.presentation) {
+      throw new Error("first-frame stop control was not delivered");
+    }
+    await transport.receive({
+      ...message("cancel-from-first-frame"),
+      parts: [],
+      interaction: {
+        presentationId: first.presentation.id,
+        actionId: "cancel",
+      },
+    });
+    await original;
+
+    expect(cancelled).toEqual(["existing-cancel-session"]);
+    expect(transport.commands.at(-1)).toMatchObject({
+      type: "reply",
+      text: "⏹️ 任务已停止。",
+      final: true,
+    });
     await gateway.stop();
   });
 

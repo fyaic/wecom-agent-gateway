@@ -35,7 +35,7 @@ describe("MutableReply", () => {
     ]);
   });
 
-  it("keeps one mutable progress presentation on coalesced partials", async () => {
+  it("sends a presentation only on the first mutable frame", async () => {
     vi.useFakeTimers();
     const updates: ReplyUpdate[] = [];
     const initialPresentation = {
@@ -66,45 +66,9 @@ describe("MutableReply", () => {
         final: false,
         presentation: initialPresentation,
       },
-      { text: "结论", final: false, presentation: thinkingPresentation },
+      { text: "结论", final: false },
       { text: "结论", final: true },
     ]);
-  });
-
-  it("replaces an in-stream progress card without creating a new message", async () => {
-    vi.useFakeTimers();
-    const updates: ReplyUpdate[] = [];
-    const reply = new MutableReply(
-      async (update) => {
-        updates.push(update);
-      },
-      {
-        initialPresentation: {
-          kind: "notice",
-          id: "progress_2",
-          title: "🤔 Agent 正在思考…",
-        },
-      },
-    );
-
-    await reply.open();
-    reply.update("正在处理");
-    await vi.advanceTimersByTimeAsync(250);
-    reply.replacePresentation({
-      kind: "actions",
-      id: "run_control_2",
-      title: "⏳ 任务仍在执行",
-      actions: [{ id: "cancel", label: "停止任务", style: "danger" }],
-    });
-    await vi.advanceTimersByTimeAsync(250);
-    await reply.close("处理完成");
-
-    expect(updates.at(-2)).toMatchObject({
-      text: "正在处理",
-      final: false,
-      presentation: { kind: "actions", id: "run_control_2" },
-    });
-    expect(updates.at(-1)).toEqual({ text: "处理完成", final: true });
   });
 });
 

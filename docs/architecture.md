@@ -97,10 +97,10 @@ Core 只认识通用 `Presentation`：notice、article、actions、choice、form
 也不会把企业微信私有结构扩散到 Adapter。
 
 当 Adapter 声明 `status-events`，且 Transport 同时支持 `structured-presentation` 与
-`reply-with-presentation` 时，Core 从第一帧起在原可变回复中附加同一个 notice 进度卡。初始状态只表示
-Gateway 已接收请求；后续标题严格来自 Adapter 显式 status/emoji，并随 250ms 文本合并窗口共同更新。
-Core 不根据耗时、工具名或文本猜测“思考中”。最终正文关闭同一 stream；完成时才得知的快捷操作仍走
-独立 proactive card，避免真实客户端丢失最后一帧才出现的卡片。
+`reply-with-presentation` 时，Core 可在第一帧附加一个 notice；后续显式 status/emoji 只进入 250ms
+合并的可变文字。官方 SDK 明确规定同一流式消息的 `template_card` 只能回复一次，不能把后续状态误当成
+可变卡片。Core 不根据耗时、工具名或文本猜测“思考中”。最终正文关闭同一 stream；完成时才得知的
+快捷操作仍走独立 proactive card。
 
 完整的 Agent 交互卡架构、SDK/CLI 分工、状态机和里程碑见
 [`interaction-cards.md`](interaction-cards.md)。Core 的 Interaction Broker 已实现五秒 callback fast
@@ -108,13 +108,12 @@ lane、TTL、发送者/会话绑定和 durable deferred resume；Kernel continua
 Transport。Pi 与 Codex App Server 已接入上游真实 ask-user；ACP v1 只有 permission request，OpenClaw
 Gateway v4 也没有导出通用 elicitation response，因此不会以合成 Prompt 冒充缺失协议。
 
-长任务控制属于 Core，不属于 Kernel 推理。仅当 Adapter 声明 `cancel` 且 Transport 支持交互卡时，任务
-超过配置阈值才生成一次 `run_control_*`。支持首帧组合流时，原进度 notice 在同一可变消息内切换为停止
-按钮，最终帧自然清除，避免已完成任务遗留“仍在执行”卡；其他 Transport 降级为独立主动卡。SQLite
-单独保存 account/conversation/sender/TTL 和首答状态；点击后先在企业微信回调窗口内原位确认，再调用
-该 session 的原生 `cancel()`。控制动作不进入 Agent 文本队列、不创建新 turn，也不复用 ask-user、审批
-或最终回复 action 的 namespace。任务正常结束、卡片过期、错误发送者、重复点击和进程重启后的旧卡都
-不能取消后续任务。
+长任务控制属于 Core，不属于 Kernel 推理。Adapter 声明 `cancel`、已有可恢复 session 且 Transport
+支持首帧交互组合卡时，第一帧直接附带一次 `run_control_*` 停止按钮，最终帧自然清除；首轮尚无 session
+时不伪造取消能力。不支持组合流的 Transport 可在阈值后降级为独立主动卡。SQLite 单独保存
+account/conversation/sender/TTL 和首答状态；点击后先在企业微信回调窗口内原位确认，再调用该 session
+的原生 `cancel()`。控制动作不进入 Agent 文本队列、不创建新 turn，也不复用 ask-user、审批或最终回复
+action 的 namespace。
 
 ## Gateway Core 与 Adapter Host
 

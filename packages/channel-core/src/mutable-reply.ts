@@ -25,13 +25,12 @@ export interface MutableReplyOptions {
 export class MutableReply {
   private readonly intervalMs: number;
   private readonly initialText: string;
+  private readonly initialPresentation: Presentation | undefined;
   private readonly setTimer: (callback: () => void, delayMs: number) => unknown;
   private readonly clearTimer: (handle: unknown) => void;
   private timer: unknown;
   private pendingText: string | undefined;
   private pendingPresentation: Presentation | undefined;
-  private currentPresentation: Presentation | undefined;
-  private currentText: string;
   private inFlight = Promise.resolve();
   private closed = false;
 
@@ -41,8 +40,7 @@ export class MutableReply {
   ) {
     this.intervalMs = options.updateIntervalMs ?? 250;
     this.initialText = options.initialText ?? "⏳ 已收到，等待 Agent 响应…";
-    this.currentText = this.initialText;
-    this.currentPresentation = options.initialPresentation;
+    this.initialPresentation = options.initialPresentation;
     this.setTimer =
       options.setTimer ??
       ((callback, delayMs) => setTimeout(callback, delayMs));
@@ -55,27 +53,15 @@ export class MutableReply {
     await this.deliver({
       text: this.initialText,
       final: false,
-      ...(this.currentPresentation
-        ? { presentation: this.currentPresentation }
+      ...(this.initialPresentation
+        ? { presentation: this.initialPresentation }
         : {}),
     });
   }
 
   update(text: string, presentation?: Presentation): void {
     if (this.closed) return;
-    if (presentation) this.currentPresentation = presentation;
-    this.currentText = text;
     this.pendingText = text;
-    this.pendingPresentation = this.currentPresentation;
-    if (this.timer === undefined) {
-      this.timer = this.setTimer(() => this.flushPending(), this.intervalMs);
-    }
-  }
-
-  replacePresentation(presentation?: Presentation): void {
-    if (this.closed) return;
-    this.currentPresentation = presentation;
-    this.pendingText = this.currentText;
     this.pendingPresentation = presentation;
     if (this.timer === undefined) {
       this.timer = this.setTimer(() => this.flushPending(), this.intervalMs);
@@ -87,7 +73,6 @@ export class MutableReply {
     this.closed = true;
     this.pendingText = undefined;
     this.pendingPresentation = undefined;
-    this.currentPresentation = undefined;
     if (this.timer !== undefined) {
       this.clearTimer(this.timer);
       this.timer = undefined;

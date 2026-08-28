@@ -24,14 +24,14 @@ tagged.
 - Sender-scoped long-run control cards that appear only for cancellable
   adapters, atomically accept one stop request, and call the Kernel's native
   cancel path without creating another semantic turn.
-- First-frame mutable progress cards that project only explicit Adapter status
-  events into the existing streamed Bot reply without creating extra messages.
+- One official first-frame presentation plus mutable status text that projects
+  only explicit Adapter events without creating extra messages.
 
 ### Fixed
 
-- Replace an in-stream progress card with the long-run stop control when the
-  transport supports mutable presentations, so normal completion clears the
-  control instead of leaving a stale “still running” card in chat history.
+- Respect the official one-template-card-per-stream contract: existing
+  cancellable sessions receive the stop action on the first frame, while later
+  status changes remain mutable text and completion leaves no stale card.
 - Preserve complete choice labels, render peer selections vertically without
   first-option color bias, and render updates as an inert checked result state
   instead of an invalid no-link notice.

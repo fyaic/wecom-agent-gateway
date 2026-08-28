@@ -14,7 +14,7 @@ export type ChannelCapability =
   | "multimodal-output"
   | "structured-presentation"
   | "interactive-presentation"
-  /** Mutable reply frames can carry one channel-native structured presentation. */
+  /** The first mutable reply frame can carry one channel-native presentation. */
   | "reply-with-presentation";
 
 export interface PresentationLink {

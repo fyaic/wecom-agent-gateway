@@ -24,11 +24,7 @@ import {
   type RuntimeInteractionResumeEntry,
   type RuntimeRouter,
 } from "@fyaic/wecom-runtime-contract";
-import {
-  AgentReplyProjection,
-  MutableReply,
-  renderAgentStatus,
-} from "./mutable-reply.js";
+import { AgentReplyProjection, MutableReply } from "./mutable-reply.js";
 
 export interface GatewayOptions {
   transport: ChannelTransport;
@@ -236,7 +232,6 @@ interface ActiveRunControlState {
   cancelRequested: boolean;
   finished: boolean;
   cancel(): Promise<void>;
-  clearInlinePresentation?(): void;
 }
 
 export class WeComAgentGateway {
@@ -798,13 +793,22 @@ export class WeComAgentGateway {
     let activeSessionId = sessionId;
     const streamId = `run-${message.id}`;
     const projection = new AgentReplyProjection();
+    const runControlState: ActiveRunControlState = {
+      cancelRequested: false,
+      finished: false,
+      cancel: async () => undefined,
+    };
+    let runControlId: string | undefined;
+    let runControlTimer: ReturnType<typeof setTimeout> | undefined;
+    let runControlCreation: Promise<string | undefined> | undefined;
+    let runControlSuspended = false;
     const progressPresentationId = `progress_${randomUUID().replaceAll("-", "")}`;
     const progressPresentationEnabled =
       this.options.progressPresentationEnabled !== false &&
       adapter.capabilities.has("status-events") &&
       this.options.transport.capabilities.has("structured-presentation") &&
       this.options.transport.capabilities.has("reply-with-presentation");
-    let progressPresentation: Presentation | undefined =
+    const progressPresentation: Presentation | undefined =
       progressPresentationEnabled
         ? {
             kind: "notice",
@@ -813,10 +817,37 @@ export class WeComAgentGateway {
             body: "等待 Agent 返回运行状态；回复内容会在本消息中持续更新。",
           }
         : undefined;
-    let inlineRunControlPresentation: Presentation | undefined;
-    const inlineRunControlEnabled =
-      progressPresentationEnabled &&
-      this.options.transport.capabilities.has("interactive-presentation");
+    const firstFrameRunControlEnabled =
+      this.options.runControlAfterMs !== undefined &&
+      sessionId !== undefined &&
+      adapter.capabilities.has("cancel") &&
+      Boolean(adapter.cancel) &&
+      this.options.transport.capabilities.has("structured-presentation") &&
+      this.options.transport.capabilities.has("interactive-presentation") &&
+      this.options.transport.capabilities.has("reply-with-presentation");
+    let initialPresentation: Presentation | undefined = progressPresentation;
+    if (firstFrameRunControlEnabled) {
+      runControlState.cancel = async () => {
+        if (runControlState.finished) return;
+        await adapter.cancel!(sessionId);
+      };
+      try {
+        runControlId = await this.presentRunControl({
+          message,
+          state: runControlState,
+          presentInline: (presentation) => {
+            initialPresentation = presentation;
+          },
+        });
+      } catch (error) {
+        this.notifyInfrastructureError({
+          component: "store",
+          componentId: "gateway-store",
+          operation: "create-run-control",
+          error: asError(error),
+        });
+      }
+    }
     let channelAcknowledged = false;
     const reply = new MutableReply(
       async (update) => {
@@ -840,21 +871,12 @@ export class WeComAgentGateway {
       },
       {
         updateIntervalMs: this.options.replyUpdateIntervalMs,
-        initialPresentation: progressPresentation,
+        initialPresentation,
       },
     );
     let closed = false;
     const mediaOutputs: AgentMediaOutput[] = [];
     let releaseMedia: () => Promise<void> = async () => undefined;
-    const runControlState: ActiveRunControlState = {
-      cancelRequested: false,
-      finished: false,
-      cancel: async () => undefined,
-    };
-    let runControlId: string | undefined;
-    let runControlTimer: ReturnType<typeof setTimeout> | undefined;
-    let runControlCreation: Promise<string | undefined> | undefined;
-    let runControlSuspended = false;
 
     try {
       // Establish the mutable Bot message before waiting for the Agent. This is
@@ -886,8 +908,6 @@ export class WeComAgentGateway {
         runControlTimer = undefined;
       };
       const scheduleRunControl = () => {
-        const canPresentProactively =
-          this.options.transport.capabilities.has("proactive-message");
         if (
           runControlTimer ||
           runControlId ||
@@ -902,7 +922,7 @@ export class WeComAgentGateway {
           !this.options.transport.capabilities.has(
             "interactive-presentation",
           ) ||
-          (!inlineRunControlEnabled && !canPresentProactively)
+          !this.options.transport.capabilities.has("proactive-message")
         ) {
           return;
         }
@@ -921,18 +941,6 @@ export class WeComAgentGateway {
           runControlCreation = this.presentRunControl({
             message,
             state: runControlState,
-            ...(inlineRunControlEnabled
-              ? {
-                  presentInline: (presentation: Presentation) => {
-                    inlineRunControlPresentation = presentation;
-                    runControlState.clearInlinePresentation = () => {
-                      inlineRunControlPresentation = undefined;
-                      reply.replacePresentation(progressPresentation);
-                    };
-                    reply.replacePresentation(presentation);
-                  },
-                }
-              : {}),
           }).catch((error: unknown) => {
             this.notifyInfrastructureError({
               component: "store",
@@ -994,22 +1002,7 @@ export class WeComAgentGateway {
           scheduleRunControl();
         } else if (event.type === "status" || event.type === "text-delta") {
           const text = projection.apply(event);
-          if (event.type === "status" && progressPresentationEnabled) {
-            const status = renderAgentStatus(event);
-            if (status) {
-              progressPresentation = {
-                kind: "notice",
-                id: progressPresentationId,
-                title: cardExcerpt(status, 26),
-              };
-            }
-          }
-          if (text !== undefined) {
-            reply.update(
-              text,
-              inlineRunControlPresentation ?? progressPresentation,
-            );
-          }
+          if (text !== undefined) reply.update(text);
         } else if (event.type === "interaction-requested") {
           suspendRunControl();
           if (!activeSessionId) {
@@ -1366,8 +1359,10 @@ export class WeComAgentGateway {
     const presentation: Presentation = {
       kind: "actions",
       id: controlId,
-      title: "⏳ 任务仍在执行",
-      body: "可以继续等待；如不再需要，可停止当前任务。",
+      title: options.presentInline ? "⏳ 任务处理中" : "⏳ 任务仍在执行",
+      body: options.presentInline
+        ? "状态会在本消息文字中更新；如不再需要，可停止当前任务。"
+        : "可以继续等待；如不再需要，可停止当前任务。",
       actions: [{ id: "cancel", label: "停止任务", style: "danger" }],
     };
     try {
@@ -1452,7 +1447,6 @@ export class WeComAgentGateway {
       });
     } catch (error) {
       active.cancelRequested = false;
-      active.clearInlinePresentation?.();
       this.notifyRuntimeError(asError(error));
       await this.enqueueDurableDelivery(message.id, {
         type: "proactive",
