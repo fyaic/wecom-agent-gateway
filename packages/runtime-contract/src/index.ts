@@ -222,17 +222,23 @@ export interface MaterializedInboundMessage {
   release(): Promise<void>;
 }
 
-/** Channel-native feedback about a Bot reply. It is not an Agent message. */
-export interface ChannelFeedbackEvent {
+export interface ChannelContextEvent {
   id: string;
   accountId: string;
   conversationId: string;
   conversationType: ConversationType;
   senderId: string;
   receivedAt: string;
+}
+
+/** Channel-native feedback about a Bot reply. It is not an Agent message. */
+export interface ChannelFeedbackEvent extends ChannelContextEvent {
   /** Opaque correlation ID set on the original reply when the Channel returns it. */
   feedbackId?: string;
 }
+
+/** User entered a Bot conversation. Authorization happens before any welcome reply. */
+export interface ChannelEnterChatEvent extends ChannelContextEvent {}
 
 export interface ChannelTransport {
   readonly id: string;
@@ -244,6 +250,7 @@ export interface ChannelTransport {
   start(
     onMessage: (message: InboundMessage) => Promise<void>,
     onFeedback?: (event: ChannelFeedbackEvent) => Promise<void>,
+    onEnterChat?: (event: ChannelEnterChatEvent) => Promise<boolean>,
   ): Promise<void>;
   stop(): Promise<void>;
   /** Resolve Channel-specific media into protected, runtime-neutral local files. */

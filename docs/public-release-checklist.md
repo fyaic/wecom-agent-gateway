@@ -71,3 +71,12 @@ The repository must remain private until every blocking item below is complete.
 - [x] Announce Public Preview limitations and unsupported production guarantees.
 - [x] Verify badges, documentation links, issue forms, and Security Advisory flow
       as an unauthenticated visitor.
+
+## Every subsequent release
+
+- [x] Release workflow requires the tagged commit to be an ancestor of `main`.
+- [x] Re-run frozen-lockfile install, full CI, and all-ref public-history audit
+      before creating artifacts.
+- [x] Require `docs/releases/<tag>.md`; never reuse notes from another version.
+- [ ] Review the generated checksum and GitHub provenance attestation after the
+      next tag is published.

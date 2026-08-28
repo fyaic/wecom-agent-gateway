@@ -12,6 +12,22 @@ Outbox 和所选 Kernel Adapter；不会把 Agent 逻辑移进 Channel。
 - Kernel 凭据、Bot Secret 和内部 allowlist 不进入镜像、unit、Compose 文件、日志或指标；
 - 部署前执行 `pnpm doctor`，需要真实 Kernel 探测时执行 `pnpm doctor:live`。
 
+## 可靠性与隐私配置
+
+- `WECOM_SDK_MAX_RECONNECT_ATTEMPTS=-1`：普通断网持续重连；
+  `WECOM_SDK_MAX_AUTH_FAILURE_ATTEMPTS=5`：错误凭据有限重试后退出，交给服务管理器告警/重启。
+- `WECOM_WEBSOCKET_URL` 仅用于官方支持的私有部署端点，只接受不含 userinfo/query/hash 的
+  `wss://` URL；凭据仍通过独立配置传入。
+- `GATEWAY_STORAGE_RETENTION_MS=2592000000` 默认保留终态记录 30 天，按
+  `GATEWAY_STORAGE_PRUNE_BATCH_SIZE` 有界删除；pending、leased、dead 以及未恢复交互不会被清理。
+- `GATEWAY_LOG_SDK_MESSAGES=false`、`GATEWAY_LOG_ADAPTER_STDERR=false` 默认阻止原始上游诊断进入日志。
+  只有短时故障排查才应开启；开启后仍需把日志视为敏感数据并及时销毁。
+- `CODEX_AGENT_ENV_ALLOWLIST`、`ACP_AGENT_ENV_ALLOWLIST`、`PI_AGENT_ENV_ALLOWLIST` 只填写对应 Kernel
+  明确需要的变量名。不要加入 `WECOM_BOT_SECRET`；Gateway 不再把整个宿主环境交给 Codex 子进程。
+
+SQLite `PRAGMA user_version` 当前为 `1`。遇到更高版本数据库会 fail closed，避免旧二进制误写新格式；
+发布升级前先备份私有数据目录，并在测试副本执行 Doctor。
+
 ## Linux / systemd
 
 参考 unit：

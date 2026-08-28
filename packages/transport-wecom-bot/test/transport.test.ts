@@ -209,6 +209,60 @@ describe("WeComBotTransport", () => {
     expect(logs).toEqual(["debug:raw frame", "info:connected"]);
   });
 
+  it("configures the official client for durable reconnect and private endpoints", () => {
+    let captured: Record<string, unknown> | undefined;
+    new WeComBotTransport({
+      accountId: "bot-a",
+      botId: "id",
+      secret: "secret",
+      wsUrl: "wss://private-wecom.example/ws",
+      requestTimeoutMs: 12_000,
+      reconnectIntervalMs: 2_000,
+      maxReplyQueueSize: 100,
+      clientFactory: (options) => {
+        captured = options as unknown as Record<string, unknown>;
+        return new FakeClient();
+      },
+    });
+    expect(captured).toMatchObject({
+      wsUrl: "wss://private-wecom.example/ws",
+      requestTimeout: 12_000,
+      reconnectInterval: 2_000,
+      maxReconnectAttempts: -1,
+      maxReplyQueueSize: 100,
+    });
+    expect(
+      () =>
+        new WeComBotTransport({
+          accountId: "bot-a",
+          botId: "id",
+          secret: "secret",
+          wsUrl: "ws://insecure.example/ws",
+          clientFactory: () => new FakeClient(),
+        }),
+    ).toThrow("must use wss");
+    expect(
+      () =>
+        new WeComBotTransport({
+          accountId: "bot-a",
+          botId: "id",
+          secret: "secret",
+          wsUrl: "wss://private.example/ws?token=secret",
+          clientFactory: () => new FakeClient(),
+        }),
+    ).toThrow("must not contain credentials, query, or fragment");
+    expect(
+      () =>
+        new WeComBotTransport({
+          accountId: "bot-a",
+          botId: "id",
+          secret: "secret",
+          maxReconnectAttempts: 0,
+          clientFactory: () => new FakeClient(),
+        }),
+    ).toThrow("must be -1 or a positive integer");
+  });
+
   it("normalizes official SDK frames and sends stream/proactive messages", async () => {
     const client = new FakeClient();
     const received: InboundMessage[] = [];
@@ -564,9 +618,13 @@ describe("WeComBotTransport", () => {
       welcomeText: "  欢迎使用 Agent Gateway  ",
       clientFactory: () => client,
     });
-    await transport.start(async (message) => {
-      received.push(message);
-    });
+    await transport.start(
+      async (message) => {
+        received.push(message);
+      },
+      undefined,
+      async (event) => event.senderId === "user-1",
+    );
     const frame = {
       headers: { req_id: "req-welcome" },
       body: {
@@ -577,7 +635,11 @@ describe("WeComBotTransport", () => {
       },
     };
     client.listeners.get("event.enter_chat")?.(frame);
-    await Promise.resolve();
+    client.listeners.get("event.enter_chat")?.({
+      ...frame,
+      body: { ...frame.body, msgid: "enter-2", from: { userid: "user-2" } },
+    });
+    await new Promise((resolve) => setImmediate(resolve));
 
     expect(client.welcomes).toEqual([
       [

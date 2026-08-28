@@ -14,6 +14,7 @@
 | 官方非阻塞流式背压                              | 完成并自动化/真实验证     | ack 未完成时跳过旧 partial；最终帧必发并保留 durable outbox                        |
 | 回复 feedback 事件                              | 完成并自动化/真实验证     | 首帧关联、ChannelFeedbackEvent；不创建 Agent turn，不记录用户/会话 ID              |
 | 静态 enter_chat 欢迎                            | 完成并自动化验证          | 可选 2048-byte 文本、五秒官方回复路径；不启动 Kernel                               |
+| 非语义事件 ACL                                  | 完成并自动化验证          | feedback/enter_chat 复用 scoped policy；拒绝事件不回复、不启动 Kernel              |
 | Channel/Kernel 分层延迟事件                     | 完成并自动化验证          | 队列、首回执、Kernel 首事件/首文本、完成/失败分别记录                              |
 | Transport/Kernel capability 声明                | 完成并真实验证            | ACP initialize 与 Transport capability 共同约束流式、恢复和多模态                  |
 | 精确输入/输出模态契约                           | 完成并自动化/真实验证     | Core 按 Transport/Adapter 类型集合 fail closed；图片、文件、MP4 链路通过           |
@@ -71,6 +72,7 @@
 | 动态状态文字与组合卡边界                        | M2.5 自动化/真实验证      | 显式 status/emoji 进入可变文字；首帧卡客户端不可见，控制走阈值主动卡               |
 | SQLite 重启恢复                                 | 完成并自动化验证          | 入站去重、runtime session、待发送文本与投递日志跨 reopen 保留                      |
 | SQLite 文件权限                                 | 完成并自动化验证          | Store 每次打开都强制主数据库为 `0600`；本机现有数据库已收紧                        |
+| SQLite schema 与有界保留                        | 完成并自动化验证          | user_version=1；未来版本 fail closed；只清理过期终态，不删 pending/leased/dead     |
 | SQLite 故障因果保留                             | 完成并自动化验证          | 写入/提交失败后即使回滚也失败，仍抛出原始故障而非二次回滚错误                      |
 | 文本持久化 Outbox                               | 完成并自动化验证          | 发送前提交、事务认领、租约过期接管、指数退避与死信                                 |
 | OS 进程强杀后的 Outbox 恢复                     | 完成并自动化验证          | 子进程持有 SQLite 租约时 `SIGKILL`；新进程租约过期后恢复并完成唯一投递             |
@@ -82,7 +84,8 @@
 | Fail-closed ACL                                 | 完成并自动化验证          | sender/conversation allowlist；空配置拒绝启动                                      |
 | 流式窗口过期降级                                | 完成并自动化验证          | 官方错误码 `846608` 的最终文本改走 Bot `sendMessage`                               |
 | SDK/Adapter/Outbox 故障恢复                     | 完成并自动化/受管验证     | 重新鉴权后续投递、失败 Pi client 替换、租约/媒体恢复、受管重启                     |
-| 凭据日志脱敏                                    | 完成并自动化验证          | Bot 凭据与常见 secret/token/authorization 字段替换为 `[REDACTED]`                  |
+| 凭据与诊断隐私                                  | 完成并自动化验证          | 多 Adapter 凭据脱敏；SDK 原文/stderr 默认关闭；Codex 子进程使用最小环境            |
+| SDK 长时故障恢复                                | 完成并自动化/受管验证     | 普通重连默认无限、鉴权失败有限；私有端点限定无凭据 wss URL                         |
 | 分域精确白名单与私聊挑战注册                    | 完成并自动化验证          | 私聊从真实回调注册；群聊从最新会话唯一匹配；内部 ID 不输出                         |
 
 ## 真实企业微信联调记录
@@ -205,13 +208,17 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
 - 同名发布仓库已公开并进入 Public Preview；原仓库已改名并保持 private，发布仓库由审计后的干净
   根提交重新创建。未登录 API、README、SECURITY 和 Git refs 访问均已复核。
 - 项目自有代码采用与企业微信官方核心参考项目一致的 MIT；依赖许可证和来源规则已形成独立审计文档。
-- GitHub Actions 运行格式、TypeScript、192 项 deterministic tests、公开面和依赖许可证检查。
+- GitHub Actions 运行格式、TypeScript、197 项 deterministic tests、公开面和依赖许可证检查。
 - 已完成模式 `0600` 的最终离库 Git bundle 备份、旧仓库全部 refs 与 51 次 Actions 日志审计；旧历史
   确认包含私密名称和非 noreply 作者元数据，只保留在私有归档与离线 bundle。新的同名发布仓库从
   1 个审计后的根提交建立，GitHub CI、全新 clone、141 项测试和私密词扫描均通过；Dependabot 随后
   创建的提交与 pull refs 也纳入全引用审计，不连接任何旧历史。
 - Actions 依赖已固定到官方 tag 对应的不可变 commit SHA。Private Vulnerability Reporting 已启用；
   `main` 强制 `verify` CI、线性历史和会话解决，规则适用于管理员，并禁止 force-push 与分支删除。
+- GitHub Secret Scanning、Push Protection 与 CodeQL Default Setup 已启用；非 provider pattern 和
+  validity checks 当前不在该仓库计划能力内，不冒充已开启。
+- 后续 tag 发布前会从完整历史确认提交属于 `main`，重新执行 frozen install、全 CI 与 all-ref 历史审计，
+  并强制读取与 tag 同名的发布说明；不再复用 `v0.1.0` 文档。
 - 已生成并目视复核 1280×640 社交预览资产，不使用企业微信官方 Logo 或机器人形象，避免暗示官方
   背书；已由仓库所有者上传为 GitHub Social Preview。
 - squash merge、自动删除分支、Dependabot 漏洞告警和自动安全修复已启用；历史净化、默认分支保护、
@@ -241,7 +248,7 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
   at-least-once 投递。
 - Gateway 强制每 account + conversation 只有一个 pending interaction；开放输入只消费同 sender 的
   下一条非空纯文本，不创建第二个 Agent turn。
-- 192 项 deterministic tests 已通过；本机 Pi `0.84.2` 加载仓库示例后真实产生 select request，接受
+- 197 项 deterministic tests 已通过；本机 Pi `0.84.2` 加载仓库示例后真实产生 select request，接受
   “测试环境”的 native response，原 tool result 得到该值且同一 run 最终回复“测试完成”。授权私聊
   单选与限定文本输入已完成真实闭环；授权测试群的单选也已通过 group-only ACL 和完整交互链路。
 - 首轮真实私聊 select 已证明 Pi 原 run 完成且多次点击只产生一次 resume，但结果 notice 的

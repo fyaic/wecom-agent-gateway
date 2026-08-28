@@ -379,6 +379,10 @@ pending ──同 stream 新版本──→ superseded
 - 外部可见身份始终是企业微信 Bot。
 - 不使用真人账号补发、不做 Bot/Agent 双身份回退。
 - Bot secret、Codex 凭据和 `wecom-cli` 配置目录不进入消息对象、日志或数据库正文。
+- 当前消息与引用消息中的临时媒体 URL、AES key 和本地路径在 SQLite 边界统一剥离；只保留中立内容与安全元数据。
+- Feedback、enter-chat welcome 与语义消息复用同一 scoped ACL；事件不会绕过授权，也不会创建 Kernel turn。
+- Adapter 子进程以最小环境启动，额外模型/代理变量只能显式 allowlist；SDK 原始消息和 stderr 默认不落日志。
+- SQLite 使用显式 schema 版本和终态数据有界保留；待投递、租约中、死信及待恢复交互不参与定时清理。
 - ACL、命令权限和按 Bot/会话/显式配置的确定性路由属于 core/policy 层；自然语言意图路由属于上层 Agent 系统。
 - 真实入口的 sender/conversation allowlist 为空时拒绝启动；群聊 mention 门将在真实 frame 语义确认后启用，避免臆造字段导致所有群消息被误拒。
 

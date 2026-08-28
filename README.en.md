@@ -169,10 +169,16 @@ the matching scoped allowlist, and media still obeys `WECOM_MEDIA_OUTPUT_ROOTS`.
   hash.
 - Only regular files below `WECOM_MEDIA_OUTPUT_ROOTS` may be sent.
 - Write tools require durable approval bound to sender, conversation, and run.
-- Adapter child processes do not inherit Bot secrets or the full host
-  environment by default.
+- Adapter child processes inherit a minimal environment; extra variables need
+  an Adapter-specific allowlist and Bot secrets are never forwarded.
 - Reply feedback is observable without becoming an Agent turn; optional
   `WECOM_WELCOME_TEXT` is answered statically without starting a Kernel.
+- Feedback and welcome callbacks pass the same scoped ACL as ordinary messages.
+- Raw official SDK messages and Adapter stderr are disabled in logs by default.
+- SQLite schema compatibility fails closed; old terminal data is pruned in
+  bounded batches while pending, leased, and dead work survives.
+- Transient network reconnect is unbounded by default, authentication failure
+  remains bounded, and private SDK endpoints require credential-free `wss://`.
 
 Read the [architecture](docs/architecture.md), [security policy](SECURITY.md),
 and [ADRs](docs/README.md) for the complete contract.
@@ -180,7 +186,7 @@ and [ADRs](docs/README.md) for the complete contract.
 ## Maturity
 
 The project is in **Public Preview**; a stable v1 API is not promised yet. The
-current baseline has 192 deterministic tests and real acceptance evidence for
+current baseline has 197 deterministic tests and real acceptance evidence for
 direct and group conversations, mutable streaming, session recovery,
 image/file/MP4 transfer, proactive media, managed restarts, and four Kernel
 families. Cross-process SQLite outbox lease recovery after `SIGKILL` and a

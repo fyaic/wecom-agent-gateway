@@ -49,13 +49,20 @@ class FakeProcess extends EventEmitter {
 describe("CodexAppServerClient", () => {
   it("speaks initialized JSONL, streams a turn, declines stray approvals, and stops", async () => {
     const process = new FakeProcess();
-    let spawnSpec: { args: string[] } | undefined;
+    let spawnSpec: { args: string[]; env: NodeJS.ProcessEnv } | undefined;
     const client = new CodexAppServerClient({
       processFactory: (spec) => {
         spawnSpec = spec;
         return process as unknown as ChildProcessWithoutNullStreams;
       },
       requestTimeoutMs: 1_000,
+      codexHome: "/private/codex-home",
+      env: {
+        PATH: "/safe/bin",
+        ZAI_API_KEY: "explicit-provider-key",
+        WECOM_BOT_SECRET: "must-not-reach-codex",
+      },
+      envAllowlist: ["ZAI_API_KEY"],
     });
 
     const starting = client.start();
@@ -67,6 +74,14 @@ describe("CodexAppServerClient", () => {
         "model_providers.wecom_http.requires_openai_auth=true",
         "model_providers.wecom_http.supports_websockets=false",
       ]),
+    );
+    expect(spawnSpec?.env).toEqual({
+      PATH: "/safe/bin",
+      ZAI_API_KEY: "explicit-provider-key",
+      CODEX_HOME: "/private/codex-home",
+    });
+    expect(JSON.stringify(spawnSpec?.env)).not.toContain(
+      "must-not-reach-codex",
     );
     expect(initialize).toMatchObject({
       method: "initialize",

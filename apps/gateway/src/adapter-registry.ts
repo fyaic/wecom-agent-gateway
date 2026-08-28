@@ -232,6 +232,8 @@ function createCodexAdapter(
     approvalPolicy: approvalPolicy(env.CODEX_APPROVAL_POLICY),
     requestTimeoutMs: positiveInteger(env.CODEX_REQUEST_TIMEOUT_MS, 30_000),
     responsesWebsocket: booleanValue(env.CODEX_RESPONSES_WEBSOCKET, false),
+    env,
+    envAllowlist: list(env.CODEX_AGENT_ENV_ALLOWLIST),
     tools: options.tools,
     toolTimeoutMs: positiveInteger(env.RUNTIME_TOOL_TIMEOUT_MS, 60_000),
     approvalWaitTimeoutMs: positiveInteger(

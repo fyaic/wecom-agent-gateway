@@ -5,6 +5,7 @@ import {
   type AgentRuntimeAdapter,
   type ChannelTransport,
   type ChannelFeedbackEvent,
+  type ChannelContextEvent,
   type DeliveryOutboxEntry,
   type DurableMediaArtifact,
   type DurableOutboundCommand,
@@ -571,7 +572,12 @@ export class WeComAgentGateway {
     try {
       await this.options.transport.start(
         async (message) => this.enqueue(message),
-        async (event) => this.options.onChannelFeedbackEvent?.(event),
+        async (event) => {
+          if (await this.authorizeChannelEvent(event)) {
+            this.options.onChannelFeedbackEvent?.(event);
+          }
+        },
+        async (event) => this.authorizeChannelEvent(event),
       );
       this.started = true;
       this.stopping = false;
@@ -586,6 +592,22 @@ export class WeComAgentGateway {
       });
       throw error;
     }
+  }
+
+  private async authorizeChannelEvent(
+    event: ChannelContextEvent,
+  ): Promise<boolean> {
+    if (!this.options.policy) return true;
+    const decision = await this.options.policy.authorize({
+      ...event,
+      parts: [],
+      metadata: { mentionedBot: true, channelEvent: true },
+    });
+    this.notifyAccessDecision({
+      conversationType: event.conversationType,
+      ...decision,
+    });
+    return decision.allowed;
   }
 
   async stop(): Promise<void> {
