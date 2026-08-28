@@ -33,7 +33,7 @@ Agent 如何思考、选择模型、调用工具或理解视频，不属于 Gate
 - **交互协调层**：卡片选择不进入模型解析；Gateway 持久校验、即时更新并按同一 session 恢复 Agent；Pi 原生 ask-user 已贯通。
 - **多 Kernel 原生提问**：Codex App Server 与 Pi 的阻塞式 ask-user 都由同一 Broker 原路恢复；多问题可表单或逐步完成，秘密输入不进入 IM。
 - **回复快捷操作**：最终流式回答可附原生 action 卡；点击经 SQLite/ACL/幂等后继续同一 Agent session，写操作仍需审批。
-- **长任务控制**：已有 session 的可取消 Kernel 在首帧附带“停止任务”卡；点击原位确认并调用原生 cancel，不把控制动作交给模型解析。
+- **长任务控制**：可取消 Kernel 超过阈值后收到 sender-scoped“停止本轮”卡；点击原位确认并调用原生 cancel，不把控制动作交给模型解析。
 - **可靠投递**：文本与媒体发送前进入 SQLite outbox；租约、重试、死信和媒体 spool 支持崩溃恢复。
 - **精确多模态**：Transport 与 Adapter 声明具体输入/输出类型，不支持时 fail closed，不伪造文字占位。
 - **安全默认值**：单一 Bot 身份、分域白名单、敏感字段脱敏、受保护临时媒体和写工具审批。

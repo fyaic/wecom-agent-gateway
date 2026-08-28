@@ -66,7 +66,6 @@ export interface GatewayOptions {
   runControlAfterMs?: number;
   runControlTimeoutMs?: number;
   /** Render explicit Adapter status events in the mutable reply card. */
-  progressPresentationEnabled?: boolean;
   maxProactiveTextBytes?: number;
   now?: () => number;
   wallClock?: () => number;
@@ -802,52 +801,6 @@ export class WeComAgentGateway {
     let runControlTimer: ReturnType<typeof setTimeout> | undefined;
     let runControlCreation: Promise<string | undefined> | undefined;
     let runControlSuspended = false;
-    const progressPresentationId = `progress_${randomUUID().replaceAll("-", "")}`;
-    const progressPresentationEnabled =
-      this.options.progressPresentationEnabled !== false &&
-      adapter.capabilities.has("status-events") &&
-      this.options.transport.capabilities.has("structured-presentation") &&
-      this.options.transport.capabilities.has("reply-with-presentation");
-    const progressPresentation: Presentation | undefined =
-      progressPresentationEnabled
-        ? {
-            kind: "notice",
-            id: progressPresentationId,
-            title: "⏳ 请求已接收",
-            body: "等待 Agent 返回运行状态；回复内容会在本消息中持续更新。",
-          }
-        : undefined;
-    const firstFrameRunControlEnabled =
-      this.options.runControlAfterMs !== undefined &&
-      sessionId !== undefined &&
-      adapter.capabilities.has("cancel") &&
-      Boolean(adapter.cancel) &&
-      this.options.transport.capabilities.has("structured-presentation") &&
-      this.options.transport.capabilities.has("interactive-presentation") &&
-      this.options.transport.capabilities.has("reply-with-presentation");
-    let initialPresentation: Presentation | undefined = progressPresentation;
-    if (firstFrameRunControlEnabled) {
-      runControlState.cancel = async () => {
-        if (runControlState.finished) return;
-        await adapter.cancel!(sessionId);
-      };
-      try {
-        runControlId = await this.presentRunControl({
-          message,
-          state: runControlState,
-          presentInline: (presentation) => {
-            initialPresentation = presentation;
-          },
-        });
-      } catch (error) {
-        this.notifyInfrastructureError({
-          component: "store",
-          componentId: "gateway-store",
-          operation: "create-run-control",
-          error: asError(error),
-        });
-      }
-    }
     let channelAcknowledged = false;
     const reply = new MutableReply(
       async (update) => {
@@ -871,7 +824,6 @@ export class WeComAgentGateway {
       },
       {
         updateIntervalMs: this.options.replyUpdateIntervalMs,
-        initialPresentation,
       },
     );
     let closed = false;
@@ -1338,7 +1290,6 @@ export class WeComAgentGateway {
   private async presentRunControl(options: {
     message: InboundMessage;
     state: ActiveRunControlState;
-    presentInline?: (presentation: Presentation) => void;
   }): Promise<string> {
     if (options.state.finished || options.state.cancelRequested) {
       throw new Error("Agent run ended before its control card was created");
@@ -1359,23 +1310,17 @@ export class WeComAgentGateway {
     const presentation: Presentation = {
       kind: "actions",
       id: controlId,
-      title: options.presentInline ? "⏳ 任务处理中" : "⏳ 任务仍在执行",
-      body: options.presentInline
-        ? "状态会在本消息文字中更新；如不再需要，可停止当前任务。"
-        : "可以继续等待；如不再需要，可停止当前任务。",
-      actions: [{ id: "cancel", label: "停止任务", style: "danger" }],
+      title: "⏳ 本轮任务仍在执行",
+      body: "仅本轮执行中有效；任务结束后点击会显示已结束。",
+      actions: [{ id: "cancel", label: "停止本轮", style: "danger" }],
     };
     try {
-      if (options.presentInline) {
-        options.presentInline(presentation);
-      } else {
-        await this.enqueueDurableDelivery(controlId, {
-          type: "proactive-presentation",
-          accountId: options.message.accountId,
-          conversationId: options.message.conversationId,
-          presentation,
-        });
-      }
+      await this.enqueueDurableDelivery(controlId, {
+        type: "proactive-presentation",
+        accountId: options.message.accountId,
+        conversationId: options.message.conversationId,
+        presentation,
+      });
     } catch (error) {
       this.activeRunControls.delete(controlId);
       await this.options.store.completeRunControl({

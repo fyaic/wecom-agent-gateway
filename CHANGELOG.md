@@ -24,14 +24,14 @@ tagged.
 - Sender-scoped long-run control cards that appear only for cancellable
   adapters, atomically accept one stop request, and call the Kernel's native
   cancel path without creating another semantic turn.
-- One official first-frame presentation plus mutable status text that projects
-  only explicit Adapter events without creating extra messages.
+- Mutable status text that projects only explicit Adapter events without
+  creating extra messages, plus real-client coverage of combined-stream cards.
 
 ### Fixed
 
-- Respect the official one-template-card-per-stream contract: existing
-  cancellable sessions receive the stop action on the first frame, while later
-  status changes remain mutable text and completion leaves no stale card.
+- Respect the official one-template-card-per-stream contract and real desktop
+  rendering: status stays in mutable text; cancellable long runs use one
+  sender-scoped proactive control card instead of an invisible first-frame card.
 - Preserve complete choice labels, render peer selections vertically without
   first-option color bias, and render updates as an inert checked result state
   instead of an invalid no-link notice.

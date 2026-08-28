@@ -150,7 +150,6 @@ GLM 首文本 23.05 秒，端到端 25.20 秒，多次可变回复投递成功�
    GATEWAY_RUN_CONTROL_ENABLED=true
    GATEWAY_RUN_CONTROL_AFTER_MS=15000
    GATEWAY_RUN_CONTROL_TIMEOUT_MS=300000
-   GATEWAY_PROGRESS_PRESENTATION_ENABLED=true
    CODEX_APPROVAL_WAIT_TIMEOUT_MS=90000
    GATEWAY_MEDIA_SPOOL_ROOT=data/media-spool
    GATEWAY_MEDIA_SPOOL_MAX_TOTAL_BYTES=524288000
@@ -173,23 +172,23 @@ GLM 首文本 23.05 秒，端到端 25.20 秒，多次可变回复投递成功�
 `.env` 会被设为 `0600`。
 Gateway 数据目录应为 `0700`；SQLite Store 每次打开主数据库时会强制收紧为 `0600`。
 
-支持原生 `cancel` 的 Adapter 在运行超过 15 秒后会收到一张独立“停止任务”卡。只有发起该任务的原
+支持原生 `cancel` 的 Adapter 在运行超过 15 秒后会收到一张独立“停止本轮”卡。只有发起该任务的原
 sender、同 account 与 conversation 可以点击；Gateway 先原位确认再调用 Adapter cancel。设置
 `GATEWAY_RUN_CONTROL_ENABLED=false` 可关闭，阈值和卡片 TTL 分别由后两个变量控制。快速任务、正在
 等待 ask-user/审批的未展示阶段，以及不声明 `cancel` 的 Adapter 不产生控制卡。
 
-真实验收应选一个明确会持续超过阈值、且无副作用的任务。卡片出现后点击一次“停止任务”，检查客户端
+真实验收应选一个明确会持续超过阈值、且无副作用的任务。卡片出现后点击一次“停止本轮”，检查客户端
 停止终态，并只核对脱敏的聚合证据：`interaction_lifecycle=cancelled`、对应
 `gateway_lifecycle=cancelled`、`run_controls` 只有一条 `resolved/cancel`，以及
 `pnpm outbox:status` 无 pending/leased/dead。不得通过重复点击制造成功，也不得读取消息正文或内部 ID。
 2026-08-28 的 Pi 私聊验收在 21.045 秒取消原 run，控制记录只结算一次，Outbox 307 条均 delivered，
-Gateway 仍为 ready。
+Gateway 仍为 ready。同日由本机 UI 自动化复验新“停止本轮”文案：执行中点击后 Pi run 在 34.204 秒进入
+cancelled；Outbox 551 条均 delivered、零 pending/leased/dead，Gateway 继续 ready。
 
-首帧 presentation 默认开启。尚无 session 或 Adapter 不可取消时，可显示一次“请求已接收”notice；
-已有 session 且 Adapter 声明 `cancel` 时，首帧应直接显示“停止任务”action。后续 Adapter 的显式
-emoji/status 只更新同一条回复的文字，因为官方 SDK 规定 template card 在同一 stream 只能回复一次。
-最终正文仍在原消息完成，首帧卡不得残留；最终快捷 action 作为紧邻的独立主动卡发送。验收只记录
-reply 投递阶段和 Outbox 聚合，不记录正文、presentation ID 或会话 ID。
+Adapter 的显式 emoji/status 只更新同一条回复的文字。官方 SDK 虽支持组合流卡片，但 2026-08-28
+真实 macOS 客户端验收确认首帧卡不可见，重复附卡又违反同一 stream 只能回复一次 template card 的
+契约，因此运行控制只走阈值主动卡。任务自然结束后平台没有无 callback 主动更新旧卡的接口；旧卡首次
+点击应原位显示任务已结束，不能取消后续 run。最终快捷 action 作为紧邻的独立主动卡发送。
 
 ## 联调顺序与通过条件
 
