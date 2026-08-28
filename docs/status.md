@@ -198,7 +198,7 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
 - 同名发布仓库已公开并进入 Public Preview；原仓库已改名并保持 private，发布仓库由审计后的干净
   根提交重新创建。未登录 API、README、SECURITY 和 Git refs 访问均已复核。
 - 项目自有代码采用与企业微信官方核心参考项目一致的 MIT；依赖许可证和来源规则已形成独立审计文档。
-- GitHub Actions 运行格式、TypeScript、176 项 deterministic tests、公开面和依赖许可证检查。
+- GitHub Actions 运行格式、TypeScript、179 项 deterministic tests、公开面和依赖许可证检查。
 - 已完成模式 `0600` 的最终离库 Git bundle 备份、旧仓库全部 refs 与 51 次 Actions 日志审计；旧历史
   确认包含私密名称和非 noreply 作者元数据，只保留在私有归档与离线 bundle。新的同名发布仓库从
   1 个审计后的根提交建立，GitHub CI、全新 clone、141 项测试和私密词扫描均通过；Dependabot 随后
@@ -234,7 +234,7 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
   at-least-once 投递。
 - Gateway 强制每 account + conversation 只有一个 pending interaction；开放输入只消费同 sender 的
   下一条非空纯文本，不创建第二个 Agent turn。
-- 176 项 deterministic tests 已通过；本机 Pi `0.84.2` 加载仓库示例后真实产生 select request，接受
+- 179 项 deterministic tests 已通过；本机 Pi `0.84.2` 加载仓库示例后真实产生 select request，接受
   “测试环境”的 native response，原 tool result 得到该值且同一 run 最终回复“测试完成”。授权私聊
   单选与限定文本输入已完成真实闭环；授权测试群的单选也已通过 group-only ACL 和完整交互链路。
 - 首轮真实私聊 select 已证明 Pi 原 run 完成且多次点击只产生一次 resume，但结果 notice 的
@@ -279,7 +279,19 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
   一次，因此 Adapter `status`/emoji 只进入 250ms 合并的可变文字。2026-08-28 本机 UI 自动验收确认，
   首帧仅发送一次卡片时 macOS 客户端不可见；重复附卡虽可能出现却违反官方契约。因此运行控制保留
   已真实验证的阈值主动卡，首帧组合卡不进入生产 UX。
-- 后续保留欢迎/主动任务卡、主题与独立群投票聚合；它们不阻塞 Gateway 主链路。
+- 后续只把欢迎、主动任务卡和独立群投票聚合作为可选能力；新增主题与卡片样式不再排在 IM 保真前面。
+
+### 2026-08-28 主线与官方生态复核
+
+- 重新检查 Runtime Contract、Core、WeCom Transport 和各 Adapter 后确认：厂商卡片 JSON 只存在于
+  Transport 映射，普通回复默认不附卡，Kernel 不需要支持卡片即可完成文本、媒体、流式和 session。
+- 对照官方 Node SDK、OpenClaw 插件、`wecom-cli 1.2.0` 与 `wecom-unified` 后，将引用/回复上下文保真、
+  `replyStreamNonBlocking` 背压和最终 durable delivery 列为 P0；feedback event、静态 `enter_chat`
+  welcome 列为 P1；Bot Webhook 作为独立可选 Transport 评估。
+- 官方插件的自然语言动态 Agent 路由、多账号业务编排、LLM 文本卡片 JSON 提取和内存 callback 表不进入
+  Core。`wecom-cli` / `wecom-unified` 的完整办公能力继续由 Kernel 工具层拥有。
+- 新增 `verified-kernel-cases.md` 与英文镜像，汇总 Codex、Kimi/ACP、OpenClaw、Pi 的真实企业微信场景、
+  分层延迟和 smoke 入口；Pi 案例附带一张裁剪、隐私复核后的真实客户端截图。
 
 ### M5：生产运行与韧性
 

@@ -23,6 +23,12 @@ Codex / Pi Agent / Kimi Code / OpenClaw
 2. `channel-core` 只处理通用 Channel 编排，不引用 Codex/OpenClaw 类型。
 3. 每个 Agent Kernel 通过 `AgentRuntimeAdapter` 接入；`wecom-cli` 是可注入的工具，不是消息传输层。
 
+项目主线按优先级是：入站/出站连通与顺序、消息和引用上下文归一化、媒体生命周期、会话恢复、
+背压与可靠投递、可观测性、稳定 Adapter Contract。结构化卡片只是一项可选
+`structured-presentation` / `interactive-presentation` Transport capability；关闭它或换成不支持卡片的
+IM Transport，不得破坏普通文本、媒体、流式回复或 Agent session。Core 也不得为了卡片从 Agent
+自然语言中猜测意图或解析厂商 JSON。
+
 ## 通用工具边界
 
 `RuntimeTool` 是 Kernel-neutral 契约，只包含工具 schema、副作用等级、审批要求和执行函数。

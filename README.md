@@ -29,11 +29,7 @@ Agent 如何思考、选择模型、调用工具或理解视频，不属于 Gate
 - **官方 SDK 优先**：认证、心跳、重连、媒体下载/解密和主动推送由企业微信官方 SDK 实现。
 - **Kernel 中立**：Core 不依赖 Codex、Kimi、OpenClaw、Pi 或任何模型厂商类型。
 - **可变消息 UX**：同一条 Bot 消息从即时回执更新为 Agent 显式状态文字、流式增量和最终正文，不额外刷屏。
-- **结构化卡片**：通用通知、图文、按钮、投票和表单映射官方模板卡片；审批按钮回调持久且可原位更新。
-- **交互协调层**：卡片选择不进入模型解析；Gateway 持久校验、即时更新并按同一 session 恢复 Agent；Pi 原生 ask-user 已贯通。
-- **多 Kernel 原生提问**：Codex App Server 与 Pi 的阻塞式 ask-user 都由同一 Broker 原路恢复；多问题可表单或逐步完成，秘密输入不进入 IM。
-- **回复快捷操作**：最终流式回答可附原生 action 卡；点击经 SQLite/ACL/幂等后继续同一 Agent session，写操作仍需审批。
-- **长任务控制**：可取消 Kernel 超过阈值后收到 sender-scoped“停止本轮”卡；点击原位确认并调用原生 cancel，不把控制动作交给模型解析。
+- **可选的 Channel 原生交互**：通用卡片、审批、ask-user、回复动作和长任务取消都经过同一耐久 Broker；不解析模型文本中的厂商 JSON，不支持卡片的 IM 或 Adapter 仍可完整使用文本、媒体和流式主链路。
 - **可靠投递**：文本与媒体发送前进入 SQLite outbox；租约、重试、死信和媒体 spool 支持崩溃恢复。
 - **精确多模态**：Transport 与 Adapter 声明具体输入/输出类型，不支持时 fail closed，不伪造文字占位。
 - **安全默认值**：单一 Bot 身份、分域白名单、敏感字段脱敏、受保护临时媒体和写工具审批。
@@ -63,6 +59,10 @@ flowchart LR
 - `wecom-cli` 是可选办公工具层，不承担 IM 接入，也不提供真人身份替代。
 - 本地主动控制面只提交别名和消息，仍复用同一 Bot、Outbox 和官方 SDK。
 
+> [!NOTE]
+> 主线优先级始终是 IM 接入、消息归一化、会话与媒体保真、可靠投递和稳定 Adapter Contract。
+> 卡片只是 Transport 能力允许时的可选交互投影，默认普通回复不会附卡，也不能改变 Agent 的推理语义。
+
 ## 已支持的 Kernel
 
 | Adapter   | 上游接口               | 已验证能力                                                                      |
@@ -77,6 +77,9 @@ flowchart LR
 [`docs/adapter-authoring.md`](docs/adapter-authoring.md) 使用 `@fyaic/wecom-adapter-sdk` 实现小型
 Adapter，并通过 `GATEWAY_ADAPTER=external` 加载，无需修改 Gateway Registry。仓库内的
 [`examples/adapter-template`](examples/adapter-template) 是可运行模板。
+
+真实企业微信端到端案例、代表性延迟和复现入口见
+[`docs/verified-kernel-cases.md`](docs/verified-kernel-cases.md)。
 
 交互卡片的完整设计和里程碑见 [`docs/interaction-cards.md`](docs/interaction-cards.md)。
 无副作用的 Pi 原生交互示例见 [`examples/pi-wecom-interaction.mjs`](examples/pi-wecom-interaction.mjs)。
@@ -192,7 +195,7 @@ allowlist 内。媒体路径还必须位于 `WECOM_MEDIA_OUTPUT_ROOTS` 允许目
 
 ## 成熟度
 
-项目处于 **Public Preview**，尚未承诺稳定的 v1 API。当前已有 176 项 deterministic tests，并完成
+项目处于 **Public Preview**，尚未承诺稳定的 v1 API。当前已有 179 项 deterministic tests，并完成
 真实企业微信私聊、群聊、流式回复、会话恢复、图片/文件/MP4、主动媒体、受管重启及四类 Kernel
 接入验证。真实 OS 子进程 `SIGKILL` 后的 SQLite Outbox 租约恢复、macOS 受管 Gateway 强杀拉起和
 重新鉴权也已通过；隔离 Linux 网络断开/恢复、持久卷只读和受限 tmpfs 容量耗尽均完成真实故障验收。

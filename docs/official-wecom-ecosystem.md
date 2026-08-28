@@ -1,6 +1,6 @@
 # 企业微信官方与周边生态调研
 
-调研快照：2026-08-20；Kernel 协议补充于 2026-08-24；卡片复核于 2026-08-25。版本和 commit 是为了让结论可复核，
+调研快照：2026-08-28；Kernel 协议补充于 2026-08-24；卡片复核于 2026-08-25。版本和 commit 是为了让结论可复核，
 不表示项目永久固定在这些版本。
 
 ## 官方能力地图
@@ -9,8 +9,8 @@
 | ------------------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
 | [`@wecom/aibot-node-sdk`](https://github.com/WecomTeam/aibot-node-sdk)          | npm `1.0.7`；仓库 main `80615b9` | WebSocket 认证、心跳、指数退避重连；文本/图片/混合/语音/文件/视频消息；流式与卡片回复；主动 `sendMessage`；媒体上传、下载和解密 | 首选且唯一的 Bot WebSocket 协议实现               |
 | [`wecom-openclaw-plugin`](https://github.com/WecomTeam/wecom-openclaw-plugin)   | `2026.8.17`；main `3b1cbe3`      | Bot WebSocket/Webhook、单聊/群聊、流式回复、主动推送、富媒体、ACL、多账号、动态 Agent 路由、会话、`wecom-cli` 工具              | 产品级语义与异常处理参考，不作为运行时依赖        |
-| [`wecom-cli`](https://github.com/WecomTeam/wecom-cli)                           | npm `1.1.0`；main `59604ae`      | 通讯录、消息、文档、表格、微盘、日程、会议、待办、邮件等办公业务工具                                                            | Agent 工具层；不负责 IM 入站                      |
-| [`wecom-unified`](https://github.com/WecomTeam/wecom-unified)                   | main `33aaa71`                   | 面向 WorkBuddy、CodeBuddy、MiniMax Code、Kimi Work、Codex、Cursor 的统一 Skill 分发                                             | 工具说明/Skill 生态参考，不是常驻 Channel runtime |
+| [`wecom-cli`](https://github.com/WecomTeam/wecom-cli)                           | npm `1.2.0`；main `78c514b`      | 消息、邮件、文档/表格/智能表格/智能文档、日程、会议、待办、微盘、通讯录、媒体和身份等办公工具                                   | Agent 工具层；不负责 IM 入站                      |
+| [`wecom-unified`](https://github.com/WecomTeam/wecom-unified)                   | main `7865dca`                   | 面向 WorkBuddy、CodeBuddy、MiniMax Code、Kimi Work、Codex、Cursor 的统一 Skill 分发                                             | 工具说明/Skill 生态参考，不是常驻 Channel runtime |
 | [`wecom-aibot-python-sdk`](https://github.com/WecomTeam/wecom-aibot-python-sdk) | main `6bcb59a`                   | Node SDK 的 Python 语义对应实现                                                                                                 | 跨语言行为参考；首版仍选 Node                     |
 
 ## 对官方 OpenClaw 插件的代码核验
@@ -24,6 +24,25 @@
 - `src/cli/tool.ts` 把 `wecom-cli` 作为受限工具执行，按 Bot 注入独立配置目录，限制输出、超时和参数，避免 Agent 绕过凭据隔离直接调用 shell。
 
 这些实现证明“企业微信 Bot ↔ 通用 Agent runtime”在官方生态里已经可行，也说明我们不应重写认证、心跳、重连或媒体密码学。它们不能直接成为本项目内核，原因是其路由、session、tool 和 reply 生命周期都绑定 OpenClaw API；本项目需要稳定的中立契约。
+
+2026-08-28 再次对照官方 Node SDK、OpenClaw 插件、`wecom-cli 1.2.0` 和 `wecom-unified`。官方 SDK 还提供
+引用消息、`replyStreamNonBlocking`、`ReplyFeedback`、`feedback_event`、`enter_chat` / `replyWelcome`
+等能力；官方插件同时实现 Bot WebSocket、Bot HTTP Webhook、Agent HTTP XML Webhook、多账号、配对/
+白名单策略和欢迎语。这些能力需要按本项目边界分层吸收，而不是整包复制。
+
+| 官方能力                                        | 本项目差距与决定                                                                            | 优先级 / 所属层                    |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------- |
+| 引用/回复消息                                   | 将被引用消息归一化为中立上下文，保持单聊、群聊和各 Adapter 一致；不得只拼接成 Prompt 字符串 | P0 / Runtime Contract + Transport  |
+| `replyStreamNonBlocking`                        | 采用有界合并、背压和可观察失败，最终正文仍经 durable outbox；不以无限并发换首字速度         | P0 / Transport + Core              |
+| `ReplyFeedback`、`feedback_event`               | 归一化为可选 channel feedback signal；默认不创建新 Agent turn，也不让赞踩改变会话文本       | P1 / Transport + Core event        |
+| `enter_chat`、`replyWelcome`                    | 允许静态欢迎或部署配置模板；不启动 Kernel、不生成模型回复                                   | P1 / optional Transport capability |
+| Bot HTTP Webhook                                | 可新增独立 Transport，共用同一中立 Core；不能把 HTTP/XML 类型泄漏到 Adapter                 | Optional Transport                 |
+| 多账号、配对、动态 Agent 路由                   | 作为部署编排/策略层参考；Core 坚持显式确定性 Kernel，不按自然语言切换 Agent                 | Out of Core                        |
+| `wecom-cli 1.2.0`、`wecom-unified` 全量办公能力 | 保持为 Kernel 拥有的工具/Skill 层；Gateway 仅保留少量精确、隔离、需审批的参考工具           | Kernel tool ecosystem              |
+
+官方插件从模型输出中提取企业微信卡片 JSON、用内存表关联 callback 的做法也不复制。本项目继续使用
+Channel-neutral Presentation、SQLite Interaction Broker 和显式 Adapter event；卡片能力关闭时，普通
+文本、媒体、流式和 session 主链路必须完全不变。
 
 媒体 API 的官方边界也已核对：图片、文件和视频回调给出五分钟有效的加密 URL 与每链接独立
 AES key；语音回调给出转写文本，不给原始音频 URL。`downloadFile` 负责下载和 AES 解密；

@@ -8,6 +8,9 @@ tagged.
 
 ### Added
 
+- A privacy-reviewed real WeCom case page covering Codex, Kimi/ACP, OpenClaw,
+  and Pi, with one cropped client screenshot, representative layered latency,
+  evidence boundaries, and reproducible smoke commands.
 - Channel-neutral notice, article, action, choice, and form presentations,
   rendered through the official WeCom SDK's five template-card types.
 - Durable, sender- and conversation-scoped card interactions with an approval
@@ -29,6 +32,9 @@ tagged.
 
 ### Fixed
 
+- Reframe cards as an optional channel-native projection so repository
+  positioning, architecture, and roadmap keep IM fidelity and the stable
+  Kernel Adapter boundary ahead of additional card UX.
 - Respect the official one-template-card-per-stream contract and real desktop
   rendering: status stays in mutable text; cancellable long runs use one
   sender-scoped proactive control card instead of an invisible first-frame card.
