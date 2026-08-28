@@ -108,11 +108,13 @@ lane、TTL、发送者/会话绑定和 durable deferred resume；Kernel continua
 Transport。Pi 与 Codex App Server 已接入上游真实 ask-user；ACP v1 只有 permission request，OpenClaw
 Gateway v4 也没有导出通用 elicitation response，因此不会以合成 Prompt 冒充缺失协议。
 
-长任务控制属于 Core，不属于 Kernel 推理。仅当 Adapter 声明 `cancel` 且 Transport 支持主动交互卡时，
-任务超过配置阈值才生成一次 `run_control_*` 卡。SQLite 单独保存 account/conversation/sender/TTL 和
-首答状态；点击后先在企业微信回调窗口内原位确认，再调用该 session 的原生 `cancel()`。控制动作不进入
-Agent 文本队列、不创建新 turn，也不复用 ask-user、审批或最终回复 action 的 namespace。任务正常结束、
-卡片过期、错误发送者、重复点击和进程重启后的旧卡都不能取消后续任务。
+长任务控制属于 Core，不属于 Kernel 推理。仅当 Adapter 声明 `cancel` 且 Transport 支持交互卡时，任务
+超过配置阈值才生成一次 `run_control_*`。支持首帧组合流时，原进度 notice 在同一可变消息内切换为停止
+按钮，最终帧自然清除，避免已完成任务遗留“仍在执行”卡；其他 Transport 降级为独立主动卡。SQLite
+单独保存 account/conversation/sender/TTL 和首答状态；点击后先在企业微信回调窗口内原位确认，再调用
+该 session 的原生 `cancel()`。控制动作不进入 Agent 文本队列、不创建新 turn，也不复用 ask-user、审批
+或最终回复 action 的 namespace。任务正常结束、卡片过期、错误发送者、重复点击和进程重启后的旧卡都
+不能取消后续任务。
 
 ## Gateway Core 与 Adapter Host
 

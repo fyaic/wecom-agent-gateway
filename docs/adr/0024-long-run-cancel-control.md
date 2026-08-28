@@ -13,8 +13,10 @@
 
 - 取消是 Gateway Core 控制面。仅当 Adapter 声明 `cancel`、实现 `cancel(sessionId)`，且 Transport 支持
   主动结构化交互时启用。
-- 默认应用配置在 Kernel 运行 15 秒后发送一张独立 action card，仅含显式 danger 样式的“停止任务”。
-  快速任务不发卡；可通过 `GATEWAY_RUN_CONTROL_ENABLED`、`GATEWAY_RUN_CONTROL_AFTER_MS` 和
+- 默认应用配置在 Kernel 运行 15 秒后呈现仅含显式 danger 样式“停止任务”的 action card。已经从首帧
+  建立 mutable presentation 的 Transport 在同一回复中把进度 notice 替换为控制卡，完成时随最终帧
+  清除；其他 Transport 才使用独立主动卡。快速任务不发卡；可通过
+  `GATEWAY_RUN_CONTROL_ENABLED`、`GATEWAY_RUN_CONTROL_AFTER_MS` 和
   `GATEWAY_RUN_CONTROL_TIMEOUT_MS` 调整。
 - `run_control_*` 使用独立 SQLite 表和 namespace，持久绑定 account、conversation、原 sender、TTL 与
   首答状态。它不复用 approval、Runtime Interaction 或 reply-action 的语义。
@@ -39,3 +41,5 @@
 - SQLite tests 覆盖跨 sender 拒绝、原子首答、重复、正常完成和过期。
 - 2026-08-28 真实企业微信私聊点击验收通过：停止卡可见，一次点击只结算一条 `resolved/cancel`，Pi
   原生 run 在 21.045 秒进入 `cancelled`；Outbox 零积压/死信且 Gateway 保持 ready。
+- 同日动态进度卡首轮验收发现，任务在停止卡主动送达后很快正常结束，会在历史中遗留“任务仍在执行”。
+  因此组合流 Transport 改为同消息替换并由最终帧清除，独立主动卡只作为能力降级。

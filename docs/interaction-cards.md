@@ -404,8 +404,8 @@ sequenceDiagram
 
     A->>G: run 持续超过阈值（capability=cancel）
     G->>S: create run_control（scope + TTL）
-    G->>W: durable proactive 停止卡
-    W->>U: 继续等待 / 停止任务
+    G->>W: 原可变回复 notice → 停止 action
+    W->>U: 同消息显示继续等待 / 停止任务
     U->>W: 点击停止任务
     W->>G: template_card_event
     G->>S: ACL + first-answer resolve
@@ -417,12 +417,17 @@ sequenceDiagram
 
 `run_control_*` 不进入 Agent 消息、不授予工具权限，也不恢复已结束 session。正常完成时 pending control
 立即标记 completed；旧卡第一次点击只收敛为“任务已经结束”，之后重复静默。进程重启只保留陈旧卡
-安全性，不尝试复活已经消失的 live run。
+安全性，不尝试复活已经消失的 live run。不支持首帧组合卡的 Transport 使用原独立主动卡降级。
 
 2026-08-28 已完成真实企业微信私聊验收：阈值后停止卡正常可见，一次点击只原子结算一条
 `resolved/cancel` 控制记录，绑定的 Pi run 在 21.045 秒进入 `cancelled`。取消后没有继续完成原 run，
 Outbox 保持零 pending/leased/dead，Gateway 继续 ready。该结果验证的是 Channel 控制面到 Adapter 原生
 取消的闭环，不把模型行为纳入卡片语义。
+
+同日进度卡首轮目视确认了同消息阶段变化，但任务在 18.561 秒完成前，15 秒阈值触发的独立停止卡已
+送达，最终回复后仍显示“任务仍在执行”。该状态虽然点击会安全收敛且不能取消后续任务，视觉语义仍然
+错误。修复后，支持组合流的企业微信直接把原进度卡替换为停止按钮，正常完成的最终帧清除卡片；不再
+依赖用户点击旧卡收尾。
 
 动态进度卡的数据流：
 
@@ -449,5 +454,6 @@ sequenceDiagram
 
 这不是 Gateway 的任务规划器：初始卡只陈述请求已经进入处理链路；后续“思考、工具运行或自定义阶段”
 必须由 Adapter 显式发出。未声明 `status-events`、Transport 不支持组合流或配置
-`GATEWAY_PROGRESS_PRESENTATION_ENABLED=false` 时，Gateway 保持原有纯文字可变回复。进度卡不接收
-callback，不进入 Interaction Broker，也不取代超过阈值后独立出现的原生停止卡。
+`GATEWAY_PROGRESS_PRESENTATION_ENABLED=false` 时，Gateway 保持原有纯文字可变回复。进度 notice
+不接收 callback、不进入 Interaction Broker；超过阈值后可在同一 presentation 槽位切换为带 ACL、
+首答和原生 cancel 语义的停止卡。
