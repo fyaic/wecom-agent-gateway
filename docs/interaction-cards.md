@@ -209,7 +209,7 @@ Adapter 提供稳定 idempotency key；不能虚假声称外部 Kernel 已具备
 2. 卡片只确认用户提交的内容，不等待 Agent 工具执行结果。
 3. callback `req_id` 被卡片更新消费后，不再用于 Agent 回复；续跑输出使用新的主动可变消息。
 4. TTL 到期但没有 callback frame 时无法原位更新旧卡，只主动发送一次简短过期提醒。
-5. 首帧已知的卡片才使用 `replyStreamWithCard`；最终完成时才确定的快捷动作紧随文字以主动卡片发送。
+5. `replyStreamWithCard` 只用于通过真实客户端认证的场景；最终才确定的快捷动作紧随文字以主动卡片发送。
 
 目标指标：`callback → SQLite commit` p95 小于 100ms，`callback → card update` p95 小于 800ms，
 `callback → resume enqueue` p95 小于 150ms。Kernel 首事件、首文本和完成耗时继续单独统计。
@@ -385,9 +385,9 @@ callback continuation 完成后再次出现，否则“点击 → 续跑 → 同
 
 ### M2.5：高级交互
 
-- [x] 长任务取消卡：已有 session 首帧展示；sender/conversation ACL、SQLite 首答、原位确认、原生
-      cancel、正常完成/过期/重复/重启陈旧卡 fail closed；无组合流时阈值后主动降级。
-- [x] 首帧呈现与动态状态文字：template card 只回复一次；显式 Agent status/emoji 与文本增量合并。
+- [x] 长任务取消卡：阈值后主动展示；sender/conversation ACL、SQLite 首答、原位确认、原生 cancel、
+      正常完成/过期/重复/重启陈旧卡 fail closed。
+- [x] 动态状态文字与组合卡边界：显式 Agent status/emoji 与文本增量合并；首帧卡真实客户端不可见。
 - [ ] 欢迎卡与主动任务卡。
 - 独立群投票和多人聚合模型。
 - 卡片模板主题与 Agent 品牌标识。
@@ -402,10 +402,10 @@ sequenceDiagram
     participant S as SQLite
     participant A as Kernel Adapter
 
-    G->>S: 已有 session 时 create run_control（scope + TTL）
-    G->>W: 首帧文字 + 停止 action
-    W->>U: 同消息显示运行状态文字 / 停止任务
-    U->>W: 点击停止任务
+    G->>S: 超过阈值时 create run_control（scope + TTL）
+    G->>W: 主动发送“停止本轮”卡
+    W->>U: 独立显示本轮控制卡
+    U->>W: 点击停止本轮
     W->>G: template_card_event
     G->>S: ACL + first-answer resolve
     G->>W: 五秒内原位显示“正在停止”
@@ -416,20 +416,23 @@ sequenceDiagram
 
 `run_control_*` 不进入 Agent 消息、不授予工具权限，也不恢复已结束 session。正常完成时 pending control
 立即标记 completed；旧卡第一次点击只收敛为“任务已经结束”，之后重复静默。进程重启只保留陈旧卡
-安全性，不尝试复活已经消失的 live run。首轮无 session 时不伪造 cancel；不支持首帧组合卡的
-Transport 使用阈值后的独立主动卡降级。
+安全性，不尝试复活已经消失的 live run。首轮无 session 时不伪造 cancel。
 
 2026-08-28 已完成真实企业微信私聊验收：阈值后停止卡正常可见，一次点击只原子结算一条
 `resolved/cancel` 控制记录，绑定的 Pi run 在 21.045 秒进入 `cancelled`。取消后没有继续完成原 run，
 Outbox 保持零 pending/leased/dead，Gateway 继续 ready。该结果验证的是 Channel 控制面到 Adapter 原生
 取消的闭环，不把模型行为纳入卡片语义。
 
-同日首轮目视确认了可变状态文字，但任务在 18.561 秒完成前，15 秒阈值触发的独立停止卡已送达，最终
-回复后仍显示“任务仍在执行”。随后 UI 自动验收又确认，stream 中把 `text_notice` 换成
-`button_interaction` 并不可靠。官方 SDK 的根本约束是同一消息只能回复一次 `template_card`，因此最终
-方案是已有 session 首帧直接发送停止 action，最终帧清除；不再尝试运行中换卡。
+同日 Gateway 改为“本轮”生命周期文案后，由本机企业微信 UI 自动化再次发送长任务并点击“停止本轮”。
+原 Pi run 在 34.204 秒进入 `cancelled`；Outbox 551 条全部 delivered、零 pending/leased/dead，服务保持
+ready。另一次任务已自然结束后点击旧卡只原位显示“已完成”，验证了陈旧控制不会影响后续 run。
 
-首帧呈现与动态状态文字的数据流：
+同日首轮目视确认了可变状态文字，但任务在 18.561 秒完成前，15 秒阈值触发的独立停止卡已送达，最终
+回复后仍显示“任务仍在执行”。后续 UI 自动验收确认首帧组合卡服务端成功但客户端不可见，重复附卡虽
+可能显示却违反官方单次契约。因此最终方案保留真实可用的阈值主动卡，文案改为“本轮”；旧卡点击只能
+收敛为已结束，不再尝试用组合流承载运行控制。
+
+动态状态文字的数据流：
 
 ```mermaid
 sequenceDiagram
@@ -439,8 +442,8 @@ sequenceDiagram
     participant W as WeCom SDK
     participant U as 用户
 
-    G->>O: 首帧文字 + 一次 template card
-    O->>W: replyStreamWithCard(final=false)
+    G->>O: 首帧中性文字
+    O->>W: replyStreamWithCard(final=false, no card)
     W->>U: 显示一条可变 Bot 消息
     A->>G: status(thinking/tool/custom, emoji)
     G->>G: 只投影显式状态到文字，250ms 合并
@@ -453,6 +456,4 @@ sequenceDiagram
 ```
 
 这不是 Gateway 的任务规划器：后续“思考、工具运行或自定义阶段”必须由 Adapter 显式发出，并且只
-更新文字。已有 session 且 Adapter 可取消时，首帧卡使用带 ACL、首答和原生 cancel 语义的停止 action；
-否则可使用中性 notice。未声明 `status-events`、Transport 不支持组合流或配置
-`GATEWAY_PROGRESS_PRESENTATION_ENABLED=false` 时，Gateway 保持纯文字可变回复。
+更新文字。运行控制在阈值后使用带 ACL、首答和原生 cancel 语义的独立主动卡。

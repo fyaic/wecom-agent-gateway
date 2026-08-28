@@ -23,10 +23,10 @@ ask-user 交互解决了 Agent 在运行中主动向用户提问，但最终回�
 - Gateway 为最终动作生成 task ID，使用现有 SQLite Runtime Interaction 保存 account、conversation、
   sender、Adapter、session、TTL 和动作集合。新快捷卡会取消同会话旧快捷卡；真正的 ask-user 请求也
   可替换旧快捷卡，但不能被快捷卡覆盖。
-- 企业微信组合流只有在首帧已经携带模板卡片时能在真实客户端稳定呈现；服务端虽然接受在最终帧首次加入
-  卡片，但桌面端会静默丢弃。最终动作来自 `message-completed`，无法在首帧确定，因此 Gateway 保持原
-  可变流式文字，终态完成后立即通过 durable proactive path 发送独立模板卡片。Transport 仍保留
-  `replyStreamWithCard` 映射，供未来首帧即可确定卡片的场景使用；不得以服务端成功回执冒充客户端可见。
+- 企业微信组合流在不同发送时机都存在真实客户端静默丢弃卡片的情况。最终动作来自
+  `message-completed`，因此 Gateway 保持原可变流式文字，终态完成后立即通过 durable proactive path
+  发送独立模板卡片。Transport 仍保留 `replyStreamWithCard` 映射，供未来经过客户端认证的场景使用；
+  不得以服务端成功回执冒充客户端可见。
 - 用户点击后，Gateway 先完成 ACL、入站去重、原子 resolve 和五秒内原位更新，再创建 durable resume。
   `resumeMode=new-turn` 明确表示这是一个真实 callback continuation：必须进入正常会话串行队列和 run
   semaphore，不得借 `interaction-live-resume` 绕过背压。
