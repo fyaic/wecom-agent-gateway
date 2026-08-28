@@ -36,18 +36,10 @@ model selection, tool policy, and media understanding stay in the Kernel.
 - **Mutable Bot UX** — one reply evolves from an immediate acknowledgement to
   explicit Agent-status text, streamed text, and the final answer without
   extra chat messages.
-- **Structured cards** — neutral notices, articles, actions, choices, and forms
-  map to official template cards; approval callbacks are durable and update in
-  place.
-- **Interaction broker** — card choices bypass text interpretation; the Gateway
-  persists, validates, updates, and resumes the same Agent session; Pi native
-  ask-user is bridged end to end.
-- **Final reply actions** — a streamed answer can carry native quick actions;
-  scoped, idempotent callbacks continue the same Agent session while write
-  tools still require approval.
-- **Long-run controls** — cancellable Kernels get one sender-scoped stop card
-  after a threshold; the callback invokes native cancel without becoming a
-  model prompt or a second semantic turn.
+- **Optional channel-native interaction** — cards, approvals, ask-user, reply
+  actions, and long-run cancellation share one durable Broker. Vendor JSON is
+  never parsed from model text, and transports or adapters without cards retain
+  the complete text, media, and streaming path.
 - **Durable delivery** — SQLite outbox leases, retries, dead letters, and a
   protected media spool survive process failure.
 - **Exact modalities** — transports and adapters declare concrete media types
@@ -81,6 +73,12 @@ flowchart LR
 - `wecom-cli` is an optional office-tool layer, never a human-identity fallback.
 - The local control plane reuses the same Bot, durable outbox, and official SDK.
 
+> [!NOTE]
+> The mainline is IM connectivity, normalized message fidelity, sessions,
+> media, reliable delivery, and a stable Adapter Contract. Cards are an
+> optional Transport projection: ordinary replies do not attach them by
+> default, and cards never redefine Agent reasoning semantics.
+
 ## Kernel adapters
 
 | Adapter     | Upstream interface           | Validated capabilities                                                                       |
@@ -96,6 +94,9 @@ One Gateway process hosts one explicitly selected Kernel. See the
 [Adapter template](examples/adapter-template) to add another Kernel through
 `@fyaic/wecom-adapter-sdk` and `GATEWAY_ADAPTER=external`, without changing the
 Gateway registry.
+
+See [verified Kernel cases](docs/verified-kernel-cases.en.md) for real WeCom
+end-to-end evidence, representative latency, and reproducible smoke commands.
 
 See the [interaction-card architecture](docs/interaction-cards.md) for the
 implemented durable callback, TTL, scoped interaction, and Agent-resume design.
@@ -174,7 +175,7 @@ and [ADRs](docs/README.md) for the complete contract.
 ## Maturity
 
 The project is in **Public Preview**; a stable v1 API is not promised yet. The
-current baseline has 176 deterministic tests and real acceptance evidence for
+current baseline has 179 deterministic tests and real acceptance evidence for
 direct and group conversations, mutable streaming, session recovery,
 image/file/MP4 transfer, proactive media, managed restarts, and four Kernel
 families. Cross-process SQLite outbox lease recovery after `SIGKILL` and a

@@ -23,6 +23,19 @@ changes.
 
 ## Next
 
+Mainline priorities take precedence over additional card themes or business UI:
+
+- [ ] Preserve quoted/replied-message context in the neutral inbound contract
+      and certify it in real direct and group conversations.
+- [ ] Adopt the official non-blocking stream path with bounded coalescing and
+      backpressure, while keeping the final answer on the durable outbox path.
+- [ ] Normalize reply-feedback events as channel feedback without creating a
+      new semantic Agent turn.
+- [ ] Add a static, Kernel-free `enter_chat` welcome as an optional Transport
+      capability.
+- [ ] Evaluate a separate Bot Webhook Transport without changing Core or the
+      Runtime Contract.
+
 - [x] M2.1: durable Interaction Broker, five-second callback fast lane, and
       runtime resume queue with deterministic end-to-end tests.
 - [x] M2.2: connect Pi native ask-user hooks to the neutral interaction contract,
@@ -51,8 +64,8 @@ changes.
 - [x] M2.5 second slice: mutable status text driven only by explicit Adapter
       events, plus real-client certification of the official combined-stream
       boundary; run controls use the proven proactive-card path.
-- M2.5 follow-up: welcome/proactive task cards, card themes, and a separate
-  group-poll aggregation model.
+- M2.5 follow-up: optional proactive task cards and a separate group-poll
+  aggregation model, after the IM-fidelity priorities above.
 - Compatibility certification for additional Agent kernels.
 - Optional distributed outbox and media storage implementations.
 - A documented extension model for additional IM transports without weakening
