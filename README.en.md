@@ -1,60 +1,179 @@
-# wecom-agent-gateway
+<p align="center">
+  <img src="docs/assets/social-preview.png" width="100%" alt="WeCom Agent Gateway — one IM channel, pluggable agent kernels">
+</p>
 
-> A WeCom Bot IM gateway for pluggable Agent kernels.
+<p align="center">
+  <a href="https://github.com/fyaic/wecom-agent-gateway/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/fyaic/wecom-agent-gateway/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-f2c744.svg"></a>
+  <a href="package.json"><img alt="Node 22 or newer" src="https://img.shields.io/badge/node-%3E%3D22-339933.svg"></a>
+  <a href="ROADMAP.md"><img alt="Public Preview status" src="https://img.shields.io/badge/status-public_preview-6f42c1.svg"></a>
+</p>
 
-[![CI](https://github.com/fyaic/wecom-agent-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/fyaic/wecom-agent-gateway/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-339933.svg)](package.json)
-[![Status: Public Preview](https://img.shields.io/badge/status-public_preview-6f42c1.svg)](ROADMAP.md)
+<p align="center">
+  <a href="#quick-start"><strong>Quick start</strong></a> ·
+  <a href="docs/verified-kernel-cases.en.md">Real cases</a> ·
+  <a href="#supported-agents"><strong>Agent support</strong></a> ·
+  <a href="docs/README.md">Documentation</a> ·
+  <a href="README.md">简体中文</a>
+</p>
 
-[简体中文](README.md) · English
+# WeCom Agent Gateway
 
-![WeCom Agent Gateway connecting one IM channel to pluggable Agent kernels](docs/assets/social-preview.png)
+Turn one WeCom Bot into a reliable IM front door for Codex, Kimi Code,
+OpenClaw, Pi Agent, and other Agent kernels.
 
-wecom-agent-gateway connects to WeCom through the official
-[`@wecom/aibot-node-sdk`](https://github.com/WecomTeam/aibot-node-sdk), maps
-messages and mutable streaming replies to a stable Runtime Contract, and hands
-them to Codex, Kimi Code, OpenClaw, Pi Agent, or another Agent kernel.
+**WeCom provides reach. The Agent provides intelligence. The Gateway makes the
+path between them reliable.**
 
-Its job is the faithful IM path: transport, normalization, sessions, media,
-mutable presentation, access control, and reliable delivery. Agent reasoning,
-model selection, tool policy, and media understanding stay in the Kernel.
+People send text, images, files, or video through an ordinary WeCom
+conversation. The Gateway receives them through the official SDK, owns session
+and streaming behavior, and hands a stable Runtime Contract to the selected
+Agent. The Agent can use the same controlled path to push messages and media or
+ask for native confirmation, selection, and cancellation.
 
 > [!IMPORTANT]
 > This is an independent community project, not an official Tencent WeCom
 > product. OpenClaw-only deployments should also evaluate the official
 > [`wecom-openclaw-plugin`](https://github.com/WecomTeam/wecom-openclaw-plugin).
-> This project focuses on multiple kernels, a stable Runtime Contract, and an
-> independently reliable transport layer.
+> This project is for multiple kernels, a stable Runtime Contract, and an
+> independently reliable IM layer.
 
-## Highlights
+## Why it exists
 
-- **Official SDK first** — WeCom authentication, heartbeat, reconnect, media
-  download/decryption, and proactive push use the official SDK.
-- **Kernel-neutral Core** — no Codex, Kimi, OpenClaw, Pi, or model-vendor types
-  leak into Gateway Core.
-- **Mutable Bot UX** — one reply evolves from an immediate acknowledgement to
-  explicit Agent-status text, streamed text, and the final answer without
-  extra chat messages.
-- **Message fidelity** — quoted text/media stays structured through protected
-  materialization and every reference Adapter; official non-blocking streaming
-  drops stale partials but never the final frame.
-- **Optional channel-native interaction** — cards, approvals, ask-user, reply
-  actions, and long-run cancellation share one durable Broker. Vendor JSON is
-  never parsed from model text, and transports or adapters without cards retain
-  the complete text, media, and streaming path.
-- **Durable delivery** — SQLite outbox leases, retries, dead letters, and a
-  protected media spool survive process failure.
-- **Exact modalities** — transports and adapters declare concrete media types
-  and fail closed instead of fabricating placeholder prompts.
-- **Secure defaults** — one Bot identity, scoped allowlists, redacted logs,
-  ephemeral inbound media, bounded output roots, and write-tool approvals.
-- **Bidirectional IM** — local Agents can proactively send to authorized aliases
-  through a `0600` socket without Bot secrets or internal conversation IDs.
-- **Operable by default** — loopback liveness/readiness, privacy-safe Prometheus
-  metrics, systemd, and a non-root container baseline.
+Making an Agent answer one WeCom message is easy. Keeping that integration
+reliable is not. Rebuilding Bot authentication, heartbeat and reconnect, group
+scope, media decryption, sessions, mutable streaming, retries, and security for
+every Kernel produces a collection of incompatible channel plugins.
 
-## Architecture
+WeCom Agent Gateway implements the WeCom side once. A new Agent only needs a
+small Adapter. Changing Kernel does not rebuild the IM path, and improving
+delivery or interaction does not invade the Agent reasoning loop.
+
+## What one message does
+
+```text
+WeCom user ⇄ official Bot WebSocket ⇄ Gateway ⇄ Kernel Adapter ⇄ Agent
+ text / image / file / video       session / ACL / stream / outbox    model / tools
+```
+
+1. The Gateway applies the scoped allowlist and acknowledges receipt quickly.
+2. Neutral text and media parts reach the Agent in strict conversation order.
+3. Explicit Agent status and text deltas update one Bot message in place; the
+   final answer goes through the durable outbox.
+4. Native ask-user or cancel events can become WeCom cards whose result resumes
+   the original session.
+5. The Agent can proactively send text or media to authorized direct and group
+   targets through the same path.
+
+<p align="center">
+  <img src="docs/assets/verified-kernel-cases/pi-wecom-private.png" width="548" alt="A real Pi Agent conversation and interaction card delivered through WeCom Agent Gateway">
+</p>
+
+<p align="center"><em>A real WeCom client: an ordinary Pi Agent answer and an explicit interaction card through the same Gateway. The image is cropped and privacy-reviewed.</em></p>
+
+## Quick start
+
+### Validate the repository without a Bot or model credential
+
+```bash
+git clone https://github.com/fyaic/wecom-agent-gateway.git
+cd wecom-agent-gateway
+pnpm install --frozen-lockfile
+pnpm run ci
+```
+
+The 197 deterministic tests traverse the Runtime Contract, Gateway Core,
+official SDK mapping, sessions, streaming, media, outbox, Interaction Broker,
+and every reference Adapter. They spend no model quota and contact no real Bot.
+
+### Connect one real WeCom Bot and Agent
+
+Prepare Node.js 22, pnpm 11.8.0, a WeCom intelligent Bot with
+long-connection/API mode enabled, and one Agent Kernel that already works on
+its own. Create a local-only configuration:
+
+```bash
+cp .env.example .env
+chmod 600 .env
+```
+
+This minimal example selects a local OpenClaw Gateway. Any supported Adapter
+below can be selected instead.
+
+```dotenv
+WECOM_BOT_ID=
+WECOM_BOT_SECRET=
+GATEWAY_ADAPTER=openclaw
+OPENCLAW_GATEWAY_URL=ws://127.0.0.1:18789
+```
+
+Enroll one authorized direct conversation without copying or exposing any
+internal ID:
+
+```bash
+pnpm enroll:direct --name 'Authorized test member'
+```
+
+The command displays a one-time token. Send it in that member's direct Bot
+conversation, then check and start the deployment:
+
+```bash
+pnpm doctor
+pnpm start:checked
+```
+
+An empty allowlist fails closed. `.env`, SQLite, logs, and media stay outside
+Git. Continue with the [15-minute guide](docs/getting-started.en.md). The
+[real WeCom runbook](docs/real-wecom-runbook.md) records group authorization,
+complete acceptance, and smoke commands; the
+[deployment baseline](docs/deployment.md) covers production operation.
+
+## What you get
+
+| Capability                      | Gateway semantics                                                                                                                       |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Official WeCom path             | Official SDK authentication, heartbeat, reconnect, media download/decryption, streaming replies, and proactive push                     |
+| Kernel-neutral integration      | Codex, ACP/Kimi, OpenClaw, Pi, and external Adapters share one Runtime Contract; Core has no model-vendor types                         |
+| Conversation and media fidelity | Direct/group messages, quoted context, text, images, files, and video binary use exact capability negotiation                           |
+| Native Bot UX                   | Immediate acknowledgement, in-place streaming, explicit status/emoji, and optional confirmation, selection, approval, and cancel cards  |
+| Reliable bidirectional delivery | SQLite outbox, retry, dead letters, crash recovery, protected media spool, and authorized proactive Agent messages                      |
+| Security and operation          | Scoped ACLs, least-environment child processes, write approvals, privacy-safe logs, health, Prometheus, and systemd/container baselines |
+
+## Supported Agents
+
+| Adapter     | Upstream interface           | Validated capabilities                                                                                   |
+| ----------- | ---------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Codex       | SDK / App Server JSONL       | Streaming, resume, reply actions, native ask-user, cancel, status, approvals, dynamic tools, image/audio |
+| Kimi Code   | ACP v1 stdio                 | Streaming, resume, reply actions, cancel, permissions, status, image                                     |
+| Generic ACP | ACP v1 stdio                 | Resume, reply actions, and input modalities negotiated through `initialize`                              |
+| OpenClaw    | Gateway WebSocket v4         | Streaming, resume, reply actions, cancel, status, image/audio/video/file                                 |
+| Pi Agent    | Official strict-LF JSONL RPC | Streaming, resume, reply actions, cancel, status, dynamic image input, bounded workers, native ask-user  |
+
+One Gateway process hosts one explicitly selected Kernel. Add another Kernel
+with the [Adapter authoring guide](docs/adapter-authoring.md),
+`@fyaic/wecom-adapter-sdk`, and the runnable
+[Adapter template](examples/adapter-template), without modifying the Gateway
+registry.
+
+The [verified case portfolio](docs/verified-kernel-cases.en.md) separates real
+WeCom evidence from deterministic and local protocol tests. The
+[interaction design](docs/interaction-cards.md) documents durable callbacks,
+TTL, scoped results, and Agent resume.
+
+## How it fits
+
+| Option                         | Best fit                                                               | Relationship to this project                                                                                       |
+| ------------------------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Official WeCom OpenClaw plugin | The fastest official path when OpenClaw is the only Kernel             | Evaluate it first; this project targets multiple Kernels and an independent reliability layer                      |
+| `wecom-cli` / `wecom-unified`  | Agent access to contacts, calendar, todos, docs, and other office APIs | Optional tool layer, not the persistent IM session transport                                                       |
+| Custom webhook Bot             | Fixed commands, notifications, or lightweight business automation      | Appropriate for simple flows; this project adds sessions, mutable streaming, media, Adapters, and durable delivery |
+| **WeCom Agent Gateway**        | One WeCom channel for different Agent Kernels                          | Unifies Channel behavior while leaving model, reasoning, and tools inside each Agent                               |
+
+This project is not another Agent framework and does not replace Codex,
+OpenClaw, Pi, Kimi, or a model. It is the IM infrastructure layer between
+WeCom and those systems.
+
+## Architecture and boundary
 
 ```mermaid
 flowchart LR
@@ -69,12 +188,12 @@ flowchart LR
 ```
 
 - The Transport owns the official WeCom Bot protocol and media transfer.
-- Core owns ordering, deduplication, sessions, capability checks, streaming
-  projection, and durable delivery.
+- Core owns ordering, deduplication, sessions, capabilities, projection, and
+  durable delivery.
 - An Adapter only translates one Kernel's SDK/RPC, sessions, and events.
 - The Kernel owns models, reasoning, tools, workspace, and transcripts.
 - `wecom-cli` is an optional office-tool layer, never a human-identity fallback.
-- The local control plane reuses the same Bot, durable outbox, and official SDK.
+- Proactive local control reuses the same Bot, outbox, and official SDK.
 
 > [!NOTE]
 > The mainline is IM connectivity, normalized message fidelity, sessions,
@@ -82,73 +201,10 @@ flowchart LR
 > optional Transport projection: ordinary replies do not attach them by
 > default, and cards never redefine Agent reasoning semantics.
 
-## Kernel adapters
+## Proactive Agent messages
 
-| Adapter     | Upstream interface           | Validated capabilities                                                                       |
-| ----------- | ---------------------------- | -------------------------------------------------------------------------------------------- |
-| Codex       | SDK / App Server JSONL       | Streaming, resume, native ask-user, cancel, status, approvals, tools, image/audio            |
-| Kimi Code   | ACP v1 stdio                 | Streaming, resume, cancel, permissions, status, image                                        |
-| Generic ACP | ACP v1 stdio                 | Resume and media negotiated through `initialize`                                             |
-| OpenClaw    | Gateway WebSocket v4         | Streaming, resume, cancel, status, image/audio/video/file                                    |
-| Pi Agent    | Official strict-LF JSONL RPC | Streaming, resume, cancel, status, dynamic image input, bounded worker pool, native ask-user |
-
-One Gateway process hosts one explicitly selected Kernel. See the
-[adapter authoring guide](docs/adapter-authoring.md) and the runnable
-[Adapter template](examples/adapter-template) to add another Kernel through
-`@fyaic/wecom-adapter-sdk` and `GATEWAY_ADAPTER=external`, without changing the
-Gateway registry.
-
-See [verified Kernel cases](docs/verified-kernel-cases.en.md) for real WeCom
-end-to-end evidence, representative latency, and reproducible smoke commands.
-
-See the [interaction-card architecture](docs/interaction-cards.md) for the
-implemented durable callback, TTL, scoped interaction, and Agent-resume design.
-The side-effect-free [Pi interaction extension](examples/pi-wecom-interaction.mjs)
-demonstrates native select, confirm, and text input.
-
-## Quick start
-
-Requirements: Node.js 22+, pnpm 11.8.0, a WeCom intelligent Bot configured for
-long-connection/API mode, and one independently working Agent kernel.
-
-```bash
-git clone https://github.com/fyaic/wecom-agent-gateway.git
-cd wecom-agent-gateway
-pnpm install --frozen-lockfile
-pnpm run ci
-
-cp .env.example .env
-chmod 600 .env
-```
-
-Configure at least the Bot and selected adapter:
-
-```dotenv
-WECOM_BOT_ID=
-WECOM_BOT_SECRET=
-GATEWAY_ADAPTER=openclaw
-OPENCLAW_GATEWAY_URL=ws://127.0.0.1:18789
-```
-
-Resolve scoped allowlists using readable local names. Internal IDs are not
-printed:
-
-```bash
-pnpm configure:allowlist --direct 'Authorized test member' --group 'Authorized test group'
-pnpm enroll:direct --name 'Authorized test member'
-pnpm doctor
-pnpm start:checked
-```
-
-The default test suite uses deterministic fakes and needs no real WeCom or model
-credentials. See the [real WeCom runbook](docs/real-wecom-runbook.md) for each
-Kernel's setup and operator-triggered smoke tests.
-See the [production deployment baseline](docs/deployment.md) for systemd,
-containers, and health semantics.
-
-To enable proactive Agent messages, set `GATEWAY_CONTROL_ENABLED=true`. A single
-scoped direct and group target automatically receives the aliases `direct` and
-`group`:
+Set `GATEWAY_CONTROL_ENABLED=true`. A single scoped direct and group target
+automatically receives the aliases `direct` and `group`:
 
 ```bash
 pnpm proactive:health
@@ -156,49 +212,52 @@ pnpm proactive:send --target direct --text 'The build has completed.'
 pnpm proactive:send --target group --file /allowed/report.pdf --media-type file
 ```
 
-The client never loads `.env`. Additional aliases must map to targets already in
-the matching scoped allowlist, and media still obeys `WECOM_MEDIA_OUTPUT_ROOTS`.
+The client never loads `.env`. Additional aliases must already belong to the
+matching scoped allowlist, and media still obeys `WECOM_MEDIA_OUTPUT_ROOTS`.
 
 ## Reliability and security semantics
 
 - Turns are ordered per conversation and concurrent across conversations.
 - Delivery is **at-least-once**, not exactly-once.
-- Expired passive streaming windows can fall back to official proactive push.
-- Inbound media is ephemeral and removed after the run.
-- Outbound media is copied into a Gateway-owned spool and verified by size and
-  hash.
+- Expired passive streams can fall back to official proactive push.
+- Inbound media is ephemeral; outbound media is copied into a verified,
+  Gateway-owned spool.
 - Only regular files below `WECOM_MEDIA_OUTPUT_ROOTS` may be sent.
 - Write tools require durable approval bound to sender, conversation, and run.
-- Adapter child processes inherit a minimal environment; extra variables need
-  an Adapter-specific allowlist and Bot secrets are never forwarded.
-- Reply feedback is observable without becoming an Agent turn; optional
-  `WECOM_WELCOME_TEXT` is answered statically without starting a Kernel.
-- Feedback and welcome callbacks pass the same scoped ACL as ordinary messages.
-- Raw official SDK messages and Adapter stderr are disabled in logs by default.
-- SQLite schema compatibility fails closed; old terminal data is pruned in
-  bounded batches while pending, leased, and dead work survives.
-- Transient network reconnect is unbounded by default, authentication failure
-  remains bounded, and private SDK endpoints require credential-free `wss://`.
+- Adapter children inherit a minimal environment; Bot secrets are never
+  forwarded.
+- Feedback and welcome events use the same ACL without creating Agent turns.
+- Raw SDK messages and Adapter stderr are disabled in logs by default.
+- SQLite schema compatibility fails closed; bounded retention preserves
+  pending, leased, and dead work.
+- Transient reconnect is unbounded by default, authentication failure remains
+  bounded, and private endpoints require credential-free `wss://`.
 
 Read the [architecture](docs/architecture.md), [security policy](SECURITY.md),
-and [ADRs](docs/README.md) for the complete contract.
+and [ADRs](docs/README.md) for the full contract.
 
-## Maturity
+## Project status
 
-The project is in **Public Preview**; a stable v1 API is not promised yet. The
+The project is in **Public Preview**; a stable v1 API is not promised. The
 current baseline has 197 deterministic tests and real acceptance evidence for
-direct and group conversations, mutable streaming, session recovery,
+direct/group conversations, mutable streaming, session recovery,
 image/file/MP4 transfer, proactive media, managed restarts, and four Kernel
-families. Cross-process SQLite outbox lease recovery after `SIGKILL` and a
-managed macOS Gateway crash/re-authentication are also covered. Isolated Linux
-network detach/recovery, a read-only persistent volume, and capacity exhaustion
-on a bounded tmpfs have real fault evidence. Host-level NIC loss, a native
-WeCom `msgtype=video` callback, and multi-instance ordering remain on the
-roadmap.
+families. Cross-process SQLite outbox recovery, isolated Linux network
+detach/recovery, read-only storage, bounded-capacity exhaustion, and managed
+macOS re-authentication also have evidence.
 
-- [Current status and evidence](docs/status.md)
-- [Roadmap](ROADMAP.md)
-- [Changelog](CHANGELOG.md)
+Host-level NIC loss, a native WeCom `msgtype=video` callback, and
+multi-instance ownership/order remain on the roadmap.
+
+| If you want to…                | Start here                                                |
+| ------------------------------ | --------------------------------------------------------- |
+| See real Agent integrations    | [Verified Kernel cases](docs/verified-kernel-cases.en.md) |
+| Connect a real Bot             | [15-minute integration guide](docs/getting-started.en.md) |
+| Run the full acceptance matrix | [Real WeCom runbook](docs/real-wecom-runbook.md)          |
+| Add another Agent              | [Adapter authoring guide](docs/adapter-authoring.md)      |
+| Understand cards and callbacks | [Interaction design](docs/interaction-cards.md)           |
+| Operate the Gateway            | [Deployment baseline](docs/deployment.md)                 |
+| Audit current claims and gaps  | [Status](docs/status.md) and [roadmap](ROADMAP.md)        |
 
 ## Contributing and license
 

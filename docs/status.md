@@ -306,6 +306,8 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
   Core。`wecom-cli` / `wecom-unified` 的完整办公能力继续由 Kernel 工具层拥有。
 - 新增 `verified-kernel-cases.md` 与英文镜像，汇总 Codex、Kimi/ACP、OpenClaw、Pi 的真实企业微信场景、
   分层延迟和 smoke 入口；Pi 案例附带一张裁剪、隐私复核后的真实客户端截图。
+- 参考 ThreadMesh 的陌生访客阅读路径重构中英文 README：首屏直接说明产品价值、问题、真实消息流、
+  最短上手与相邻项目边界；新增中英文 15 分钟接入指南，避免把完整验收手册当作新用户教程。
 - 随后完成四项主线补齐：官方 quote frame 进入中立结构并贯通所有参考 Adapter；普通流改用
   `replyStreamNonBlocking`；feedback 作为非语义 Channel event；`enter_chat` 只返回可选静态欢迎。
   Bot HTTP Webhook 已完成边界评估，决定未来以独立 Transport package 实现，不与 WebSocket 代码混合。
