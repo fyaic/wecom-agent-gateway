@@ -128,6 +128,108 @@ const message = (id: string): InboundMessage => ({
 });
 
 describe("WeComAgentGateway", () => {
+  it("projects explicit Agent status events into one mutable progress card", async () => {
+    class ProgressTransport extends FakeTransport {
+      override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
+        "stream-reply-update",
+        "proactive-message",
+        "structured-presentation",
+        "reply-with-presentation",
+      ]);
+    }
+    const transport = new ProgressTransport();
+    const runtime: AgentRuntimeAdapter = {
+      id: "status-runtime",
+      contractVersion: 1,
+      capabilities: new Set(["streaming", "status-events"]),
+      async *run() {
+        yield { type: "session-started", sessionId: "status-session" };
+        yield { type: "status", phase: "thinking" };
+        await new Promise((resolve) => setTimeout(resolve, 3));
+        yield {
+          type: "status",
+          phase: "custom",
+          emoji: "🔎",
+          text: "正在核对一段非常长但只应安全显示在卡片标题范围内的资料",
+        };
+        await new Promise((resolve) => setTimeout(resolve, 3));
+        yield { type: "text-delta", text: "已完成核对" };
+        await new Promise((resolve) => setTimeout(resolve, 3));
+        yield { type: "message-completed" };
+      },
+      async health() {
+        return { ok: true };
+      },
+    };
+    const gateway = new WeComAgentGateway({
+      transport,
+      adapters: [runtime],
+      router: new StaticRuntimeRouter(runtime.id),
+      store: new MemoryGatewayStore(),
+      replyUpdateIntervalMs: 1,
+      outboxPollIntervalMs: 1,
+    });
+
+    await gateway.start();
+    await transport.receive(message("progress-run"));
+
+    const replies = transport.commands.filter(
+      (command) => command.type === "reply",
+    );
+    expect(replies[0]).toMatchObject({
+      final: false,
+      presentation: {
+        kind: "notice",
+        title: "⏳ 请求已接收",
+      },
+    });
+    const presentations = replies.flatMap((command) =>
+      command.type === "reply" && command.presentation
+        ? [command.presentation]
+        : [],
+    );
+    expect(new Set(presentations.map((entry) => entry.id)).size).toBe(1);
+    expect(presentations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ title: "🤔 Agent 正在思考…" }),
+        expect.objectContaining({ title: expect.stringMatching(/^🔎/) }),
+      ]),
+    );
+    expect(presentations.every((entry) => [...entry.title].length <= 26)).toBe(
+      true,
+    );
+    expect(replies.at(-1)).toMatchObject({
+      text: "已完成核对",
+      final: true,
+    });
+    expect(replies.at(-1)).not.toHaveProperty("presentation");
+    expect(
+      transport.commands.filter(
+        (command) => command.type === "proactive-presentation",
+      ),
+    ).toHaveLength(0);
+    await gateway.stop();
+
+    const disabledTransport = new ProgressTransport();
+    const disabledGateway = new WeComAgentGateway({
+      transport: disabledTransport,
+      adapters: [runtime],
+      router: new StaticRuntimeRouter(runtime.id),
+      store: new MemoryGatewayStore(),
+      progressPresentationEnabled: false,
+      replyUpdateIntervalMs: 1,
+      outboxPollIntervalMs: 1,
+    });
+    await disabledGateway.start();
+    await disabledTransport.receive(message("progress-disabled"));
+    expect(
+      disabledTransport.commands.filter(
+        (command) => command.type === "reply" && command.presentation,
+      ),
+    ).toHaveLength(0);
+    await disabledGateway.stop();
+  });
+
   it("offers one scoped cancel card for a long cancellable run", async () => {
     class InteractiveTransport extends FakeTransport {
       override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([

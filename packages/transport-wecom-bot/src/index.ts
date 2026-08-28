@@ -200,17 +200,12 @@ export class WeComBotTransport implements ChannelTransport {
         const frame = {
           headers: { req_id: command.replyReference.requestId },
         };
-        if (command.presentation && !command.final) {
-          throw new Error(
-            "Reply presentations are only valid on the final stream update",
-          );
-        }
         // A stream that may receive a template card later must use the
-        // official stream_with_template_card message type from its first
-        // frame. Switching from plain stream only on the final frame is
-        // accepted by the server but the desktop client silently drops the
-        // card. The SDK keeps templateCard optional, so ordinary replies use
-        // the same framing without rendering a card.
+        // official stream_with_template_card message type from its first frame.
+        // Progress presentations are therefore valid on partial frames. Final
+        // actions discovered only after completion use the proactive path in
+        // Core because switching card types at the last frame is not reliably
+        // rendered by real desktop clients.
         await this.client.replyStreamWithCard(
           frame,
           command.streamId,

@@ -13,6 +13,7 @@ export interface ReplyUpdate {
 export interface MutableReplyOptions {
   updateIntervalMs?: number;
   initialText?: string;
+  initialPresentation?: Presentation;
   setTimer?: (callback: () => void, delayMs: number) => unknown;
   clearTimer?: (handle: unknown) => void;
 }
@@ -28,6 +29,8 @@ export class MutableReply {
   private readonly clearTimer: (handle: unknown) => void;
   private timer: unknown;
   private pendingText: string | undefined;
+  private pendingPresentation: Presentation | undefined;
+  private currentPresentation: Presentation | undefined;
   private inFlight = Promise.resolve();
   private closed = false;
 
@@ -37,6 +40,7 @@ export class MutableReply {
   ) {
     this.intervalMs = options.updateIntervalMs ?? 250;
     this.initialText = options.initialText ?? "⏳ 已收到，等待 Agent 响应…";
+    this.currentPresentation = options.initialPresentation;
     this.setTimer =
       options.setTimer ??
       ((callback, delayMs) => setTimeout(callback, delayMs));
@@ -46,12 +50,20 @@ export class MutableReply {
   }
 
   async open(): Promise<void> {
-    await this.deliver({ text: this.initialText, final: false });
+    await this.deliver({
+      text: this.initialText,
+      final: false,
+      ...(this.currentPresentation
+        ? { presentation: this.currentPresentation }
+        : {}),
+    });
   }
 
-  update(text: string): void {
+  update(text: string, presentation?: Presentation): void {
     if (this.closed) return;
+    if (presentation) this.currentPresentation = presentation;
     this.pendingText = text;
+    this.pendingPresentation = this.currentPresentation;
     if (this.timer === undefined) {
       this.timer = this.setTimer(() => this.flushPending(), this.intervalMs);
     }
@@ -61,6 +73,8 @@ export class MutableReply {
     if (this.closed) return;
     this.closed = true;
     this.pendingText = undefined;
+    this.pendingPresentation = undefined;
+    this.currentPresentation = undefined;
     if (this.timer !== undefined) {
       this.clearTimer(this.timer);
       this.timer = undefined;
@@ -76,10 +90,16 @@ export class MutableReply {
   private flushPending(): void {
     this.timer = undefined;
     const text = this.pendingText;
+    const presentation = this.pendingPresentation;
     this.pendingText = undefined;
+    this.pendingPresentation = undefined;
     if (text === undefined || this.closed) return;
     this.inFlight = this.inFlight.then(() =>
-      this.deliver({ text, final: false }),
+      this.deliver({
+        text,
+        final: false,
+        ...(presentation ? { presentation } : {}),
+      }),
     );
     if (this.pendingText !== undefined && this.timer === undefined) {
       this.timer = this.setTimer(() => this.flushPending(), this.intervalMs);
@@ -114,7 +134,9 @@ export class AgentReplyProjection {
   }
 }
 
-function renderAgentStatus(event: Extract<AgentRunEvent, { type: "status" }>) {
+export function renderAgentStatus(
+  event: Extract<AgentRunEvent, { type: "status" }>,
+) {
   const emoji = event.emoji ?? defaultStatusEmoji(event.phase);
   const text = event.text ?? defaultStatusText(event.phase);
   return [emoji, text].filter(Boolean).join(" ");

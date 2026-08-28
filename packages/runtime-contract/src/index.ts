@@ -14,7 +14,7 @@ export type ChannelCapability =
   | "multimodal-output"
   | "structured-presentation"
   | "interactive-presentation"
-  /** Final mutable reply can carry one channel-native structured presentation. */
+  /** Mutable reply frames can carry one channel-native structured presentation. */
   | "reply-with-presentation";
 
 export interface PresentationLink {
@@ -127,7 +127,7 @@ export type OutboundCommand =
       streamId: string;
       text: string;
       final: boolean;
-      /** Only valid on the final update; the Transport owns vendor rendering. */
+      /** The Transport owns vendor rendering and mutable-card semantics. */
       presentation?: Presentation;
     }
   | {

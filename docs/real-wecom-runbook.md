@@ -150,6 +150,7 @@ GLM 首文本 23.05 秒，端到端 25.20 秒，多次可变回复投递成功�
    GATEWAY_RUN_CONTROL_ENABLED=true
    GATEWAY_RUN_CONTROL_AFTER_MS=15000
    GATEWAY_RUN_CONTROL_TIMEOUT_MS=300000
+   GATEWAY_PROGRESS_PRESENTATION_ENABLED=true
    CODEX_APPROVAL_WAIT_TIMEOUT_MS=90000
    GATEWAY_MEDIA_SPOOL_ROOT=data/media-spool
    GATEWAY_MEDIA_SPOOL_MAX_TOTAL_BYTES=524288000
@@ -183,6 +184,11 @@ sender、同 account 与 conversation 可以点击；Gateway 先原位确认再�
 `pnpm outbox:status` 无 pending/leased/dead。不得通过重复点击制造成功，也不得读取消息正文或内部 ID。
 2026-08-28 的 Pi 私聊验收在 21.045 秒取消原 run，控制记录只结算一次，Outbox 307 条均 delivered，
 Gateway 仍为 ready。
+
+动态进度卡默认开启，但只对声明 `status-events` 的 Adapter 生效。发送一条会产生至少两个显式阶段的
+无副作用测试请求，首帧应在同一条 Bot 可变回复中显示“请求已接收”卡，随后原位变为 Adapter 发出的
+emoji/状态，不能产生第二条进度消息。最终正文仍在原消息完成；若出现最终快捷 action，它应作为紧邻的
+独立主动卡发送。验收只记录 reply 投递阶段和 Outbox 聚合，不记录正文、presentation ID 或会话 ID。
 
 ## 联调顺序与通过条件
 

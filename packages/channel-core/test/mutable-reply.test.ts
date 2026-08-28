@@ -34,6 +34,42 @@ describe("MutableReply", () => {
       { text: "你好！", final: true },
     ]);
   });
+
+  it("keeps one mutable progress presentation on coalesced partials", async () => {
+    vi.useFakeTimers();
+    const updates: ReplyUpdate[] = [];
+    const initialPresentation = {
+      kind: "notice" as const,
+      id: "progress_1",
+      title: "⏳ 请求已接收",
+    };
+    const thinkingPresentation = {
+      ...initialPresentation,
+      title: "🤔 Agent 正在思考…",
+    };
+    const reply = new MutableReply(
+      async (update) => {
+        updates.push(update);
+      },
+      { initialPresentation },
+    );
+
+    await reply.open();
+    reply.update("🤔 Agent 正在思考…", thinkingPresentation);
+    reply.update("结论");
+    await vi.advanceTimersByTimeAsync(250);
+    await reply.close("结论");
+
+    expect(updates).toEqual([
+      {
+        text: "⏳ 已收到，等待 Agent 响应…",
+        final: false,
+        presentation: initialPresentation,
+      },
+      { text: "结论", final: false, presentation: thinkingPresentation },
+      { text: "结论", final: true },
+    ]);
+  });
 });
 
 describe("AgentReplyProjection", () => {

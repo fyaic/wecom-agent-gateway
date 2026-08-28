@@ -34,7 +34,8 @@ model selection, tool policy, and media understanding stay in the Kernel.
 - **Kernel-neutral Core** — no Codex, Kimi, OpenClaw, Pi, or model-vendor types
   leak into Gateway Core.
 - **Mutable Bot UX** — one reply evolves from an immediate acknowledgement to
-  explicit Agent status, streamed text, and the final answer.
+  an explicit Agent-status card, streamed text, and the final answer without
+  extra chat messages.
 - **Structured cards** — neutral notices, articles, actions, choices, and forms
   map to official template cards; approval callbacks are durable and update in
   place.

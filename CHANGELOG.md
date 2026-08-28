@@ -24,6 +24,8 @@ tagged.
 - Sender-scoped long-run control cards that appear only for cancellable
   adapters, atomically accept one stop request, and call the Kernel's native
   cancel path without creating another semantic turn.
+- First-frame mutable progress cards that project only explicit Adapter status
+  events into the existing streamed Bot reply without creating extra messages.
 
 ### Fixed
 

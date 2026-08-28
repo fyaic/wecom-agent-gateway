@@ -387,7 +387,8 @@ callback continuation 完成后再次出现，否则“点击 → 续跑 → 同
 
 - [x] 长任务取消卡：阈值后单次展示、sender/conversation ACL、SQLite 首答、原位确认、原生 cancel、
       正常完成/过期/重复/重启陈旧卡 fail closed。
-- [ ] 欢迎卡、主动任务卡与运行中进度阶段卡。
+- [x] 运行中进度阶段卡：第一帧建立、同消息同 task ID、只投影显式 Agent status/emoji、与文本增量合并。
+- [ ] 欢迎卡与主动任务卡。
 - 独立群投票和多人聚合模型。
 - 卡片模板主题与 Agent 品牌标识。
 
@@ -422,3 +423,31 @@ sequenceDiagram
 `resolved/cancel` 控制记录，绑定的 Pi run 在 21.045 秒进入 `cancelled`。取消后没有继续完成原 run，
 Outbox 保持零 pending/leased/dead，Gateway 继续 ready。该结果验证的是 Channel 控制面到 Adapter 原生
 取消的闭环，不把模型行为纳入卡片语义。
+
+动态进度卡的数据流：
+
+```mermaid
+sequenceDiagram
+    participant A as Agent Adapter
+    participant G as Gateway Core
+    participant O as Durable Outbox
+    participant W as WeCom SDK
+    participant U as 用户
+
+    G->>O: 首帧文字 + notice（请求已接收）
+    O->>W: replyStreamWithCard(final=false)
+    W->>U: 显示一条可变 Bot 消息
+    A->>G: status(thinking/tool/custom, emoji)
+    G->>G: 只投影显式状态，250ms 合并
+    G->>O: 同 stream + 同 presentation ID
+    O->>W: replyStreamWithCard(final=false)
+    W->>U: 原消息文字与卡片阶段更新
+    A->>G: message-completed(text)
+    G->>O: 同 stream 最终正文
+    W->>U: 原消息完成
+```
+
+这不是 Gateway 的任务规划器：初始卡只陈述请求已经进入处理链路；后续“思考、工具运行或自定义阶段”
+必须由 Adapter 显式发出。未声明 `status-events`、Transport 不支持组合流或配置
+`GATEWAY_PROGRESS_PRESENTATION_ENABLED=false` 时，Gateway 保持原有纯文字可变回复。进度卡不接收
+callback，不进入 Interaction Broker，也不取代超过阈值后独立出现的原生停止卡。
