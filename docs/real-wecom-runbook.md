@@ -474,6 +474,17 @@ PI_ARGS_JSON=["--provider","zai-vision","--model","glm-4.6v","--thinking","low",
 resume。示例 extension 不执行副作用；如果生产不希望暴露演示工具，验收后从 `PI_ARGS_JSON` 移除并
 重启，核心交互桥不会受影响。
 
+#### 生产默认动作卡配置
+
+`GATEWAY_REPLY_ACTIONS_JSON` 只用于操作员明确选择的全局快捷菜单。只要它非空，每条普通最终回复都会
+紧邻出现一张动作卡；这不是 ask-user 或 Agent 显式卡片的必要配置。生产受管服务应保持该变量未设置
+或为 `[]`，并在启动后通过 `launchctl print` / systemd 环境确认没有旧的演示值残留。清理该变量不会
+关闭 Agent 显式 `message-completed.actions`、通用交互卡、审批卡或长任务取消卡。
+
+变更后至少执行以下真实回归：私聊普通文本、授权测试群 `@Bot` 普通文本都不得产生
+`proactive-presentation`；再显式发起一次无副作用 confirm 卡并点击，确认卡片请求、回调、原 run 恢复
+和最终回复仍完整通过。最终检查 Outbox 的 pending、leased、dead 均为零。
+
 单选验收还必须目视检查：选项纵向排列、完整可读、等价选项没有首项蓝色偏置，只有“提交”使用主
 CTA 色。2026-08-25 首轮私聊中业务 resume 恰好一次且 Pi 原 run 完成，但横排按钮文字不全、首项错误
 高亮，并且结果卡更新收到 `42045`；因此该轮不能标记通过。第二轮纵向单选与 live resume 通过，但
