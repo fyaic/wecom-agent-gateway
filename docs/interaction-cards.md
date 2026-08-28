@@ -1,6 +1,6 @@
 # Agent 交互卡片设计
 
-更新于 2026-08-25。
+更新于 2026-08-28。
 
 ## 目标
 
@@ -417,3 +417,8 @@ sequenceDiagram
 `run_control_*` 不进入 Agent 消息、不授予工具权限，也不恢复已结束 session。正常完成时 pending control
 立即标记 completed；旧卡第一次点击只收敛为“任务已经结束”，之后重复静默。进程重启只保留陈旧卡
 安全性，不尝试复活已经消失的 live run。
+
+2026-08-28 已完成真实企业微信私聊验收：阈值后停止卡正常可见，一次点击只原子结算一条
+`resolved/cancel` 控制记录，绑定的 Pi run 在 21.045 秒进入 `cancelled`。取消后没有继续完成原 run，
+Outbox 保持零 pending/leased/dead，Gateway 继续 ready。该结果验证的是 Channel 控制面到 Adapter 原生
+取消的闭环，不把模型行为纳入卡片语义。

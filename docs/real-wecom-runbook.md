@@ -1,6 +1,6 @@
 # 真实企业微信联调手册
 
-更新于 2026-08-25。本文只覆盖独立测试 Bot，不使用真人账号模拟 Bot，也不从
+更新于 2026-08-28。本文只覆盖独立测试 Bot，不使用真人账号模拟 Bot，也不从
 `wecom-cli` 的加密凭据存储中导出 Secret。
 
 ## 授权边界
@@ -176,6 +176,13 @@ Gateway 数据目录应为 `0700`；SQLite Store 每次打开主数据库时会�
 sender、同 account 与 conversation 可以点击；Gateway 先原位确认再调用 Adapter cancel。设置
 `GATEWAY_RUN_CONTROL_ENABLED=false` 可关闭，阈值和卡片 TTL 分别由后两个变量控制。快速任务、正在
 等待 ask-user/审批的未展示阶段，以及不声明 `cancel` 的 Adapter 不产生控制卡。
+
+真实验收应选一个明确会持续超过阈值、且无副作用的任务。卡片出现后点击一次“停止任务”，检查客户端
+停止终态，并只核对脱敏的聚合证据：`interaction_lifecycle=cancelled`、对应
+`gateway_lifecycle=cancelled`、`run_controls` 只有一条 `resolved/cancel`，以及
+`pnpm outbox:status` 无 pending/leased/dead。不得通过重复点击制造成功，也不得读取消息正文或内部 ID。
+2026-08-28 的 Pi 私聊验收在 21.045 秒取消原 run，控制记录只结算一次，Outbox 307 条均 delivered，
+Gateway 仍为 ready。
 
 ## 联调顺序与通过条件
 
