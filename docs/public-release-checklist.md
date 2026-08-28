@@ -10,6 +10,9 @@ The repository must remain private until every blocking item below is complete.
 - [x] Third-party dependencies and architectural references are documented.
 - [x] Contribution, security, support, conduct, changelog, and roadmap files exist.
 - [x] Issues and pull requests use privacy-aware templates.
+- [x] Public screenshots and demo video/GIF exclude sidebars, account names,
+      contacts, internal IDs, credentials, local paths, and unrelated chats;
+      raw desktop captures remain ignored and uncommitted.
 - [x] The current worktree passes `pnpm run public:check` and `pnpm run ci`.
 - [x] A full-ref audit command exists and accepts an operator-owned private term
       file without committing those terms: set

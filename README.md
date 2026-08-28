@@ -10,6 +10,7 @@
 </p>
 
 <p align="center">
+  <a href="#26-秒看懂"><strong>26 秒演示</strong></a> ·
   <a href="#快速开始"><strong>快速开始</strong></a> ·
   <a href="docs/verified-kernel-cases.md">真实案例</a> ·
   <a href="#已支持的-agent"><strong>Agent 支持</strong></a> ·
@@ -54,11 +55,18 @@ WeCom Agent Gateway 把这些重复工作收敛为一层：企业微信侧只实
 4. Agent 原生请求确认、选择或取消时，Gateway 可投影为企业微信卡片并把结果恢复到原会话；
 5. Agent 也能通过受控本地接口主动向已授权私聊或群聊发送文本与媒体。
 
+## 26 秒看懂
+
 <p align="center">
-  <img src="docs/assets/verified-kernel-cases/pi-wecom-private.png" width="548" alt="A real Pi Agent conversation and interaction card delivered through WeCom Agent Gateway">
+  <a href="docs/assets/demo/wecom-agent-gateway-demo.mp4">
+    <img src="docs/assets/demo/wecom-agent-gateway-demo.gif" width="960" alt="26 秒真实企业微信演示：即时回执、可变回复、交互卡片、任务恢复和主动媒体">
+  </a>
 </p>
 
-<p align="center"><em>真实企业微信客户端：同一 Gateway 完成普通 Agent 回复与显式交互卡片；截图已裁剪并做隐私复核。</em></p>
+<p align="center"><em>真实 macOS 企业微信客户端与真实 Pi Agent：即时状态、最终回复、原生确认卡片、同任务恢复，以及 Agent 主动文本/图片。点击动画打开高清 MP4。</em></p>
+
+演示使用正式 Gateway、官方 Bot SDK 和受控主动消息接口完成，不是 UI mock。公开资产只保留聊天内容区，
+已裁掉会话侧栏、账号名称、内部 ID 和凭据；默认普通回复不会附带卡片。
 
 ## 快速开始
 

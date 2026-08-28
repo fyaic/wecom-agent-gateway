@@ -8,6 +8,10 @@ tagged.
 
 ### Added
 
+- A 26-second bilingual-README product walkthrough built from a real,
+  privacy-cropped WeCom/Pi conversation, covering mutable status/final replies,
+  native confirmation and same-task resume, plus proactive text/media delivery.
+
 - A bilingual 15-minute integration guide from a clean clone to the first
   authorized WeCom direct conversation.
 

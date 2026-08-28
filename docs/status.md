@@ -70,6 +70,7 @@
 | 多 Kernel 回复动作续接                          | M2.4 自动化通过           | Codex SDK/App Server、ACP/Kimi、OpenClaw、Pi、外部模板共用 deterministic contract  |
 | 长任务原生取消控制卡                            | M2.5 真实私聊通过         | 仅 cancellable Adapter；控制卡单次结算；Pi 原生 run 真实进入 cancelled             |
 | 动态状态文字与组合卡边界                        | M2.5 自动化/真实验证      | 显式 status/emoji 进入可变文字；首帧卡客户端不可见，控制走阈值主动卡               |
+| 公开真实客户端演示资产                          | 完成并隐私复核            | 26 秒 GIF/MP4 覆盖状态、最终回复、确认/恢复与主动文本/图片；原始桌面截图不入库     |
 | SQLite 重启恢复                                 | 完成并自动化验证          | 入站去重、runtime session、待发送文本与投递日志跨 reopen 保留                      |
 | SQLite 文件权限                                 | 完成并自动化验证          | Store 每次打开都强制主数据库为 `0600`；本机现有数据库已收紧                        |
 | SQLite schema 与有界保留                        | 完成并自动化验证          | user_version=1；未来版本 fail closed；只清理过期终态，不删 pending/leased/dead     |
@@ -155,6 +156,7 @@
 | 2026-08-28 | 生产默认动作卡关闭回归        | 通过   | 清理 LaunchAgent 演示配置；私聊/群聊普通回复无动作卡；显式 confirm 卡点击与原 Pi run 恢复仍通过          |
 | 2026-08-28 | 官方非阻塞流式普通私聊        | 通过   | Channel 回执 434ms、Kernel 首事件 103ms、首文本 11.265s、端到端 12.087s；最终文本正确且无默认卡          |
 | 2026-08-28 | 回复 feedback 非语义事件      | 通过   | 客户端点赞后仅记录脱敏 `channel_feedback`，首帧关联成功；未创建新 Agent turn                             |
+| 2026-08-28 | README 真实客户端产品演示     | 通过   | 正式 Pi/WeCom 链路完成状态→最终文本、确认→原任务恢复、主动文本/图片；公开帧裁掉侧栏与身份标题            |
 
 ### 延迟结论
 
