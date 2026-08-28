@@ -1,6 +1,6 @@
 # 工作状态
 
-更新于 2026-08-26。
+更新于 2026-08-28。
 
 ## 已完成并有自动化验证
 
@@ -63,7 +63,7 @@
 | 单选卡片可读性与颜色语义                        | 私聊与群聊真实通过        | 完整标签、无首项偏置、显式 action style、禁用完成态、重复回调幂等                 |
 | 最终回复快捷操作                                | M2.3 自动化与真实验证通过 | 紧邻主动卡、SQLite TTL/幂等、同 session continuation、默认动作一次性              |
 | 多 Kernel 回复动作续接                          | M2.4 自动化通过           | Codex SDK/App Server、ACP/Kimi、OpenClaw、Pi、外部模板共用 deterministic contract |
-| 长任务原生取消控制卡                            | M2.5 自动化通过           | 仅 cancellable Adapter；15s 阈值；sender/conversation ACL；SQLite 首答与重复静默  |
+| 长任务原生取消控制卡                            | M2.5 真实私聊通过         | 仅 cancellable Adapter；控制卡单次结算；Pi 原生 run 真实进入 cancelled            |
 | SQLite 重启恢复                                 | 完成并自动化验证          | 入站去重、runtime session、待发送文本与投递日志跨 reopen 保留                     |
 | SQLite 文件权限                                 | 完成并自动化验证          | Store 每次打开都强制主数据库为 `0600`；本机现有数据库已收紧                       |
 | SQLite 故障因果保留                             | 完成并自动化验证          | 写入/提交失败后即使回滚也失败，仍抛出原始故障而非二次回滚错误                     |
@@ -140,6 +140,7 @@
 | 2026-08-25 | Pi 私聊限定文本输入           | 通过   | 下一条同范围文本被 Broker 消费；17.744s 提交、1ms 恢复原 run；未创建第二个 Agent turn                    |
 | 2026-08-25 | Pi 群聊单选交互               | 通过   | group-only ACL；440ms 回执、3.847s 首文本、16.433s 提交、1ms 恢复；更新与最终回复无错误                  |
 | 2026-08-26 | Pi 私聊最终回复快捷操作       | 通过   | 446ms 回执、9.693s 首文本；仅一张默认卡；点击后同 session 续跑且不再生成卡；Outbox 零积压/死信           |
+| 2026-08-28 | Pi 私聊长任务停止卡           | 通过   | 点击后 SQLite 控制记录仅一次 resolved/cancel；原 run 于 21.045s 进入 cancelled；Outbox 零积压/死信       |
 
 ### 延迟结论
 
@@ -264,7 +265,9 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
 - 第一切片已实现长任务取消卡：应用默认 15 秒阈值，只对同时具备原生 `cancel` 和可交互 Transport 的
   run 展示；SQLite 持久绑定 account/conversation/sender/TTL，首次点击原位确认后取消原 session。
 - 自动化覆盖快速/不可取消任务不展示、跨 sender 拒绝、重复静默、正常结束旧卡收敛和 SQLite 过期。
-  真实企业微信客户端点击仍待合并部署后验收。
+  2026-08-28 真实企业微信私聊验收确认：控制卡一次点击后只产生一条 `resolved/cancel` 记录，Pi
+  原生 run 在 21.045 秒进入 `cancelled`，没有继续完成该 run；Outbox 为 307 delivered、零
+  pending/leased/dead，Gateway 保持 ready。
 - 后续保留欢迎/主动任务卡、进度阶段卡、主题与独立群投票聚合；它们不阻塞 Gateway 主链路。
 
 ### M5：生产运行与韧性

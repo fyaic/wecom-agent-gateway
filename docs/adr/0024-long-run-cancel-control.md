@@ -37,4 +37,5 @@
 - Core tests 覆盖阈值展示、danger 样式、原 sender 限定、原 session cancel、最终停止文案、重复 callback
   静默，以及快速/不可取消运行不展示。
 - SQLite tests 覆盖跨 sender 拒绝、原子首答、重复、正常完成和过期。
-- 真实企业微信点击验收在合并部署后单列记录，不以 deterministic test 冒充客户端可见性。
+- 2026-08-28 真实企业微信私聊点击验收通过：停止卡可见，一次点击只结算一条 `resolved/cancel`，Pi
+  原生 run 在 21.045 秒进入 `cancelled`；Outbox 零积压/死信且 Gateway 保持 ready。
