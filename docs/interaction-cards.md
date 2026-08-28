@@ -423,9 +423,10 @@ sequenceDiagram
 Outbox 保持零 pending/leased/dead，Gateway 继续 ready。该结果验证的是 Channel 控制面到 Adapter 原生
 取消的闭环，不把模型行为纳入卡片语义。
 
-同日 Gateway 改为“本轮”生命周期文案后，由本机企业微信 UI 自动化再次发送长任务并点击“停止本轮”。
-原 Pi run 在 34.204 秒进入 `cancelled`；Outbox 551 条全部 delivered、零 pending/leased/dead，服务保持
-ready。另一次任务已自然结束后点击旧卡只原位显示“已完成”，验证了陈旧控制不会影响后续 run。
+同日 Gateway 改为“本轮”生命周期文案后，由本机企业微信 UI 自动化发送两轮长任务并点击“停止本轮”。
+原 Pi run 分别在 33.521 秒和 34.204 秒进入 `cancelled`；Outbox 551 条全部 delivered、零
+pending/leased/dead，服务保持 ready。客户端把已提交按钮切换为“已完成”样式；取消终态以原可变回复
+的“任务已停止”和结构化生命周期日志为准。
 
 同日首轮目视确认了可变状态文字，但任务在 18.561 秒完成前，15 秒阈值触发的独立停止卡已送达，最终
 回复后仍显示“任务仍在执行”。后续 UI 自动验收确认首帧组合卡服务端成功但客户端不可见，重复附卡虽
