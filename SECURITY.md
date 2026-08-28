@@ -27,6 +27,12 @@ Operators are responsible for:
 - using scoped direct and group allowlists;
 - restricting `.env`, SQLite, media temp, and spool permissions;
 - restricting `WECOM_MEDIA_OUTPUT_ROOTS` to dedicated output directories;
+- leaving raw SDK message and Adapter stderr logging disabled except during a
+  short, controlled diagnostic window;
+- granting Adapter child processes only the minimum required environment
+  variables through their explicit allowlists;
+- backing up the private data directory before an upgrade and respecting
+  SQLite schema-version failures instead of bypassing them;
 - running exactly one Gateway Kernel for a Bot identity;
 - reviewing write-tool approvals and rotating credentials after suspected
   exposure.

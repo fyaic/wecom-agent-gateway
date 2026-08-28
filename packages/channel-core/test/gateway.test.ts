@@ -5,6 +5,7 @@ import type {
   AgentRuntimeAdapter,
   AgentMediaOutput,
   ChannelCapability,
+  ChannelEnterChatEvent,
   ChannelFeedbackEvent,
   ChannelTransport,
   DeliveryOutboxStats,
@@ -33,12 +34,15 @@ class FakeTransport implements ChannelTransport {
   readonly commands: OutboundCommand[] = [];
   private handler?: (message: InboundMessage) => Promise<void>;
   private feedbackHandler?: (event: ChannelFeedbackEvent) => Promise<void>;
+  private enterChatHandler?: (event: ChannelEnterChatEvent) => Promise<boolean>;
   async start(
     handler: (message: InboundMessage) => Promise<void>,
     feedbackHandler?: (event: ChannelFeedbackEvent) => Promise<void>,
+    enterChatHandler?: (event: ChannelEnterChatEvent) => Promise<boolean>,
   ): Promise<void> {
     this.handler = handler;
     this.feedbackHandler = feedbackHandler;
+    this.enterChatHandler = enterChatHandler;
   }
   async stop(): Promise<void> {}
   async health(): Promise<{ ok: boolean }> {
@@ -58,6 +62,11 @@ class FakeTransport implements ChannelTransport {
   async receiveFeedback(event: ChannelFeedbackEvent): Promise<void> {
     if (!this.feedbackHandler) throw new Error("feedback handler not started");
     await this.feedbackHandler(event);
+  }
+  async receiveEnterChat(event: ChannelEnterChatEvent): Promise<boolean> {
+    if (!this.enterChatHandler)
+      throw new Error("enter-chat handler not started");
+    return this.enterChatHandler(event);
   }
 }
 
@@ -162,6 +171,47 @@ describe("WeComAgentGateway", () => {
     expect(observed).toEqual([feedback]);
     expect(runtime.requests).toHaveLength(0);
     expect(transport.commands).toHaveLength(0);
+  });
+
+  it("applies the scoped inbound policy to feedback and enter-chat events", async () => {
+    const transport = new FakeTransport();
+    const runtime = new FakeRuntime();
+    const observed: ChannelFeedbackEvent[] = [];
+    const gateway = new WeComAgentGateway({
+      transport,
+      adapters: [runtime],
+      router: new StaticRuntimeRouter(runtime.id),
+      store: new MemoryGatewayStore(),
+      policy: new AllowlistPolicy({ allowedDirectSenders: ["allowed-user"] }),
+      onChannelFeedbackEvent: (event) => observed.push(event),
+    });
+    await gateway.start();
+    const unauthorized = {
+      id: "event-unauthorized",
+      accountId: "bot-a",
+      conversationId: "other-user",
+      conversationType: "direct" as const,
+      senderId: "other-user",
+      receivedAt: "2026-08-28T00:00:00.000Z",
+    };
+    await transport.receiveFeedback({
+      ...unauthorized,
+      feedbackId: "stream-1",
+    });
+    expect(await transport.receiveEnterChat(unauthorized)).toBe(false);
+
+    const authorized = {
+      ...unauthorized,
+      id: "event-authorized",
+      conversationId: "allowed-user",
+      senderId: "allowed-user",
+    };
+    await transport.receiveFeedback({ ...authorized, feedbackId: "stream-2" });
+    expect(await transport.receiveEnterChat(authorized)).toBe(true);
+    expect(observed).toEqual([
+      expect.objectContaining({ senderId: "allowed-user" }),
+    ]);
+    expect(runtime.requests).toHaveLength(0);
   });
 
   it("projects status events into mutable text without an ephemeral first-frame card", async () => {

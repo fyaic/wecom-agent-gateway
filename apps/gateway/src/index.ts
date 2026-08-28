@@ -28,6 +28,18 @@ import { parseReplyActions } from "./reply-actions.js";
 
 const botId = required("WECOM_BOT_ID");
 const secret = required("WECOM_BOT_SECRET");
+const diagnosticSecrets = sensitiveEnvironmentValues(process.env, [
+  botId,
+  secret,
+]);
+const logAdapterStderr = booleanValue(
+  process.env.GATEWAY_LOG_ADAPTER_STDERR,
+  false,
+);
+const logSdkMessages = booleanValue(
+  process.env.GATEWAY_LOG_SDK_MESSAGES,
+  false,
+);
 const allowedSenders = list("WECOM_ALLOWED_SENDERS");
 const allowedConversations = list("WECOM_ALLOWED_CONVERSATIONS");
 const allowedDirectSenders = list("WECOM_ALLOWED_DIRECT_SENDERS");
@@ -47,6 +59,30 @@ const databasePath = resolve(
 );
 mkdirSync(dirname(databasePath), { recursive: true, mode: 0o700 });
 const store = new SqliteGatewayStore(databasePath);
+const storageRetentionMs = positiveInteger(
+  process.env.GATEWAY_STORAGE_RETENTION_MS,
+  30 * 24 * 60 * 60 * 1_000,
+);
+const storagePruneIntervalMs = positiveInteger(
+  process.env.GATEWAY_STORAGE_PRUNE_INTERVAL_MS,
+  60 * 60 * 1_000,
+);
+const storagePruneBatchSize = positiveInteger(
+  process.env.GATEWAY_STORAGE_PRUNE_BATCH_SIZE,
+  1_000,
+);
+const pruneStorage = async () => {
+  const result = await store.pruneRetainedData({
+    before: new Date(Date.now() - storageRetentionMs).toISOString(),
+    limit: storagePruneBatchSize,
+  });
+  const removed = Object.values(result).reduce((sum, count) => sum + count, 0);
+  if (removed > 0) {
+    console.log(JSON.stringify({ event: "storage_retention_pruned", removed }));
+  }
+};
+await pruneStorage();
+let storagePruneTimer: ReturnType<typeof setInterval> | undefined;
 const operationalMetrics = new GatewayMetrics();
 const adapter = await createConfiguredAdapter({
   env: process.env,
@@ -55,19 +91,21 @@ const adapter = await createConfiguredAdapter({
     console.error(
       JSON.stringify({
         event: "runtime_tool_error",
-        message: redactSecrets(error.message, [botId, secret]),
+        message: redactSecrets(error.message, diagnosticSecrets),
       }),
     ),
   onToolLifecycle: (event) =>
     console.log(JSON.stringify({ event: "runtime_tool_lifecycle", ...event })),
-  onStderr: (adapterId, message) =>
-    console.error(
-      JSON.stringify({
-        event: "adapter_stderr",
-        adapterId,
-        message: redactSecrets(message, [botId, secret]),
-      }),
-    ),
+  onStderr: logAdapterStderr
+    ? (adapterId, message) =>
+        console.error(
+          JSON.stringify({
+            event: "adapter_stderr",
+            adapterId,
+            message: redactSecrets(message, diagnosticSecrets),
+          }),
+        )
+    : undefined,
 });
 const mediaMaxBytes = positiveInteger(
   process.env.WECOM_MEDIA_MAX_BYTES,
@@ -86,9 +124,30 @@ const transport = new WeComBotTransport({
   accountId: botId,
   botId,
   secret,
+  wsUrl: process.env.WECOM_WEBSOCKET_URL || undefined,
+  requestTimeoutMs: positiveInteger(
+    process.env.WECOM_SDK_REQUEST_TIMEOUT_MS,
+    10_000,
+  ),
+  reconnectIntervalMs: positiveInteger(
+    process.env.WECOM_SDK_RECONNECT_INTERVAL_MS,
+    1_000,
+  ),
+  maxReconnectAttempts: attemptsValue(
+    process.env.WECOM_SDK_MAX_RECONNECT_ATTEMPTS,
+    -1,
+  ),
+  maxAuthFailureAttempts: attemptsValue(
+    process.env.WECOM_SDK_MAX_AUTH_FAILURE_ATTEMPTS,
+    5,
+  ),
+  maxReplyQueueSize: positiveInteger(
+    process.env.WECOM_SDK_MAX_REPLY_QUEUE_SIZE,
+    500,
+  ),
   onError: (error) =>
     console.error("wecom transport error", {
-      message: redactSecrets(error.message, [botId, secret]),
+      message: redactSecrets(error.message, diagnosticSecrets),
     }),
   onStateChange: (state) =>
     console.log(JSON.stringify({ event: "wecom_transport_state", state })),
@@ -97,7 +156,9 @@ const transport = new WeComBotTransport({
     const output = JSON.stringify({
       event: "wecom_sdk",
       level,
-      message: redactSecrets(message, [botId, secret]),
+      ...(logSdkMessages
+        ? { message: redactSecrets(message, diagnosticSecrets) }
+        : {}),
     });
     if (level === "error" || level === "warn") console.error(output);
     else console.log(output);
@@ -129,7 +190,7 @@ const gateway = new WeComAgentGateway({
     console.error(
       JSON.stringify({
         event: "runtime_error",
-        message: redactSecrets(error.message, [botId, secret]),
+        message: redactSecrets(error.message, diagnosticSecrets),
       }),
     ),
   onLifecycleEvent: (event) => {
@@ -172,7 +233,7 @@ const gateway = new WeComAgentGateway({
         component: event.component,
         componentId: event.componentId,
         operation: event.operation,
-        message: redactSecrets(event.error.message, [botId, secret]),
+        message: redactSecrets(event.error.message, diagnosticSecrets),
       }),
     );
   },
@@ -260,7 +321,7 @@ const controlServer = controlEnabled
         console.error(
           JSON.stringify({
             event: "gateway_control_error",
-            message: redactSecrets(error.message, [botId, secret]),
+            message: redactSecrets(error.message, diagnosticSecrets),
           }),
         ),
     })
@@ -286,7 +347,7 @@ const observabilityServer = observabilityEnabled
         console.error(
           JSON.stringify({
             event: "gateway_observability_error",
-            message: redactSecrets(error.message, [botId, secret]),
+            message: redactSecrets(error.message, diagnosticSecrets),
           }),
         ),
     })
@@ -295,6 +356,7 @@ const observabilityServer = observabilityEnabled
 const shutdown = async () => {
   if (shuttingDown) return;
   shuttingDown = true;
+  if (storagePruneTimer) clearInterval(storagePruneTimer);
   await controlServer?.stop();
   await gateway.stop();
   await observabilityServer?.stop();
@@ -309,7 +371,22 @@ try {
   await gateway.start();
   gatewayStarted = true;
   await controlServer?.start();
+  storagePruneTimer = setInterval(() => {
+    void pruneStorage().catch((error: unknown) =>
+      console.error(
+        JSON.stringify({
+          event: "storage_retention_error",
+          message: redactSecrets(
+            error instanceof Error ? error.message : String(error),
+            diagnosticSecrets,
+          ),
+        }),
+      ),
+    );
+  }, storagePruneIntervalMs);
+  storagePruneTimer.unref();
 } catch (error) {
+  if (storagePruneTimer) clearInterval(storagePruneTimer);
   await controlServer?.stop();
   if (gatewayStarted) await gateway.stop();
   await observabilityServer?.stop();
@@ -338,6 +415,37 @@ function list(name: string): string[] {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function sensitiveEnvironmentValues(
+  env: NodeJS.ProcessEnv,
+  requiredValues: readonly string[],
+): string[] {
+  const explicitNames = [
+    "WECOM_BOT_SECRET",
+    "OPENCLAW_GATEWAY_TOKEN",
+    "OPENCLAW_GATEWAY_PASSWORD",
+  ];
+  const allowlistNames = [
+    "CODEX_AGENT_ENV_ALLOWLIST",
+    "ACP_AGENT_ENV_ALLOWLIST",
+    "PI_AGENT_ENV_ALLOWLIST",
+  ];
+  const names = new Set(explicitNames);
+  for (const allowlistName of allowlistNames) {
+    for (const name of (env[allowlistName] ?? "").split(",")) {
+      const normalized = name.trim();
+      if (normalized) names.add(normalized);
+    }
+  }
+  return [
+    ...requiredValues,
+    ...[...names].map((name) => env[name]).filter(isPresent),
+  ];
+}
+
+function isPresent(value: string | undefined): value is string {
+  return Boolean(value);
 }
 
 function createRuntimeTools(): RuntimeTool[] {
@@ -373,4 +481,13 @@ function booleanValue(value: string | undefined, fallback: boolean): boolean {
   if (value === "true") return true;
   if (value === "false") return false;
   throw new Error(`Expected true or false, received: ${value}`);
+}
+
+function attemptsValue(value: string | undefined, fallback: number): number {
+  if (!value) return fallback;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < -1 || parsed === 0) {
+    throw new Error(`Expected -1 or a positive integer, received: ${value}`);
+  }
+  return parsed;
 }

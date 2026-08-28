@@ -20,6 +20,7 @@ import type {
   ChannelTransport,
   ChannelCapability,
   ChannelFeedbackEvent,
+  ChannelEnterChatEvent,
   DeliveryReceipt,
   InboundMessage,
   MaterializedInboundMessage,
@@ -98,15 +99,31 @@ interface WeComSdkLogger {
   error(message: string, ...args: unknown[]): void;
 }
 
+export interface WeComClientConnectionOptions {
+  botId: string;
+  secret: string;
+  logger: WeComSdkLogger;
+  wsUrl?: string;
+  requestTimeout?: number;
+  reconnectInterval?: number;
+  maxReconnectAttempts: number;
+  maxAuthFailureAttempts?: number;
+  maxReplyQueueSize?: number;
+}
+
 export interface WeComBotTransportOptions {
   accountId: string;
   botId: string;
   secret: string;
-  clientFactory?: (options: {
-    botId: string;
-    secret: string;
-    logger: WeComSdkLogger;
-  }) => WeComClient;
+  clientFactory?: (options: WeComClientConnectionOptions) => WeComClient;
+  /** Official or private-deployment WebSocket endpoint. HTTPS downgrade is forbidden. */
+  wsUrl?: string;
+  requestTimeoutMs?: number;
+  reconnectIntervalMs?: number;
+  /** -1 retries forever. The Gateway default is infinite to avoid a live-but-stuck process. */
+  maxReconnectAttempts?: number;
+  maxAuthFailureAttempts?: number;
+  maxReplyQueueSize?: number;
   onError?: (error: Error) => void;
   onStateChange?: (state: "authenticated" | "disconnected") => void;
   onSdkLog?: (
@@ -156,22 +173,38 @@ export class WeComBotTransport implements ChannelTransport {
   constructor(private readonly options: WeComBotTransportOptions) {
     this.welcomeText = validateWelcomeText(options.welcomeText);
     const logger = this.sdkLogger();
+    const clientOptions: WeComClientConnectionOptions = {
+      botId: options.botId,
+      secret: options.secret,
+      logger,
+      wsUrl: validateWebSocketUrl(options.wsUrl),
+      requestTimeout: optionalPositiveInteger(
+        options.requestTimeoutMs,
+        "WeCom SDK request timeout",
+      ),
+      reconnectInterval: optionalPositiveInteger(
+        options.reconnectIntervalMs,
+        "WeCom SDK reconnect interval",
+      ),
+      maxReconnectAttempts: reconnectAttempts(options.maxReconnectAttempts),
+      maxAuthFailureAttempts: optionalAttempts(
+        options.maxAuthFailureAttempts,
+        "WeCom SDK auth failure attempts",
+      ),
+      maxReplyQueueSize: optionalPositiveInteger(
+        options.maxReplyQueueSize,
+        "WeCom SDK reply queue size",
+      ),
+    };
     this.client = options.clientFactory
-      ? options.clientFactory({
-          botId: options.botId,
-          secret: options.secret,
-          logger,
-        })
-      : (new WSClient({
-          botId: options.botId,
-          secret: options.secret,
-          logger,
-        }) as unknown as WeComClient);
+      ? options.clientFactory(clientOptions)
+      : (new WSClient(clientOptions) as unknown as WeComClient);
   }
 
   async start(
     onMessage: (message: InboundMessage) => Promise<void>,
     onFeedback?: (event: ChannelFeedbackEvent) => Promise<void>,
+    onEnterChat?: (event: ChannelEnterChatEvent) => Promise<boolean>,
   ): Promise<void> {
     await this.cleanupOrphanedMedia();
     this.client.on("authenticated", () => {
@@ -213,12 +246,15 @@ export class WeComBotTransport implements ChannelTransport {
     });
     this.client.on("event.enter_chat", (frame: WeComFrame) => {
       if (!this.welcomeText) return;
-      void this.client
-        .replyWelcome(frame, {
+      void (async () => {
+        if (!onEnterChat) return;
+        const allowed = await onEnterChat(this.normalizeContextEvent(frame));
+        if (!allowed) return;
+        await this.client.replyWelcome(frame, {
           msgtype: "text",
           text: { content: this.welcomeText },
-        })
-        .catch((error: unknown) => this.reportError(error));
+        });
+      })().catch((error: unknown) => this.reportError(error));
     });
     await this.client.connect();
   }
@@ -532,6 +568,17 @@ export class WeComBotTransport implements ChannelTransport {
     const eventContainer = asRecord(body.event);
     const nested = asRecord(eventContainer.feedback_event);
     const event = Object.keys(nested).length > 0 ? nested : eventContainer;
+    return {
+      ...this.normalizeContextEvent(frame),
+      feedbackId:
+        stringValue(event.feedback_id) ??
+        stringValue(event.feedbackid) ??
+        stringValue(event.id),
+    };
+  }
+
+  private normalizeContextEvent(frame: WeComFrame): ChannelEnterChatEvent {
+    const body = frame.body ?? {};
     const from = asRecord(body.from);
     const senderId =
       stringValue(from.userid) ?? stringValue(body.userid) ?? "unknown";
@@ -539,19 +586,15 @@ export class WeComBotTransport implements ChannelTransport {
     const chatType = stringValue(body.chattype);
     const isGroup = chatType === "group" || (!chatType && Boolean(chatId));
     if (isGroup && !chatId) {
-      throw new Error("WeCom feedback event has no chatid");
+      throw new Error("WeCom channel event has no chatid");
     }
     return {
-      id: stringValue(body.msgid) ?? generateReqId("feedback"),
+      id: stringValue(body.msgid) ?? generateReqId("channel-event"),
       accountId: this.options.accountId,
       conversationId: isGroup ? chatId! : senderId,
       conversationType: isGroup ? "group" : "direct",
       senderId,
       receivedAt: timestamp(body.create_time),
-      feedbackId:
-        stringValue(event.feedback_id) ??
-        stringValue(event.feedbackid) ??
-        stringValue(event.id),
     };
   }
 
@@ -690,6 +733,54 @@ function validateWelcomeText(value: string | undefined): string | undefined {
     );
   }
   return normalized;
+}
+
+function validateWebSocketUrl(value: string | undefined): string | undefined {
+  if (value === undefined || !value.trim()) return undefined;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("WeCom WebSocket URL is invalid");
+  }
+  if (
+    url.protocol !== "wss:" ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error(
+      "WeCom WebSocket URL must use wss and must not contain credentials, query, or fragment",
+    );
+  }
+  return url.toString();
+}
+
+function optionalPositiveInteger(
+  value: number | undefined,
+  label: string,
+): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(`${label} must be a positive integer`);
+  }
+  return value;
+}
+
+function optionalAttempts(
+  value: number | undefined,
+  label: string,
+): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isInteger(value) || value < -1 || value === 0) {
+    throw new Error(`${label} must be -1 or a positive integer`);
+  }
+  return value;
+}
+
+function reconnectAttempts(value: number | undefined): number {
+  return optionalAttempts(value ?? -1, "WeCom SDK reconnect attempts")!;
 }
 
 function normalizeParts(body: Record<string, unknown>): MessagePart[] {

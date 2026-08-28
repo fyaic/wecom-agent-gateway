@@ -101,6 +101,102 @@ describe("SqliteGatewayStore", () => {
     second.close();
   });
 
+  it("versions the schema and refuses a database created by a newer binary", () => {
+    const directory = mkdtempSync(join(tmpdir(), "wecom-schema-version-"));
+    directories.push(directory);
+    const path = join(directory, "gateway.db");
+    const current = new SqliteGatewayStore(path);
+    current.close();
+    const database = new DatabaseSync(path);
+    expect(
+      (
+        database.prepare("PRAGMA user_version").get() as {
+          user_version: number;
+        }
+      ).user_version,
+    ).toBe(1);
+    database.exec("PRAGMA user_version = 99");
+    database.close();
+    expect(() => new SqliteGatewayStore(path)).toThrow(
+      "Gateway database schema 99 is newer than supported version 1",
+    );
+  });
+
+  it("prunes only old terminal records and preserves active work", async () => {
+    const store = new SqliteGatewayStore(":memory:");
+    const oldMessage: InboundMessage = {
+      id: "old-message",
+      accountId: "bot",
+      conversationId: "chat",
+      conversationType: "direct",
+      senderId: "user",
+      receivedAt: "2026-01-01T00:00:00.000Z",
+      parts: [{ type: "text", text: "old content" }],
+    };
+    const currentMessage: InboundMessage = {
+      ...oldMessage,
+      id: "current-message",
+      receivedAt: "2026-08-28T00:00:00.000Z",
+      parts: [{ type: "text", text: "current content" }],
+    };
+    await store.acceptInbound(oldMessage);
+    await store.acceptInbound(currentMessage);
+
+    const deliveredId = await store.enqueueDelivery({
+      messageId: "old-delivery",
+      command: {
+        type: "proactive",
+        accountId: "bot",
+        conversationId: "chat",
+        text: "old reply",
+      },
+      now: "2026-01-01T00:00:00.000Z",
+    });
+    await store.claimDelivery({
+      deliveryId: deliveredId,
+      owner: "worker",
+      now: "2026-01-01T00:00:01.000Z",
+      leaseUntil: "2026-01-01T00:00:31.000Z",
+    });
+    await store.completeDelivery({
+      deliveryId: deliveredId,
+      owner: "worker",
+      receipt: {
+        id: "receipt",
+        acceptedAt: "2026-01-01T00:00:02.000Z",
+      },
+      now: "2026-01-01T00:00:02.000Z",
+    });
+    await store.enqueueDelivery({
+      messageId: "current-pending",
+      command: {
+        type: "proactive",
+        accountId: "bot",
+        conversationId: "chat",
+        text: "must survive",
+      },
+      now: "2026-01-01T00:00:00.000Z",
+    });
+
+    expect(
+      await store.pruneRetainedData({
+        before: "2026-08-01T00:00:00.000Z",
+        limit: 100,
+      }),
+    ).toMatchObject({
+      inboundMessages: 1,
+      deliveryJournal: 1,
+      deliveryOutbox: 1,
+    });
+    expect(await store.acceptInbound(oldMessage)).toBe(true);
+    expect(await store.acceptInbound(currentMessage)).toBe(false);
+    expect(await store.getDeliveryOutboxStats()).toMatchObject({
+      pending: 1,
+      delivered: 0,
+    });
+    store.close();
+  });
+
   it("never persists ephemeral media URLs, keys, or local paths", async () => {
     const directory = mkdtempSync(join(tmpdir(), "wecom-agent-media-store-"));
     directories.push(directory);
@@ -124,6 +220,19 @@ describe("SqliteGatewayStore", () => {
           sizeBytes: 8,
         },
       ],
+      quote: {
+        parts: [
+          {
+            type: "file",
+            url: "https://example.invalid/quoted-secret-url",
+            path: "/tmp/quoted-secret-path",
+            aesKey: "quoted-secret-aes-key",
+            name: "quoted.pdf",
+            mimeType: "application/pdf",
+            sizeBytes: 16,
+          },
+        ],
+      },
     });
     store.close();
 
@@ -140,8 +249,17 @@ describe("SqliteGatewayStore", () => {
         sizeBytes: 8,
       },
     ]);
+    expect(JSON.parse(row.payload_json).quote.parts).toEqual([
+      {
+        type: "file",
+        name: "quoted.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 16,
+      },
+    ]);
     expect(row.payload_json).not.toContain("secret-media");
     expect(row.payload_json).not.toContain("secret-aes-key");
+    expect(row.payload_json).not.toContain("quoted-secret");
   });
 
   it("does not persist an Agent local path in the delivery journal", async () => {

@@ -8,7 +8,7 @@ export function redactSecrets(
       redacted = redacted.split(secret).join("[REDACTED]");
   }
   return redacted.replace(
-    /\b(secret|token|authorization)\s*[:=]\s*[^\s,;]+/gi,
+    /\b(secret|token|authorization|api[_-]?key|password|credential)\s*[:=]\s*[^\s,;]+/gi,
     "$1=[REDACTED]",
   );
 }

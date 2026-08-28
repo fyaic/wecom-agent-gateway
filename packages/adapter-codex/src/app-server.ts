@@ -139,6 +139,9 @@ export interface CodexAppServerClientOptions {
   clientVersion?: string;
   requestTimeoutMs?: number;
   responsesWebsocket?: boolean;
+  /** Source environment; only the fixed safe set and explicit allowlist are forwarded. */
+  env?: NodeJS.ProcessEnv;
+  envAllowlist?: readonly string[];
   processFactory?: (spec: {
     executable: string;
     args: string[];
@@ -185,10 +188,11 @@ export class CodexAppServerClient implements CodexAppServerClientLike {
     if (this.options.responsesWebsocket !== true) {
       args.push(...httpOnlyProviderArgs());
     }
-    const env = {
-      ...process.env,
-      ...(this.options.codexHome ? { CODEX_HOME: this.options.codexHome } : {}),
-    };
+    const env = safeCodexEnvironment(
+      this.options.env ?? process.env,
+      this.options.envAllowlist,
+      this.options.codexHome,
+    );
     const child = this.options.processFactory
       ? this.options.processFactory({
           executable,
@@ -524,6 +528,8 @@ export interface CodexAppServerRuntimeAdapterOptions
   codexHome?: string;
   requestTimeoutMs?: number;
   responsesWebsocket?: boolean;
+  env?: NodeJS.ProcessEnv;
+  envAllowlist?: readonly string[];
   onStderr?: (line: string) => void;
   tools?: readonly RuntimeTool[];
   toolTimeoutMs?: number;
@@ -587,6 +593,8 @@ export class CodexAppServerRuntimeAdapter implements AgentRuntimeAdapter {
         codexHome: options.codexHome,
         requestTimeoutMs: options.requestTimeoutMs,
         responsesWebsocket: options.responsesWebsocket,
+        env: options.env,
+        envAllowlist: options.envAllowlist,
         onStderr: options.onStderr,
         dynamicToolHandler:
           this.tools.size > 0
@@ -843,6 +851,39 @@ export class CodexAppServerRuntimeAdapter implements AgentRuntimeAdapter {
       elapsedMs,
     });
   }
+}
+
+function safeCodexEnvironment(
+  source: NodeJS.ProcessEnv,
+  extraNames: readonly string[] | undefined,
+  codexHome: string | undefined,
+): NodeJS.ProcessEnv {
+  const names = new Set([
+    "HOME",
+    "PATH",
+    "TMPDIR",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "TERM",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "NO_PROXY",
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+    ...(extraNames ?? []),
+  ]);
+  const env: NodeJS.ProcessEnv = {};
+  for (const name of names) {
+    if (!/^[A-Z_][A-Z0-9_]*$/.test(name)) {
+      throw new Error(`Invalid Codex environment allowlist entry: ${name}`);
+    }
+    const value = source[name];
+    if (value !== undefined) env[name] = value;
+  }
+  if (codexHome) env.CODEX_HOME = codexHome;
+  return env;
 }
 
 function rememberBounded(

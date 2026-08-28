@@ -26,6 +26,17 @@ export class SqliteGatewayStore implements GatewayStore {
   constructor(path: string) {
     this.database = new DatabaseSync(path);
     if (path !== ":memory:") chmodSync(path, 0o600);
+    const schemaVersion = (
+      this.database.prepare("PRAGMA user_version").get() as {
+        user_version: number;
+      }
+    ).user_version;
+    if (schemaVersion > SQLITE_SCHEMA_VERSION) {
+      this.database.close();
+      throw new Error(
+        `Gateway database schema ${schemaVersion} is newer than supported version ${SQLITE_SCHEMA_VERSION}`,
+      );
+    }
     this.database.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     this.database.exec(`
       CREATE TABLE IF NOT EXISTS inbound_messages (
@@ -154,6 +165,76 @@ export class SqliteGatewayStore implements GatewayStore {
       CREATE INDEX IF NOT EXISTS runtime_interaction_resumes_due_idx
         ON runtime_interaction_resumes(status, next_attempt_at, lease_until, id);
     `);
+    if (schemaVersion < SQLITE_SCHEMA_VERSION) {
+      this.database.exec(`PRAGMA user_version = ${SQLITE_SCHEMA_VERSION}`);
+    }
+  }
+
+  async pruneRetainedData(options: {
+    before: string;
+    limit: number;
+  }): Promise<RetentionPruneResult> {
+    const beforeMs = Date.parse(options.before);
+    if (!Number.isFinite(beforeMs)) {
+      throw new Error("Retention cutoff must be an ISO timestamp");
+    }
+    if (
+      !Number.isInteger(options.limit) ||
+      options.limit < 1 ||
+      options.limit > 10_000
+    ) {
+      throw new Error("Retention prune limit must be between 1 and 10000");
+    }
+    return this.transaction(() => ({
+      inboundMessages: this.deleteLimited(
+        "inbound_messages",
+        "received_at < ?",
+        [options.before],
+        options.limit,
+      ),
+      deliveryJournal: this.deleteLimited(
+        "delivery_journal",
+        "created_at < ?",
+        [options.before],
+        options.limit,
+      ),
+      deliveryOutbox: this.deleteLimited(
+        "delivery_outbox",
+        "status IN ('delivered', 'superseded') AND updated_at < ?",
+        [options.before],
+        options.limit,
+      ),
+      approvals: this.deleteLimited(
+        "approvals",
+        "status != 'pending' AND resolved_at IS NOT NULL AND resolved_at < ?",
+        [options.before],
+        options.limit,
+      ),
+      presentationInteractions: this.deleteLimited(
+        "presentation_interactions",
+        "status != 'pending' AND resolved_at IS NOT NULL AND resolved_at < ?",
+        [options.before],
+        options.limit,
+      ),
+      runControls: this.deleteLimited(
+        "run_controls",
+        "status != 'pending' AND resolved_at IS NOT NULL AND resolved_at < ?",
+        [options.before],
+        options.limit,
+      ),
+      runtimeInteractionResumes: this.deleteLimited(
+        "runtime_interaction_resumes",
+        "status = 'delivered' AND updated_at < ?",
+        [options.before],
+        options.limit,
+      ),
+      runtimeInteractions: this.deleteLimited(
+        "runtime_interactions",
+        "status != 'pending' AND resolved_at IS NOT NULL AND resolved_at < ? AND NOT EXISTS (SELECT 1 FROM runtime_interaction_resumes r WHERE r.interaction_id = runtime_interactions.interaction_id)",
+        [options.before],
+        options.limit,
+      ),
+    }));
   }
 
   async acceptInbound(message: InboundMessage): Promise<boolean> {
@@ -1176,6 +1257,20 @@ export class SqliteGatewayStore implements GatewayStore {
     this.database.close();
   }
 
+  private deleteLimited(
+    table: RetainedTable,
+    predicate: string,
+    parameters: readonly string[],
+    limit: number,
+  ): number {
+    const result = this.database
+      .prepare(
+        `DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table} WHERE ${predicate} ORDER BY rowid LIMIT ?)`,
+      )
+      .run(...parameters, limit);
+    return Number(result.changes);
+  }
+
   private getOutboxEntry(id: string): DeliveryOutboxEntry | undefined {
     const row = this.database
       .prepare(
@@ -1287,6 +1382,29 @@ export class SqliteGatewayStore implements GatewayStore {
   }
 }
 
+const SQLITE_SCHEMA_VERSION = 1;
+
+type RetainedTable =
+  | "inbound_messages"
+  | "delivery_journal"
+  | "delivery_outbox"
+  | "approvals"
+  | "presentation_interactions"
+  | "run_controls"
+  | "runtime_interaction_resumes"
+  | "runtime_interactions";
+
+export interface RetentionPruneResult {
+  inboundMessages: number;
+  deliveryJournal: number;
+  deliveryOutbox: number;
+  approvals: number;
+  presentationInteractions: number;
+  runControls: number;
+  runtimeInteractionResumes: number;
+  runtimeInteractions: number;
+}
+
 interface OutboxRow {
   id: number;
   message_id: string;
@@ -1381,16 +1499,25 @@ function outboxEntry(row: OutboxRow): DeliveryOutboxEntry {
 function persistableInbound(message: InboundMessage): InboundMessage {
   return {
     ...message,
-    parts: message.parts.map((part) => {
-      if (part.type === "text") return part;
-      return {
-        type: part.type,
-        name: part.name,
-        mimeType: part.mimeType,
-        sizeBytes: part.sizeBytes,
-      };
-    }),
+    parts: persistableParts(message.parts),
+    quote: message.quote
+      ? { parts: persistableParts(message.quote.parts) }
+      : undefined,
   };
+}
+
+function persistableParts(
+  parts: InboundMessage["parts"],
+): InboundMessage["parts"] {
+  return parts.map((part) => {
+    if (part.type === "text") return part;
+    return {
+      type: part.type,
+      name: part.name,
+      mimeType: part.mimeType,
+      sizeBytes: part.sizeBytes,
+    };
+  });
 }
 
 function persistableOutbound(command: OutboundCommand): unknown {

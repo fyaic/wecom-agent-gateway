@@ -191,14 +191,17 @@ allowlist 内。媒体路径还必须位于 `WECOM_MEDIA_OUTPUT_ROOTS` 允许目
 - 出站媒体先复制到 Gateway 控制的 spool，并校验大小与哈希；
 - 只有 `WECOM_MEDIA_OUTPUT_ROOTS` 下的普通文件允许外发；
 - 写工具必须经过与发送者、会话和 run 绑定的持久审批；
-- Adapter 子进程默认不继承 Bot secret 或全部宿主环境。
+- Adapter 子进程默认只继承最小运行环境；额外变量必须按 Adapter 显式 allowlist，Bot secret 不会下传；
+- SDK 原始消息和 Adapter stderr 默认不写日志；显式开启诊断时仍会对已知凭据和值字段脱敏；
+- SQLite schema 版本不兼容时拒绝启动；终态运行数据默认保留 30 天并分批清理，pending/leased/dead 工作不被删除；
+- 普通网络故障默认无限重连，鉴权失败仍有独立有限重试上限；私有 SDK 端点只接受不含凭据的 `wss://` URL。
 
 完整设计见 [`docs/architecture.md`](docs/architecture.md) 和
 [`ADR`](docs/README.md)。安全问题请按 [`SECURITY.md`](SECURITY.md) 私下报告。
 
 ## 成熟度
 
-项目处于 **Public Preview**，尚未承诺稳定的 v1 API。当前已有 192 项 deterministic tests，并完成
+项目处于 **Public Preview**，尚未承诺稳定的 v1 API。当前有 197 项 deterministic tests，并完成
 真实企业微信私聊、群聊、流式回复、会话恢复、图片/文件/MP4、主动媒体、受管重启及四类 Kernel
 接入验证。真实 OS 子进程 `SIGKILL` 后的 SQLite Outbox 租约恢复、macOS 受管 Gateway 强杀拉起和
 重新鉴权也已通过；隔离 Linux 网络断开/恢复、持久卷只读和受限 tmpfs 容量耗尽均完成真实故障验收。

@@ -11,6 +11,7 @@
 - [`licensing.md`](licensing.md)：项目许可证、上游来源与第三方代码引入规则。
 - [`public-release-checklist.md`](public-release-checklist.md)：切换公开可见性前的阻塞检查清单。
 - [`releases/v0.1.0.md`](releases/v0.1.0.md)：首个 Public Preview 的发布说明与已知限制。
+- [`releases/v0.2.0.md`](releases/v0.2.0.md)：安全、可靠性与仓库治理收口的候选发布说明。
 - [`adr/0001-bot-only-identity.md`](adr/0001-bot-only-identity.md)：单一 Bot 身份决策。
 - [`adr/0002-runtime-neutral-contract.md`](adr/0002-runtime-neutral-contract.md)：通用 Agent Kernel 边界。
 - [`adr/0003-official-sdk-first.md`](adr/0003-official-sdk-first.md)：官方 SDK 优先决策。

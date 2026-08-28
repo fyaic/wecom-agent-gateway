@@ -25,8 +25,10 @@ changes.
 
 Mainline priorities take precedence over additional card themes or business UI:
 
-- [x] Preserve quoted/replied-message context in the neutral inbound contract
-      and certify it in real direct and group conversations.
+- [x] Preserve quoted/replied-message context in the neutral inbound contract,
+      including protected quoted-media persistence boundaries.
+- [ ] Certify quoted/replied-message callbacks in real direct and group
+      conversations; deterministic transport and Adapter coverage is complete.
 - [x] Adopt the official non-blocking stream path with bounded coalescing and
       backpressure, while keeping the final answer on the durable outbox path.
 - [x] Normalize reply-feedback events as channel feedback without creating a
@@ -47,6 +49,11 @@ Mainline priorities take precedence over additional card themes or business UI:
       real callback click, same-session continuation, and one-shot termination.
 - [ ] Complete the remaining real WeCom approval-card rejection, expiry, and
       process-interruption acceptance checks.
+
+- [x] v0.2 security/reliability convergence: versioned SQLite schema, bounded
+      retention, least-environment Adapter processes, privacy-safe diagnostic
+      defaults, ACL-gated channel events, long-outage reconnect, and release
+      revalidation from `main`.
 
 - Exercise host-level physical network loss, native WeCom video callbacks, and
   a real Linux/systemd soak. Cross-process SQLite lease recovery after

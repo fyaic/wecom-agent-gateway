@@ -36,6 +36,25 @@ tagged.
 
 ### Fixed
 
+- Strip ephemeral URLs, decryption keys, and local paths from both current and
+  quoted media before SQLite persistence.
+- Apply the same scoped ACL to feedback and `enter_chat` events as semantic
+  messages, without creating an Agent turn.
+- Keep official SDK reconnect attempts unbounded for transient outages while
+  retaining a bounded authentication-failure limit; validate private endpoints
+  as credential-free `wss://` URLs.
+- Version the SQLite schema and prune old terminal records in bounded batches
+  without deleting pending, leased, or dead work.
+- Launch Codex with a least-environment child process and make raw official SDK
+  messages and Adapter stderr opt-in diagnostics instead of default logs.
+
+### Security
+
+- Redact configured Adapter credentials plus common API key, password, and
+  credential fields from enabled diagnostics.
+- Re-run the complete repository CI and public-history audit for each release,
+  require the tag commit to be on `main`, and select release notes by tag.
+
 - Use the official non-blocking plain-stream helper so stale partial frames do
   not queue behind an unacknowledged update while final frames remain durable.
 - Keep late presentations outside an already-started plain stream instead of

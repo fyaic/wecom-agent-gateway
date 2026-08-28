@@ -34,8 +34,8 @@
 | ----------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------- |
 | 引用/回复消息                                   | 已实现结构化 `quote.parts`、引用媒体物化、全参考 Adapter 映射和未声明能力 fail closed | Complete / Runtime Contract + Transport  |
 | `replyStreamNonBlocking`                        | 已用于普通流；官方 ack 跳帧叠加 Core 合并，最终正文仍经 durable outbox                | Complete / Transport + Core              |
-| `ReplyFeedback`、`feedback_event`               | 已在首次回复设置关联 ID，并归一化为不创建 Agent turn 的 `ChannelFeedbackEvent`        | Complete / Transport + Core event        |
-| `enter_chat`、`replyWelcome`                    | 已提供有界静态 `WECOM_WELCOME_TEXT`；不启动 Kernel、不生成模型回复                    | Complete / optional Transport capability |
+| `ReplyFeedback`、`feedback_event`               | 首次回复设置关联 ID；归一化为非语义事件并复用 scoped ACL，不创建 Agent turn           | Complete / Transport + Core event        |
+| `enter_chat`、`replyWelcome`                    | 有界静态欢迎；先通过同一 scoped ACL，不启动 Kernel、不生成模型回复                    | Complete / optional Transport capability |
 | Bot HTTP Webhook                                | 已评估为未来独立 Transport package；Public Preview 继续以官方 WebSocket 为参考实现    | Evaluated / future optional Transport    |
 | 多账号、配对、动态 Agent 路由                   | 作为部署编排/策略层参考；Core 坚持显式确定性 Kernel，不按自然语言切换 Agent           | Out of Core                              |
 | `wecom-cli 1.2.0`、`wecom-unified` 全量办公能力 | 保持为 Kernel 拥有的工具/Skill 层；Gateway 仅保留少量精确、隔离、需审批的参考工具     | Kernel tool ecosystem                    |
@@ -106,6 +106,10 @@ Broker 幂等消费。补齐该按钮后真实 `updateTemplateCard` 已被服务
 - `wecom-unified` 新增宿主时，对通用 Agent Adapter 能力模型的启示。
 
 每次升级官方 SDK 都必须跑 transport contract tests，并在真实沙箱补做单聊、群聊、断线重连、流式回复、主动推送与媒体矩阵。
+
+当前 Transport 将普通网络重连设为无限次，覆盖长时间故障；鉴权失败仍使用独立有限上限，避免错误凭据永久
+重试。SDK 私有端点只接受不含 userinfo/query/hash 的 `wss://` URL。SDK 原始日志默认不输出正文，只有
+显式诊断开关打开时才输出经过已知凭据脱敏的消息。
 
 当前 transport 已按官方插件语义处理错误码 `846608`：超过六分钟的流式 partial 不再重试，最终文本改用同一个 Bot 的 `sendMessage` 主动推送。模板卡片事件已接入 SDK 专用 listener；五秒更新窗口超时按 UX 失败记录，不重放业务决定。
 

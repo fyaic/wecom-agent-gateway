@@ -34,6 +34,18 @@ describe("production deployment artifacts", () => {
     expect(unit).toContain("NoNewPrivileges=true");
     expect(unit).not.toContain("WECOM_BOT_SECRET=");
   });
+
+  it("revalidates tagged source before publishing version-matched notes", async () => {
+    const release = await read(".github/workflows/release.yml");
+    expect(release).toContain("fetch-depth: 0");
+    expect(release).toContain(
+      'git merge-base --is-ancestor "${GITHUB_SHA}" origin/main',
+    );
+    expect(release).toContain("pnpm run ci");
+    expect(release).toContain("pnpm run public:history-check");
+    expect(release).toContain("docs/releases/${GITHUB_REF_NAME}.md");
+    expect(release).not.toContain("--notes-file docs/releases/v0.1.0.md");
+  });
 });
 
 function read(path: string): Promise<string> {
