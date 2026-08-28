@@ -417,6 +417,49 @@ describe("WeComBotTransport", () => {
     ]);
   });
 
+  it("uses the official combined stream for a mutable progress card", async () => {
+    const client = new FakeClient();
+    const transport = new WeComBotTransport({
+      accountId: "bot-a",
+      botId: "id",
+      secret: "secret",
+      clientFactory: () => client,
+    });
+    const progress = {
+      kind: "notice" as const,
+      id: "progress_1",
+      title: "🤔 Agent 正在思考…",
+    };
+
+    await transport.deliver({
+      type: "reply",
+      accountId: "bot-a",
+      conversationId: "chat-1",
+      replyReference: { requestId: "req-progress" },
+      streamId: "stream-progress",
+      text: "🤔 Agent 正在思考…",
+      final: false,
+      presentation: progress,
+    });
+
+    expect(client.repliesWithCard).toMatchObject([
+      [
+        { headers: { req_id: "req-progress" } },
+        "stream-progress",
+        "🤔 Agent 正在思考…",
+        false,
+        {
+          templateCard: {
+            task_id: "progress_1",
+            card_type: "text_notice",
+            main_title: { title: "🤔 Agent 正在思考…" },
+          },
+        },
+      ],
+    ]);
+    expect(client.pushes).toHaveLength(0);
+  });
+
   it("reports authenticated and disconnected SDK states", async () => {
     const client = new FakeClient();
     const states: string[] = [];

@@ -24,7 +24,11 @@ import {
   type RuntimeInteractionResumeEntry,
   type RuntimeRouter,
 } from "@fyaic/wecom-runtime-contract";
-import { AgentReplyProjection, MutableReply } from "./mutable-reply.js";
+import {
+  AgentReplyProjection,
+  MutableReply,
+  renderAgentStatus,
+} from "./mutable-reply.js";
 
 export interface GatewayOptions {
   transport: ChannelTransport;
@@ -65,6 +69,8 @@ export interface GatewayOptions {
   /** Show a scoped cancel card after this many milliseconds; unset disables it. */
   runControlAfterMs?: number;
   runControlTimeoutMs?: number;
+  /** Render explicit Adapter status events in the mutable reply card. */
+  progressPresentationEnabled?: boolean;
   maxProactiveTextBytes?: number;
   now?: () => number;
   wallClock?: () => number;
@@ -791,6 +797,21 @@ export class WeComAgentGateway {
     let activeSessionId = sessionId;
     const streamId = `run-${message.id}`;
     const projection = new AgentReplyProjection();
+    const progressPresentationId = `progress_${randomUUID().replaceAll("-", "")}`;
+    const progressPresentationEnabled =
+      this.options.progressPresentationEnabled !== false &&
+      adapter.capabilities.has("status-events") &&
+      this.options.transport.capabilities.has("structured-presentation") &&
+      this.options.transport.capabilities.has("reply-with-presentation");
+    let progressPresentation: Presentation | undefined =
+      progressPresentationEnabled
+        ? {
+            kind: "notice",
+            id: progressPresentationId,
+            title: "⏳ 请求已接收",
+            body: "等待 Agent 返回运行状态；回复内容会在本消息中持续更新。",
+          }
+        : undefined;
     let channelAcknowledged = false;
     const reply = new MutableReply(
       async (update) => {
@@ -812,7 +833,10 @@ export class WeComAgentGateway {
           );
         }
       },
-      { updateIntervalMs: this.options.replyUpdateIntervalMs },
+      {
+        updateIntervalMs: this.options.replyUpdateIntervalMs,
+        initialPresentation: progressPresentation,
+      },
     );
     let closed = false;
     const mediaOutputs: AgentMediaOutput[] = [];
@@ -951,7 +975,17 @@ export class WeComAgentGateway {
           scheduleRunControl();
         } else if (event.type === "status" || event.type === "text-delta") {
           const text = projection.apply(event);
-          if (text !== undefined) reply.update(text);
+          if (event.type === "status" && progressPresentationEnabled) {
+            const status = renderAgentStatus(event);
+            if (status) {
+              progressPresentation = {
+                kind: "notice",
+                id: progressPresentationId,
+                title: cardExcerpt(status, 26),
+              };
+            }
+          }
+          if (text !== undefined) reply.update(text, progressPresentation);
         } else if (event.type === "interaction-requested") {
           suspendRunControl();
           if (!activeSessionId) {
@@ -1838,7 +1872,7 @@ export class WeComAgentGateway {
       final,
       ...(presentation ? { presentation } : {}),
     };
-    if (presentation) {
+    if (presentation && final) {
       // The official combined stream only renders a template card reliably
       // when the card is present on the first reply frame. Final-answer
       // actions are not known until the Agent completes, so keep the mutable

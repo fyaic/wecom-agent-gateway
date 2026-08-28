@@ -34,6 +34,7 @@
 - [`adr/0022-live-kernel-interaction-resume.md`](adr/0022-live-kernel-interaction-resume.md)：原生 ask-user、live control resume 与文本输入范围。
 - [`adr/0023-final-reply-actions.md`](adr/0023-final-reply-actions.md)：最终流式回复快捷操作、主动降级与真实 callback continuation。
 - [`adr/0024-long-run-cancel-control.md`](adr/0024-long-run-cancel-control.md)：长任务取消卡、原生 cancel、ACL 与一次性状态边界。
+- [`adr/0025-mutable-progress-presentation.md`](adr/0025-mutable-progress-presentation.md)：同消息动态进度卡、显式状态投影与组合流边界。
 
 原始 `wecom-cli` 功能清单和测试台账仍由
 [`CAPABILITY_TEST_MATRIX_2026-08-19.md`](https://github.com/fyaic/wecom-cli/blob/agent/capability-test-matrix/docs/fyaic/CAPABILITY_TEST_MATRIX_2026-08-19.md)

@@ -96,6 +96,12 @@ Core 只认识通用 `Presentation`：notice、article、actions、choice、form
 `template_card_event` 归一化为通用交互。卡片不是 Agent 推理接口；不会扫描 Agent 文本中的 JSON，
 也不会把企业微信私有结构扩散到 Adapter。
 
+当 Adapter 声明 `status-events`，且 Transport 同时支持 `structured-presentation` 与
+`reply-with-presentation` 时，Core 从第一帧起在原可变回复中附加同一个 notice 进度卡。初始状态只表示
+Gateway 已接收请求；后续标题严格来自 Adapter 显式 status/emoji，并随 250ms 文本合并窗口共同更新。
+Core 不根据耗时、工具名或文本猜测“思考中”。最终正文关闭同一 stream；完成时才得知的快捷操作仍走
+独立 proactive card，避免真实客户端丢失最后一帧才出现的卡片。
+
 完整的 Agent 交互卡架构、SDK/CLI 分工、状态机和里程碑见
 [`interaction-cards.md`](interaction-cards.md)。Core 的 Interaction Broker 已实现五秒 callback fast
 lane、TTL、发送者/会话绑定和 durable deferred resume；Kernel continuation 不进入 WeCom

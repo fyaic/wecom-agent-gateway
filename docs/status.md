@@ -64,6 +64,7 @@
 | 最终回复快捷操作                                | M2.3 自动化与真实验证通过 | 紧邻主动卡、SQLite TTL/幂等、同 session continuation、默认动作一次性              |
 | 多 Kernel 回复动作续接                          | M2.4 自动化通过           | Codex SDK/App Server、ACP/Kimi、OpenClaw、Pi、外部模板共用 deterministic contract |
 | 长任务原生取消控制卡                            | M2.5 真实私聊通过         | 仅 cancellable Adapter；控制卡单次结算；Pi 原生 run 真实进入 cancelled            |
+| 同消息动态进度阶段卡                            | M2.5 自动化通过           | 首帧官方组合流；只投影显式 status/emoji；同卡 ID、250ms 合并、不额外刷屏          |
 | SQLite 重启恢复                                 | 完成并自动化验证          | 入站去重、runtime session、待发送文本与投递日志跨 reopen 保留                     |
 | SQLite 文件权限                                 | 完成并自动化验证          | Store 每次打开都强制主数据库为 `0600`；本机现有数据库已收紧                       |
 | SQLite 故障因果保留                             | 完成并自动化验证          | 写入/提交失败后即使回滚也失败，仍抛出原始故障而非二次回滚错误                     |
@@ -268,7 +269,10 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
   2026-08-28 真实企业微信私聊验收确认：控制卡一次点击后只产生一条 `resolved/cancel` 记录，Pi
   原生 run 在 21.045 秒进入 `cancelled`，没有继续完成该 run；Outbox 为 307 delivered、零
   pending/leased/dead，Gateway 保持 ready。
-- 后续保留欢迎/主动任务卡、进度阶段卡、主题与独立群投票聚合；它们不阻塞 Gateway 主链路。
+- 第二切片已实现同消息动态进度卡：官方组合流第一帧建立 notice 卡，后续只使用 Adapter 明确发送的
+  `status`/emoji 原位更新；普通文本仍按 250ms 合并，最终回复和快捷 action 保持原语义。自动化已覆盖
+  Core、MutableReply 和 WeCom SDK 映射，真实客户端显示仍待本轮部署验收。
+- 后续保留欢迎/主动任务卡、主题与独立群投票聚合；它们不阻塞 Gateway 主链路。
 
 ### M5：生产运行与韧性
 

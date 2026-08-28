@@ -217,6 +217,10 @@ const gateway = new WeComAgentGateway({
     process.env.GATEWAY_RUN_CONTROL_TIMEOUT_MS,
     5 * 60_000,
   ),
+  progressPresentationEnabled: booleanValue(
+    process.env.GATEWAY_PROGRESS_PRESENTATION_ENABLED,
+    true,
+  ),
   maxProactiveTextBytes: positiveInteger(
     process.env.GATEWAY_PROACTIVE_MAX_TEXT_BYTES,
     20_000,
