@@ -8,6 +8,9 @@ tagged.
 
 ### Added
 
+- A bilingual 15-minute integration guide from a clean clone to the first
+  authorized WeCom direct conversation.
+
 - Structured quoted-message context, including protected quoted-media
   materialization and explicit support across every reference Adapter.
 - Channel-native reply feedback events that never create a semantic Agent turn,
@@ -35,6 +38,10 @@ tagged.
   creating extra messages, plus real-client coverage of combined-stream cards.
 
 ### Fixed
+
+- Reframe the bilingual README around the user problem, observable message
+  flow, shortest setup path, real-client proof, Agent support, and clear
+  comparison with the official OpenClaw plugin and `wecom-cli` tool layer.
 
 - Strip ephemeral URLs, decryption keys, and local paths from both current and
   quoted media before SQLite persistence.

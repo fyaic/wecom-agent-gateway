@@ -1,8 +1,9 @@
 # 文档导航
 
+- [`getting-started.md`](getting-started.md) / [`English`](getting-started.en.md)：从全新 clone 到首条授权私聊的最短接入路径。
+- [`verified-kernel-cases.md`](verified-kernel-cases.md) / [`English`](verified-kernel-cases.en.md)：Codex、Kimi、OpenClaw、Pi 与通用 ACP 的真实接入证据和复现入口。
 - [`architecture.md`](architecture.md)：系统边界、数据流和包职责。
 - [`official-wecom-ecosystem.md`](official-wecom-ecosystem.md)：企业微信官方及周边生态调研。
-- [`verified-kernel-cases.md`](verified-kernel-cases.md) / [`English`](verified-kernel-cases.en.md)：Codex、Kimi、OpenClaw、Pi 与通用 ACP 的真实接入证据和复现入口。
 - [`interaction-cards.md`](interaction-cards.md)：Agent 交互卡片、Interaction Broker、状态机、UX 与里程碑。
 - [`real-wecom-runbook.md`](real-wecom-runbook.md)：真实 Bot 凭据、白名单与收发联调手册。
 - [`status.md`](status.md)：实际完成项、验证结果、未验证项和下一步。
