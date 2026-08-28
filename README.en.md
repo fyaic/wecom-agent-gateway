@@ -10,6 +10,7 @@
 </p>
 
 <p align="center">
+  <a href="#26-second-demo"><strong>26-second demo</strong></a> ·
   <a href="#quick-start"><strong>Quick start</strong></a> ·
   <a href="docs/verified-kernel-cases.en.md">Real cases</a> ·
   <a href="#supported-agents"><strong>Agent support</strong></a> ·
@@ -65,11 +66,20 @@ WeCom user ⇄ official Bot WebSocket ⇄ Gateway ⇄ Kernel Adapter ⇄ Agent
 5. The Agent can proactively send text or media to authorized direct and group
    targets through the same path.
 
+## 26-second demo
+
 <p align="center">
-  <img src="docs/assets/verified-kernel-cases/pi-wecom-private.png" width="548" alt="A real Pi Agent conversation and interaction card delivered through WeCom Agent Gateway">
+  <a href="docs/assets/demo/wecom-agent-gateway-demo.mp4">
+    <img src="docs/assets/demo/wecom-agent-gateway-demo.gif" width="960" alt="A 26-second real WeCom demo of acknowledgement, mutable replies, native interaction, task resume, and proactive media">
+  </a>
 </p>
 
-<p align="center"><em>A real WeCom client: an ordinary Pi Agent answer and an explicit interaction card through the same Gateway. The image is cropped and privacy-reviewed.</em></p>
+<p align="center"><em>A real macOS WeCom client and a real Pi Agent: immediate status, final reply, native confirmation, same-task resume, and proactive text/media. Select the animation for the HD MP4.</em></p>
+
+This is the production Gateway, official Bot SDK, and scoped proactive control
+path—not a UI mock. Public assets retain only the conversation pane and remove
+the sidebar, account name, internal IDs, and credentials. Ordinary replies do
+not attach cards by default.
 
 ## Quick start
 

@@ -17,6 +17,10 @@ flowchart LR
 
 ## 真实客户端快照
 
+完整 26 秒真实客户端链路（即时状态、最终回复、确认卡片、原任务恢复、主动文本/图片）见
+[`GIF 演示`](assets/demo/wecom-agent-gateway-demo.gif) 或
+[`高清 MP4`](assets/demo/wecom-agent-gateway-demo.mp4)。原始桌面截图不进入仓库。
+
 ![Pi Agent 真实企业微信私聊与显式交互卡片](assets/verified-kernel-cases/pi-wecom-private.png)
 
 截图于 2026-08-28 取自 macOS 企业微信真实 Bot 私聊，并裁掉会话侧栏和无关内容。普通消息通过 Pi

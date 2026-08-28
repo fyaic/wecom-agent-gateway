@@ -47,6 +47,7 @@
     "outbox:replay-text": "tsx --env-file-if-exists=.env scripts/outbox-admin.ts replay-text",
     "proactive:health": "tsx scripts/proactive-control.ts health",
     "proactive:send": "tsx scripts/proactive-control.ts send",
+    "demo:build": "node scripts/build-demo-assets.mjs",
     "healthcheck": "tsx scripts/healthcheck.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

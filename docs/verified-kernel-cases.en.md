@@ -17,6 +17,12 @@ flowchart LR
 
 ## Real-client snapshot
 
+The complete 26-second client path—immediate status, final reply, confirmation,
+same-task resume, and proactive text/image—is available as a
+[`GIF`](assets/demo/wecom-agent-gateway-demo.gif) or
+[`high-resolution MP4`](assets/demo/wecom-agent-gateway-demo.mp4). Raw desktop
+captures never enter the repository.
+
 ![A real Pi Agent direct conversation and an explicit interaction card in WeCom](assets/verified-kernel-cases/pi-wecom-private.png)
 
 Captured from a real macOS WeCom Bot conversation on 2026-08-28 and cropped to
