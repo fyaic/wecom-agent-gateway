@@ -57,6 +57,11 @@ const app = acp
         result.outcome.outcome === "selected"
           ? `permission:${result.outcome.optionId}`
           : "permission:cancelled";
+    } else if (
+      text.includes("[Quoted message context]\nearlier") &&
+      text.includes("[End quoted message context]\ncurrent")
+    ) {
+      reply = "quote:received";
     } else if (hasImage) {
       reply = "image:received";
     } else {

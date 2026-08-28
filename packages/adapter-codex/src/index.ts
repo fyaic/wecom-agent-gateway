@@ -4,6 +4,7 @@ import {
   type ThreadEvent,
 } from "@openai/codex-sdk";
 import {
+  agentInputParts,
   RUNTIME_CONTRACT_VERSION,
   type AgentInteractionResumeRequest,
   type AgentRunEvent,
@@ -62,6 +63,7 @@ export class CodexRuntimeAdapter implements AgentRuntimeAdapter {
     "resume",
     "interaction-resume",
     "reply-actions",
+    "quoted-context",
   ]);
   private readonly codex: CodexClientLike;
   private readonly completedInteractionResumes = new Set<string>();
@@ -79,7 +81,7 @@ export class CodexRuntimeAdapter implements AgentRuntimeAdapter {
     const thread = request.sessionId
       ? this.codex.resumeThread(request.sessionId, threadOptions)
       : this.codex.startThread(threadOptions);
-    const prompt = request.message.parts
+    const prompt = agentInputParts(request.message)
       .map((part) =>
         part.type === "text"
           ? part.text

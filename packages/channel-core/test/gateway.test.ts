@@ -5,6 +5,7 @@ import type {
   AgentRuntimeAdapter,
   AgentMediaOutput,
   ChannelCapability,
+  ChannelFeedbackEvent,
   ChannelTransport,
   DeliveryOutboxStats,
   DeliveryReceipt,
@@ -31,10 +32,13 @@ class FakeTransport implements ChannelTransport {
   ]);
   readonly commands: OutboundCommand[] = [];
   private handler?: (message: InboundMessage) => Promise<void>;
+  private feedbackHandler?: (event: ChannelFeedbackEvent) => Promise<void>;
   async start(
     handler: (message: InboundMessage) => Promise<void>,
+    feedbackHandler?: (event: ChannelFeedbackEvent) => Promise<void>,
   ): Promise<void> {
     this.handler = handler;
+    this.feedbackHandler = feedbackHandler;
   }
   async stop(): Promise<void> {}
   async health(): Promise<{ ok: boolean }> {
@@ -50,6 +54,10 @@ class FakeTransport implements ChannelTransport {
   async receive(message: InboundMessage): Promise<void> {
     if (!this.handler) throw new Error("transport not started");
     await this.handler(message);
+  }
+  async receiveFeedback(event: ChannelFeedbackEvent): Promise<void> {
+    if (!this.feedbackHandler) throw new Error("feedback handler not started");
+    await this.feedbackHandler(event);
   }
 }
 
@@ -128,6 +136,34 @@ const message = (id: string): InboundMessage => ({
 });
 
 describe("WeComAgentGateway", () => {
+  it("observes channel feedback without creating an Agent turn", async () => {
+    const transport = new FakeTransport();
+    const runtime = new FakeRuntime();
+    const observed: ChannelFeedbackEvent[] = [];
+    const gateway = new WeComAgentGateway({
+      transport,
+      adapters: [runtime],
+      router: new StaticRuntimeRouter(runtime.id),
+      store: new MemoryGatewayStore(),
+      onChannelFeedbackEvent: (event) => observed.push(event),
+    });
+    await gateway.start();
+    const feedback: ChannelFeedbackEvent = {
+      id: "feedback-1",
+      accountId: "bot-a",
+      conversationId: "chat-a",
+      conversationType: "direct",
+      senderId: "user-a",
+      receivedAt: "2026-08-28T00:00:00.000Z",
+      feedbackId: "stream-1",
+    };
+    await transport.receiveFeedback(feedback);
+
+    expect(observed).toEqual([feedback]);
+    expect(runtime.requests).toHaveLength(0);
+    expect(transport.commands).toHaveLength(0);
+  });
+
   it("projects status events into mutable text without an ephemeral first-frame card", async () => {
     class ProgressTransport extends FakeTransport {
       override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
@@ -2412,6 +2448,35 @@ describe("WeComAgentGateway", () => {
     expect(errors).toEqual([
       "Adapter image-only-runtime cannot accept file input",
     ]);
+  });
+
+  it("fails closed before the Kernel when quoted context is undeclared", async () => {
+    const transport = new FakeTransport();
+    const runtime = new FakeRuntime();
+    const errors: string[] = [];
+    const gateway = new WeComAgentGateway({
+      transport,
+      adapters: [runtime],
+      router: new StaticRuntimeRouter(runtime.id),
+      store: new MemoryGatewayStore(),
+      onRuntimeError: (error) => errors.push(error.message),
+    });
+    await gateway.start();
+    await transport.receive({
+      ...message("quoted-unsupported"),
+      quote: { parts: [{ type: "text", text: "earlier" }] },
+      parts: [{ type: "text", text: "current" }],
+    });
+
+    expect(runtime.requests).toHaveLength(0);
+    expect(errors).toEqual([
+      "Adapter fake-runtime cannot preserve quoted message context",
+    ]);
+    expect(transport.commands.at(-1)).toMatchObject({
+      type: "reply",
+      text: "Agent 处理失败，请稍后重试。",
+      final: true,
+    });
   });
 
   it("delivers declared Agent media output after finalizing the text reply", async () => {

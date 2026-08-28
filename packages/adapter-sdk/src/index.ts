@@ -5,11 +5,13 @@ import {
   RUNTIME_CONTRACT_VERSION,
   assertRuntimeAdapterCompatible,
   type AgentRuntimeAdapter,
+  type ChannelFeedbackEvent,
   type RuntimeJsonValue,
   type RuntimeTool,
 } from "@fyaic/wecom-runtime-contract";
 
 export {
+  agentInputParts,
   RUNTIME_CONTRACT_VERSION,
   type AgentInteractionResumeRequest,
   type AgentMediaOutput,
@@ -17,6 +19,7 @@ export {
   type AgentRunRequest,
   type AgentRuntimeAdapter,
   type InboundMessage,
+  type QuotedMessage,
   type MediaType,
   type RuntimeCapability,
   type RuntimeJsonValue,
@@ -172,6 +175,7 @@ function assertAdapterShape(
     "interaction-resume",
     "interaction-live-resume",
     "reply-actions",
+    "quoted-context",
   ]);
   for (const capability of capabilities as ReadonlySet<unknown>) {
     if (typeof capability !== "string" || !knownCapabilities.has(capability)) {

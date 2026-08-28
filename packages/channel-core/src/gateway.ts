@@ -4,6 +4,7 @@ import {
   type AgentMediaOutput,
   type AgentRuntimeAdapter,
   type ChannelTransport,
+  type ChannelFeedbackEvent,
   type DeliveryOutboxEntry,
   type DurableMediaArtifact,
   type DurableOutboundCommand,
@@ -46,6 +47,8 @@ export interface GatewayOptions {
   onAdapterLifecycleEvent?: (event: AdapterLifecycleEvent) => void;
   onApprovalLifecycleEvent?: (event: ApprovalLifecycleEvent) => void;
   onInteractionLifecycleEvent?: (event: InteractionLifecycleEvent) => void;
+  /** Observes channel-native reply feedback without creating an Agent turn. */
+  onChannelFeedbackEvent?: (event: ChannelFeedbackEvent) => void;
   replyUpdateIntervalMs?: number;
   maxOutboundMediaPerRun?: number;
   outboxPollIntervalMs?: number;
@@ -566,8 +569,9 @@ export class WeComAgentGateway {
       throw failure.reason;
     }
     try {
-      await this.options.transport.start(async (message) =>
-        this.enqueue(message),
+      await this.options.transport.start(
+        async (message) => this.enqueue(message),
+        async (event) => this.options.onChannelFeedbackEvent?.(event),
       );
       this.started = true;
       this.stopping = false;
@@ -839,7 +843,11 @@ export class WeComAgentGateway {
         ? await this.options.transport.materializeInbound(message)
         : { message, release: async () => undefined };
       releaseMedia = materialized.release;
-      if (message.parts.some((part) => part.type !== "text")) {
+      if (
+        [...message.parts, ...(message.quote?.parts ?? [])].some(
+          (part) => part.type !== "text",
+        )
+      ) {
         this.notifyLifecycle(
           message,
           "media-materialized",
@@ -3112,8 +3120,13 @@ function assertInboundModalities(
   adapter: AgentRuntimeAdapter,
   message: InboundMessage,
 ): void {
+  if (message.quote && !adapter.capabilities.has("quoted-context")) {
+    throw new Error(
+      `Adapter ${adapter.id} cannot preserve quoted message context`,
+    );
+  }
   const mediaTypes = new Set<MediaType>();
-  for (const part of message.parts) {
+  for (const part of [...message.parts, ...(message.quote?.parts ?? [])]) {
     if (part.type !== "text") mediaTypes.add(part.type);
   }
   if (mediaTypes.size === 0) return;

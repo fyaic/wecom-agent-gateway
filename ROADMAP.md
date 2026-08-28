@@ -25,16 +25,17 @@ changes.
 
 Mainline priorities take precedence over additional card themes or business UI:
 
-- [ ] Preserve quoted/replied-message context in the neutral inbound contract
+- [x] Preserve quoted/replied-message context in the neutral inbound contract
       and certify it in real direct and group conversations.
-- [ ] Adopt the official non-blocking stream path with bounded coalescing and
+- [x] Adopt the official non-blocking stream path with bounded coalescing and
       backpressure, while keeping the final answer on the durable outbox path.
-- [ ] Normalize reply-feedback events as channel feedback without creating a
+- [x] Normalize reply-feedback events as channel feedback without creating a
       new semantic Agent turn.
-- [ ] Add a static, Kernel-free `enter_chat` welcome as an optional Transport
+- [x] Add a static, Kernel-free `enter_chat` welcome as an optional Transport
       capability.
-- [ ] Evaluate a separate Bot Webhook Transport without changing Core or the
-      Runtime Contract.
+- [x] Evaluate a separate Bot Webhook Transport: keep it as a future independent
+      package sharing Core and the Runtime Contract; WebSocket remains the
+      Public Preview reference Transport.
 
 - [x] M2.1: durable Interaction Broker, five-second callback fast lane, and
       runtime resume queue with deterministic end-to-end tests.

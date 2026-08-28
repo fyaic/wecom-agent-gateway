@@ -41,6 +41,39 @@ describe("CodexRuntimeAdapter", () => {
     });
   });
 
+  it("preserves quoted context in the Kernel prompt", async () => {
+    let prompt = "";
+    const adapter = new CodexRuntimeAdapter({
+      client: {
+        startThread: () => ({
+          id: null,
+          runStreamed: async (value) => {
+            prompt = value;
+            return { events: asAsync(textTurn("quoted", "ok", true)) };
+          },
+        }),
+        resumeThread: () => {
+          throw new Error("unexpected resume");
+        },
+      },
+    });
+
+    for await (const _event of adapter.run({
+      message: {
+        ...inbound,
+        quote: { parts: [{ type: "text", text: "earlier" }] },
+        parts: [{ type: "text", text: "current" }],
+      },
+    })) {
+      // drain
+    }
+
+    expect(prompt).toBe(
+      "[Quoted message context]\nearlier\n[End quoted message context]\ncurrent",
+    );
+    expect(adapter.capabilities.has("quoted-context")).toBe(true);
+  });
+
   it("continues reply actions in the same thread exactly once", async () => {
     const adapter = new CodexRuntimeAdapter({
       client: {

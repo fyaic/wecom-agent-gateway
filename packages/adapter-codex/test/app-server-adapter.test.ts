@@ -156,6 +156,59 @@ describe("CodexAppServerRuntimeAdapter", () => {
     expect(JSON.stringify(client.calls)).not.toContain("warmup");
   });
 
+  it("preserves quoted context as ordered app-server input", async () => {
+    const client = new FakeAppServerClient();
+    client.events = [
+      {
+        method: "item/completed",
+        params: {
+          threadId: "thread-1",
+          turnId: "turn-1",
+          item: { type: "agentMessage", text: "ok" },
+        },
+      },
+      {
+        method: "turn/completed",
+        params: {
+          threadId: "thread-1",
+          turn: { id: "turn-1", status: "completed" },
+        },
+      },
+    ];
+    const adapter = new CodexAppServerRuntimeAdapter({ client });
+    await adapter.start();
+    for await (const _event of adapter.run({
+      message: {
+        ...inbound,
+        quote: { parts: [{ type: "text", text: "earlier" }] },
+        parts: [{ type: "text", text: "current" }],
+      },
+    })) {
+      // drain
+    }
+
+    expect(client.calls).toContainEqual([
+      "turn/start",
+      "thread-1",
+      [
+        {
+          type: "text",
+          text: "[Quoted message context]",
+          text_elements: [],
+        },
+        { type: "text", text: "earlier", text_elements: [] },
+        {
+          type: "text",
+          text: "[End quoted message context]",
+          text_elements: [],
+        },
+        { type: "text", text: "current", text_elements: [] },
+      ],
+      expect.any(Object),
+    ]);
+    expect(adapter.capabilities.has("quoted-context")).toBe(true);
+  });
+
   it("resumes an existing opaque session once per process and supports cancel", async () => {
     const client = new FakeAppServerClient();
     client.events = [

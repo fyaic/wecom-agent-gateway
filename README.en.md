@@ -36,6 +36,9 @@ model selection, tool policy, and media understanding stay in the Kernel.
 - **Mutable Bot UX** — one reply evolves from an immediate acknowledgement to
   explicit Agent-status text, streamed text, and the final answer without
   extra chat messages.
+- **Message fidelity** — quoted text/media stays structured through protected
+  materialization and every reference Adapter; official non-blocking streaming
+  drops stale partials but never the final frame.
 - **Optional channel-native interaction** — cards, approvals, ask-user, reply
   actions, and long-run cancellation share one durable Broker. Vendor JSON is
   never parsed from model text, and transports or adapters without cards retain
@@ -168,6 +171,8 @@ the matching scoped allowlist, and media still obeys `WECOM_MEDIA_OUTPUT_ROOTS`.
 - Write tools require durable approval bound to sender, conversation, and run.
 - Adapter child processes do not inherit Bot secrets or the full host
   environment by default.
+- Reply feedback is observable without becoming an Agent turn; optional
+  `WECOM_WELCOME_TEXT` is answered statically without starting a Kernel.
 
 Read the [architecture](docs/architecture.md), [security policy](SECURITY.md),
 and [ADRs](docs/README.md) for the complete contract.
@@ -175,7 +180,7 @@ and [ADRs](docs/README.md) for the complete contract.
 ## Maturity
 
 The project is in **Public Preview**; a stable v1 API is not promised yet. The
-current baseline has 179 deterministic tests and real acceptance evidence for
+current baseline has 192 deterministic tests and real acceptance evidence for
 direct and group conversations, mutable streaming, session recovery,
 image/file/MP4 transfer, proactive media, managed restarts, and four Kernel
 families. Cross-process SQLite outbox lease recovery after `SIGKILL` and a

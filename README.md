@@ -89,6 +89,9 @@ Adapter，并通过 `GATEWAY_ADAPTER=external` 加载，无需修改 Gateway Reg
 - Bot WebSocket 鉴权、心跳和重连；
 - 私聊与群聊 `@Bot`；
 - 文本和 Agent 显式状态的可变流式回复；
+- 引用/回复消息的结构化上下文保真，引用媒体复用同一受保护生命周期；
+- 官方非阻塞流式背压、最终帧保证和可选回复反馈；
+- 可选静态 `enter_chat` 欢迎语，不启动 Kernel；
 - 图片、文件、视频下载/解密和受保护临时物化；
 - 图片、语音、视频、文件上传与主动推送；
 - 分域 sender/conversation allowlist；
@@ -195,7 +198,7 @@ allowlist 内。媒体路径还必须位于 `WECOM_MEDIA_OUTPUT_ROOTS` 允许目
 
 ## 成熟度
 
-项目处于 **Public Preview**，尚未承诺稳定的 v1 API。当前已有 179 项 deterministic tests，并完成
+项目处于 **Public Preview**，尚未承诺稳定的 v1 API。当前已有 192 项 deterministic tests，并完成
 真实企业微信私聊、群聊、流式回复、会话恢复、图片/文件/MP4、主动媒体、受管重启及四类 Kernel
 接入验证。真实 OS 子进程 `SIGKILL` 后的 SQLite Outbox 租约恢复、macOS 受管 Gateway 强杀拉起和
 重新鉴权也已通过；隔离 Linux 网络断开/恢复、持久卷只读和受限 tmpfs 容量耗尽均完成真实故障验收。

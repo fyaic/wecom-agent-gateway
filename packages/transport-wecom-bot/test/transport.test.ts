@@ -17,9 +17,11 @@ import { renderWeComTemplateCard, WeComBotTransport } from "../src/index.js";
 class FakeClient {
   readonly listeners = new Map<string, (...args: any[]) => void>();
   readonly replies: any[][] = [];
+  readonly nonBlockingReplies: any[][] = [];
   readonly repliesWithCard: any[][] = [];
   readonly pushes: any[][] = [];
   readonly cardUpdates: any[][] = [];
+  readonly welcomes: any[][] = [];
   readonly mediaPushes: any[][] = [];
   readonly uploads: any[][] = [];
   replyError?: unknown;
@@ -36,9 +38,16 @@ class FakeClient {
     this.replies.push(args);
     if (this.replyError) throw this.replyError;
   }
+  async replyStreamNonBlocking(...args: any[]): Promise<void> {
+    this.nonBlockingReplies.push(args);
+    if (this.replyError) throw this.replyError;
+  }
   async replyStreamWithCard(...args: any[]): Promise<void> {
     this.repliesWithCard.push(args);
     if (this.replyError) throw this.replyError;
+  }
+  async replyWelcome(...args: any[]): Promise<void> {
+    this.welcomes.push(args);
   }
   async sendMessage(...args: any[]): Promise<void> {
     this.pushes.push(args);
@@ -221,6 +230,7 @@ describe("WeComBotTransport", () => {
         chattype: "group",
         from: { userid: "user-1" },
         text: { content: "你好" },
+        quote: { msgtype: "text", text: { content: "被引用的前文" } },
       },
     });
     await Promise.resolve();
@@ -230,6 +240,7 @@ describe("WeComBotTransport", () => {
       conversationType: "group",
       senderId: "user-1",
       parts: [{ type: "text", text: "你好" }],
+      quote: { parts: [{ type: "text", text: "被引用的前文" }] },
     });
     await transport.deliver({
       type: "reply",
@@ -246,12 +257,13 @@ describe("WeComBotTransport", () => {
       conversationId: "chat-1",
       text: "提醒",
     });
-    expect(client.repliesWithCard[0]).toEqual([
+    expect(client.nonBlockingReplies[0]).toEqual([
       { headers: { req_id: "req-1" } },
       "stream-1",
       "完成",
       true,
       undefined,
+      { id: "stream-1" },
     ]);
     expect(client.pushes[0]).toEqual([
       "chat-1",
@@ -335,7 +347,7 @@ describe("WeComBotTransport", () => {
     ]);
   });
 
-  it("combines a final stream reply with one card and falls back proactively", async () => {
+  it("keeps a late card outside an existing plain stream and falls back proactively", async () => {
     const client = new FakeClient();
     const transport = new WeComBotTransport({
       accountId: "bot-a",
@@ -370,20 +382,27 @@ describe("WeComBotTransport", () => {
       final: true,
       presentation,
     });
-    expect(client.repliesWithCard[0]).toEqual([
+    expect(client.nonBlockingReplies[0]).toEqual([
       { headers: { req_id: "req-1" } },
       "stream-1",
       "正在处理",
       false,
       undefined,
+      { id: "stream-1" },
     ]);
-    expect(client.repliesWithCard[1]).toMatchObject([
+    expect(client.nonBlockingReplies[1]).toEqual([
       { headers: { req_id: "req-1" } },
       "stream-1",
       "最终回答",
       true,
+      undefined,
+      undefined,
+    ]);
+    expect(client.pushes[0]).toMatchObject([
+      "chat-1",
       {
-        templateCard: {
+        msgtype: "template_card",
+        template_card: {
           task_id: "actions_1",
           card_type: "button_interaction",
           button_list: [{ key: "continue", text: "继续展开", style: 1 }],
@@ -487,6 +506,108 @@ describe("WeComBotTransport", () => {
       text: "重连后投递",
     });
     expect(client.pushes).toHaveLength(1);
+  });
+
+  it("normalizes reply feedback without creating an inbound Agent message", async () => {
+    const client = new FakeClient();
+    const received: InboundMessage[] = [];
+    const feedback: unknown[] = [];
+    const transport = new WeComBotTransport({
+      accountId: "bot-a",
+      botId: "id",
+      secret: "secret",
+      clientFactory: () => client,
+    });
+    await transport.start(
+      async (message) => {
+        received.push(message);
+      },
+      async (event) => {
+        feedback.push(event);
+      },
+    );
+    client.listeners.get("event.feedback_event")?.({
+      headers: { req_id: "req-feedback" },
+      body: {
+        msgid: "feedback-event-1",
+        create_time: 1_787_904_000,
+        chattype: "single",
+        from: { userid: "user-1" },
+        event: {
+          eventtype: "feedback_event",
+          feedback_event: { feedback_id: "stream-1" },
+        },
+      },
+    });
+    await Promise.resolve();
+
+    expect(received).toHaveLength(0);
+    expect(feedback).toEqual([
+      expect.objectContaining({
+        id: "feedback-event-1",
+        accountId: "bot-a",
+        conversationId: "user-1",
+        conversationType: "direct",
+        senderId: "user-1",
+        feedbackId: "stream-1",
+      }),
+    ]);
+  });
+
+  it("replies to enter_chat with bounded static text and never calls onMessage", async () => {
+    const client = new FakeClient();
+    const received: InboundMessage[] = [];
+    const transport = new WeComBotTransport({
+      accountId: "bot-a",
+      botId: "id",
+      secret: "secret",
+      welcomeText: "  欢迎使用 Agent Gateway  ",
+      clientFactory: () => client,
+    });
+    await transport.start(async (message) => {
+      received.push(message);
+    });
+    const frame = {
+      headers: { req_id: "req-welcome" },
+      body: {
+        msgid: "enter-1",
+        chattype: "single",
+        from: { userid: "user-1" },
+        event: { eventtype: "enter_chat" },
+      },
+    };
+    client.listeners.get("event.enter_chat")?.(frame);
+    await Promise.resolve();
+
+    expect(client.welcomes).toEqual([
+      [
+        frame,
+        {
+          msgtype: "text",
+          text: { content: "欢迎使用 Agent Gateway" },
+        },
+      ],
+    ]);
+    expect(received).toHaveLength(0);
+  });
+
+  it("rejects empty or oversized static welcome text", () => {
+    const options = {
+      accountId: "bot-a",
+      botId: "id",
+      secret: "secret",
+      clientFactory: () => new FakeClient(),
+    };
+    expect(
+      () => new WeComBotTransport({ ...options, welcomeText: "   " }),
+    ).toThrow("must not be empty");
+    expect(
+      () =>
+        new WeComBotTransport({
+          ...options,
+          welcomeText: "界".repeat(683),
+        }),
+    ).toThrow("exceeds 2048");
   });
 
   it("normalizes voice transcripts and mixed text/image messages", async () => {
@@ -644,6 +765,61 @@ describe("WeComBotTransport", () => {
     await materialized.release();
     await materialized.release();
     expect(existsSync(image.path)).toBe(false);
+  });
+
+  it("materializes quoted media under the same protected lifecycle", async () => {
+    const root = mkdtempSync(join(tmpdir(), "wecom-quoted-media-test-"));
+    directories.push(root);
+    const client = new FakeClient();
+    client.downloadResult = {
+      buffer: Buffer.from("89504e470d0a1a0a", "hex"),
+      filename: "quoted.png",
+    };
+    const transport = new WeComBotTransport({
+      accountId: "bot-a",
+      botId: "id",
+      secret: "secret",
+      clientFactory: () => client,
+      mediaTempRoot: root,
+    });
+
+    const materialized = await transport.materializeInbound({
+      id: "quoted-media",
+      accountId: "bot-a",
+      conversationId: "chat-1",
+      conversationType: "direct",
+      senderId: "user-1",
+      receivedAt: "2026-08-28T00:00:00.000Z",
+      parts: [{ type: "text", text: "这张图是什么意思？" }],
+      quote: {
+        parts: [
+          {
+            type: "image",
+            url: "https://example.invalid/quoted-image",
+            aesKey: "quote-key",
+          },
+        ],
+      },
+    });
+
+    const quoted = materialized.message.quote?.parts[0];
+    expect(client.downloads).toEqual([
+      ["https://example.invalid/quoted-image", "quote-key"],
+    ]);
+    expect(quoted).toMatchObject({
+      type: "image",
+      name: "01-quoted.png",
+      mimeType: "image/png",
+      sizeBytes: 8,
+    });
+    expect(quoted).not.toHaveProperty("url");
+    expect(quoted).not.toHaveProperty("aesKey");
+    if (!quoted || quoted.type === "text" || !quoted.path) {
+      throw new Error("expected a materialized quoted image path");
+    }
+    expect(statSync(quoted.path).mode & 0o777).toBe(0o600);
+    await materialized.release();
+    expect(existsSync(quoted.path)).toBe(false);
   });
 
   it.each([

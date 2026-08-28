@@ -46,7 +46,30 @@ describe("AcpRuntimeAdapter", () => {
       expect(adapter.capabilities.has("interaction-resume")).toBe(true);
       expect(adapter.capabilities.has("reply-actions")).toBe(true);
       expect(adapter.capabilities.has("multimodal-input")).toBe(true);
+      expect(adapter.capabilities.has("quoted-context")).toBe(true);
       expect(adapter.inputModalities).toEqual(new Set(["image"]));
+    } finally {
+      await adapter.stop();
+    }
+  });
+
+  it("passes quoted context through ACP content blocks", async () => {
+    const adapter = createAdapter();
+    await adapter.start();
+    try {
+      const events = await collect(
+        adapter.run({
+          message: {
+            ...inbound,
+            quote: { parts: [{ type: "text", text: "earlier" }] },
+            parts: [{ type: "text", text: "current" }],
+          },
+        }),
+      );
+      expect(events.at(-1)).toMatchObject({
+        type: "message-completed",
+        text: "quote:received",
+      });
     } finally {
       await adapter.stop();
     }

@@ -215,6 +215,28 @@ describe("PiRuntimeAdapter", () => {
     }
   });
 
+  it("preserves quoted context in the RPC prompt", async () => {
+    const fake = new FakePiClient();
+    const adapter = createAdapter(fake);
+    await adapter.start();
+    await collect(
+      adapter.run({
+        message: {
+          ...message([{ type: "text", text: "current" }]),
+          quote: { parts: [{ type: "text", text: "earlier" }] },
+        },
+      }),
+    );
+    expect(
+      fake.commands.find((command) => command.type === "prompt"),
+    ).toMatchObject({
+      message:
+        "[Quoted message context]\nearlier\n[End quoted message context]\ncurrent",
+    });
+    expect(adapter.capabilities.has("quoted-context")).toBe(true);
+    await adapter.stop();
+  });
+
   it("does not advertise or accept images for a text-only Pi model", async () => {
     const fake = new FakePiClient({ modelInput: ["text"] });
     const adapter = createAdapter(fake);
@@ -741,6 +763,7 @@ class FakePoolWorker implements AgentRuntimeAdapter {
     "multimodal-input",
     "interaction-resume",
     "interaction-live-resume",
+    "quoted-context",
   ]);
   readonly inputModalities = new Set(["image" as const]);
 
