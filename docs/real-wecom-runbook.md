@@ -182,8 +182,9 @@ sender、同 account 与 conversation 可以点击；Gateway 先原位确认再�
 `gateway_lifecycle=cancelled`、`run_controls` 只有一条 `resolved/cancel`，以及
 `pnpm outbox:status` 无 pending/leased/dead。不得通过重复点击制造成功，也不得读取消息正文或内部 ID。
 2026-08-28 的 Pi 私聊验收在 21.045 秒取消原 run，控制记录只结算一次，Outbox 307 条均 delivered，
-Gateway 仍为 ready。同日由本机 UI 自动化复验新“停止本轮”文案：执行中点击后 Pi run 在 34.204 秒进入
-cancelled；Outbox 551 条均 delivered、零 pending/leased/dead，Gateway 继续 ready。
+Gateway 仍为 ready。同日由本机 UI 自动化复验新“停止本轮”文案：两轮执行中点击后 Pi run 分别在
+33.521 秒和 34.204 秒进入 cancelled；Outbox 551 条均 delivered、零 pending/leased/dead，Gateway
+继续 ready。
 
 Adapter 的显式 emoji/status 只更新同一条回复的文字。官方 SDK 虽支持组合流卡片，但 2026-08-28
 真实 macOS 客户端验收确认首帧卡不可见，重复附卡又违反同一 stream 只能回复一次 template card 的
