@@ -314,6 +314,18 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
   `replyStreamNonBlocking`；feedback 作为非语义 Channel event；`enter_chat` 只返回可选静态欢迎。
   Bot HTTP Webhook 已完成边界评估，决定未来以独立 Transport package 实现，不与 WebSocket 代码混合。
 
+### 2026-08-31 社区观察与后续主线收敛
+
+- 重新核对官方 SDK/插件/CLI、高活跃社区 WeCom Channel、Kernel 专用桥、多 Kernel/多 Channel Gateway、
+  成熟 IM bridge、ACP、AG-UI 与 Mattermost Agents。当前定位仍是“企业微信优先、Kernel 可替换、耐久且
+  可验证的 IM 中间层”，不转向完整 Agent runtime、模型路由、记忆或办公工具平台。
+- 官方和社区 issue 的高频问题集中在晚 ACK/队列、连续 text+file、重复 final/media、群聊 session、
+  事件 shape、消息编辑/撤回、代理污染和 Bot 授权生命周期。现有 durable outbox、按会话串行、显式
+  capability、SDK client 隔离和 Bot-only 边界方向正确，但还需要固定的上游兼容矩阵。
+- 新增 [`ecosystem-watch-and-mainline-plan.md`](ecosystem-watch-and-mainline-plan.md) 作为后续主要参考，按
+  M3.0 真实/兼容收口 → M3.1 生产所有权 → M3.2 Adapter 生态 → M3.3 Transport SPI 排序，并为每阶段
+  写明退出条件。卡片和业务 UI 继续排在 IM 保真、生产 soak 与生态 conformance 之后。
+
 ### M5：生产运行与韧性
 
 - 已提供 Linux/systemd、Dockerfile/Compose、专用用户和只读/最小权限参考配置；容器不打包任何凭据或

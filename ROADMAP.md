@@ -25,6 +25,11 @@ changes.
 
 Mainline priorities take precedence over additional card themes or business UI:
 
+The evidence, ordering, and exit criteria for the following work are maintained
+in [`docs/ecosystem-watch-and-mainline-plan.md`](docs/ecosystem-watch-and-mainline-plan.md).
+
+### M3.0: upstream compatibility and real-client closure
+
 - [x] Preserve quoted/replied-message context in the neutral inbound contract,
       including protected quoted-media persistence boundaries.
 - [ ] Certify quoted/replied-message callbacks in real direct and group
@@ -50,16 +55,38 @@ Mainline priorities take precedence over additional card themes or business UI:
 - [ ] Complete the remaining real WeCom approval-card rejection, expiry, and
       process-interruption acceptance checks.
 
+- [ ] Turn current upstream community signals into a deterministic compatibility
+      matrix: late/duplicate acknowledgements, queue saturation, unknown frame
+      fields, rapid text-plus-media ingress, final/media deduplication, and proxy
+      isolation.
+- [ ] Certify native WeCom video callbacks as a transport/media lifecycle; model
+      understanding is explicitly outside this acceptance.
+
+### M3.1: production ownership
+
 - [x] v0.2 security/reliability convergence: versioned SQLite schema, bounded
       retention, least-environment Adapter processes, privacy-safe diagnostic
       defaults, ACL-gated channel events, long-outage reconnect, and release
       revalidation from `main`.
 
-- Exercise host-level physical network loss, native WeCom video callbacks, and
-  a real Linux/systemd soak. Cross-process SQLite lease recovery after
-  `SIGKILL`, isolated Linux network detach/reconnect, bounded disk exhaustion,
-  read-only recovery, and macOS managed-process restart are already covered.
+- Exercise host-level physical network loss and a real Linux/systemd soak.
+  Native WeCom video callback certification is tracked in M3.0. Cross-process
+  SQLite lease recovery after `SIGKILL`, isolated Linux network
+  detach/reconnect, bounded disk exhaustion, read-only recovery, and macOS
+  managed-process restart are already covered.
 - Define multi-instance ownership, shared backpressure, and ordering semantics.
+- Fail fast when two local processes attempt to own the same Bot account, then
+  document connection ownership, conversation fencing, shared admission, and
+  failover semantics before implementing active-active operation.
+
+### M3.2: ecosystem conformance
+
+- Extract the existing Adapter contract tests into an independently runnable
+  conformance kit and certify one clean-room external Adapter.
+- Track ACP capability negotiation and document an AG-UI event mapping without
+  making either protocol a Core dependency.
+- Specify a channel-neutral Transport SPI and validate it with a loopback
+  Transport before selecting a second production IM.
 
 ## Later
 
@@ -74,7 +101,8 @@ Mainline priorities take precedence over additional card themes or business UI:
       boundary; run controls use the proven proactive-card path.
 - M2.5 follow-up: optional proactive task cards and a separate group-poll
   aggregation model, after the IM-fidelity priorities above.
-- Compatibility certification for additional Agent kernels.
+- Compatibility certification for additional Agent kernels through the public
+  Adapter SDK and conformance kit.
 - Optional distributed outbox and media storage implementations.
-- A documented extension model for additional IM transports without weakening
-  the Runtime Contract boundary.
+- Implement additional IM transports only after the Transport SPI and delivery
+  semantics are documented without weakening the Runtime Contract boundary.

@@ -4,6 +4,7 @@
 - [`verified-kernel-cases.md`](verified-kernel-cases.md) / [`English`](verified-kernel-cases.en.md)：Codex、Kimi、OpenClaw、Pi 与通用 ACP 的真实接入证据和复现入口。
 - [`architecture.md`](architecture.md)：系统边界、数据流和包职责。
 - [`official-wecom-ecosystem.md`](official-wecom-ecosystem.md)：企业微信官方及周边生态调研。
+- [`ecosystem-watch-and-mainline-plan.md`](ecosystem-watch-and-mainline-plan.md)：近期同类项目、社区问题信号、主线差距与带退出条件的后续执行计划；后续优先级的主要参考。
 - [`interaction-cards.md`](interaction-cards.md)：Agent 交互卡片、Interaction Broker、状态机、UX 与里程碑。
 - [`real-wecom-runbook.md`](real-wecom-runbook.md)：真实 Bot 凭据、白名单与收发联调手册。
 - [`status.md`](status.md)：实际完成项、验证结果、未验证项和下一步。
