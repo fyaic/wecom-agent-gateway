@@ -1083,22 +1083,67 @@ function renderWeComInteractionUpdateCard(
     return renderWeComTemplateCard(presentation, allowedLinkHosts);
   }
   assertPresentationId(presentation.id);
+  const result = interactionResultCopy(presentation.body);
   return {
     task_id: presentation.id,
     card_type: "vote_interaction",
-    main_title: { title: bounded(presentation.title, 26, "title") },
+    main_title: { title: bounded(result.title, 26, "title") },
     sub_title_text: optionalBounded(presentation.body, 112, "body"),
     checkbox: {
       question_key: "result",
       disable: true,
       mode: 0,
-      option_list: [{ id: "completed", text: "已完成", is_checked: true }],
+      option_list: [
+        {
+          id: "completed",
+          text: bounded(result.detail, 100, "result detail"),
+          is_checked: true,
+        },
+      ],
     },
     // The real update endpoint requires submit_button even when every choice
     // is disabled (errcode 42049 when omitted). Repeated callbacks remain
     // harmless because the durable Broker has already resolved the task.
-    submit_button: { key: "completed", text: "已完成" },
+    submit_button: {
+      key: "completed",
+      text: bounded(result.button, 10, "result button"),
+    },
   };
+}
+
+function interactionResultCopy(body?: string): {
+  title: string;
+  detail: string;
+  button: string;
+} {
+  const detail = body?.trim() || "操作已处理。";
+  if (detail.includes("已批准")) {
+    return { title: "✅ 操作已批准", detail, button: "已批准" };
+  }
+  if (detail.includes("已拒绝")) {
+    return { title: "⛔ 操作已拒绝", detail, button: "已拒绝" };
+  }
+  if (
+    detail.includes("不存在") ||
+    detail.includes("已失效") ||
+    detail.includes("不属于")
+  ) {
+    return {
+      title: "⚠️ 操作已失效",
+      detail: "操作已失效、已处理，或不属于当前会话。",
+      button: "已失效",
+    };
+  }
+  if (detail.includes("正在停止")) {
+    return { title: "⏹️ 正在停止", detail, button: "停止中" };
+  }
+  if (detail.includes("已经结束") || detail.includes("无需停止")) {
+    return { title: "任务已结束", detail, button: "已结束" };
+  }
+  if (detail.includes("已提交")) {
+    return { title: "✅ 已提交", detail, button: "已提交" };
+  }
+  return { title: "操作结果", detail, button: "已处理" };
 }
 
 function normalizeSelections(

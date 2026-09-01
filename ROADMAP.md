@@ -33,7 +33,8 @@ in [`docs/ecosystem-watch-and-mainline-plan.md`](docs/ecosystem-watch-and-mainli
 - [x] Preserve quoted/replied-message context in the neutral inbound contract,
       including protected quoted-media persistence boundaries.
 - [ ] Certify quoted/replied-message callbacks in real direct and group
-      conversations; deterministic transport and Adapter coverage is complete.
+      conversations; deterministic direct/group Transport, Core and Adapter
+      coverage is complete and available through `pnpm test:m3-quote-approval`.
 - [x] Adopt the official non-blocking stream path with bounded coalescing and
       backpressure, while keeping the final answer on the durable outbox path.
 - [x] Normalize reply-feedback events as channel feedback without creating a
@@ -52,8 +53,12 @@ in [`docs/ecosystem-watch-and-mainline-plan.md`](docs/ecosystem-watch-and-mainli
       private scoped input, group select, in-place updates, and duplicate safety.
 - [x] M2.3: final-answer actions through a durable proactive card, including a
       real callback click, same-session continuation, and one-shot termination.
-- [ ] Complete the remaining real WeCom approval-card rejection, expiry, and
-      process-interruption acceptance checks.
+- [x] Complete the real WeCom approval-card rejection, expiry, and
+      process-interruption acceptance checks. All three card outcomes, including
+      inert stale clicks after expiry or startup interruption, are deterministic
+      regression gates through `pnpm test:m3-quote-approval`; the expired-card
+      fallback also retains a visible `expired` semantic instead of saying that
+      the operation completed.
 
 - [ ] Turn current upstream community signals into a deterministic compatibility
       matrix: late/duplicate acknowledgements, queue saturation, unknown frame

@@ -177,6 +177,65 @@ describe("WeComBotTransport", () => {
     ).toThrow("not allowed");
   });
 
+  it.each([
+    {
+      chattype: "single",
+      chatid: undefined,
+      expectedConversationId: "user-1",
+      expectedConversationType: "direct",
+    },
+    {
+      chattype: "group",
+      chatid: "chat-1",
+      expectedConversationId: "chat-1",
+      expectedConversationType: "group",
+    },
+  ] as const)(
+    "preserves quoted text in $expectedConversationType messages",
+    async ({
+      chattype,
+      chatid,
+      expectedConversationId,
+      expectedConversationType,
+    }) => {
+      const client = new FakeClient();
+      const received: InboundMessage[] = [];
+      const transport = new WeComBotTransport({
+        accountId: "bot-a",
+        botId: "id",
+        secret: "secret",
+        clientFactory: () => client,
+      });
+      await transport.start(async (message) => {
+        received.push(message);
+      });
+      client.listeners.get("message")?.({
+        headers: { req_id: `req-${chattype}` },
+        body: {
+          msgid: `msg-${chattype}`,
+          msgtype: "text",
+          ...(chatid ? { chatid } : {}),
+          chattype,
+          from: { userid: "user-1" },
+          text: { content: "当前消息" },
+          quote: { msgtype: "text", text: { content: "被引用的前文" } },
+        },
+      });
+      await Promise.resolve();
+
+      expect(received).toEqual([
+        expect.objectContaining({
+          conversationId: expectedConversationId,
+          conversationType: expectedConversationType,
+          senderId: "user-1",
+          parts: [{ type: "text", text: "当前消息" }],
+          quote: { parts: [{ type: "text", text: "被引用的前文" }] },
+        }),
+      ]);
+      await transport.stop();
+    },
+  );
+
   it("declares exact inbound and outbound media modalities", () => {
     const transport = new WeComBotTransport({
       accountId: "bot-a",
@@ -391,15 +450,71 @@ describe("WeComBotTransport", () => {
         card_type: "vote_interaction",
         task_id: "approval_1",
         sub_title_text: "已批准",
+        main_title: { title: "✅ 操作已批准" },
         checkbox: {
           question_key: "result",
           disable: true,
           mode: 0,
-          option_list: [{ id: "completed", text: "已完成", is_checked: true }],
+          option_list: [{ id: "completed", text: "已批准", is_checked: true }],
         },
+        submit_button: { key: "completed", text: "已批准" },
       },
     ]);
   });
+
+  it.each([
+    {
+      body: "⛔ 已拒绝，本次操作不会执行。",
+      title: "⛔ 操作已拒绝",
+      detail: "⛔ 已拒绝，本次操作不会执行。",
+      button: "已拒绝",
+    },
+    {
+      body: "该操作不存在、已处理、已失效，或不属于当前会话与发送者。",
+      title: "⚠️ 操作已失效",
+      detail: "操作已失效、已处理，或不属于当前会话。",
+      button: "已失效",
+    },
+    {
+      body: "任务已经结束，无需停止。",
+      title: "任务已结束",
+      detail: "任务已经结束，无需停止。",
+      button: "已结束",
+    },
+  ])(
+    "preserves the $button outcome in an inert interaction update",
+    async ({ body, title, detail, button }) => {
+      const client = new FakeClient();
+      const transport = new WeComBotTransport({
+        accountId: "bot-a",
+        botId: "id",
+        secret: "secret",
+        clientFactory: () => client,
+      });
+      await transport.deliver({
+        type: "interaction-update",
+        accountId: "bot-a",
+        conversationId: "user-1",
+        replyReference: { requestId: "req-result" },
+        presentation: {
+          kind: "notice",
+          id: "result_1",
+          title: "操作结果",
+          body,
+        },
+      });
+
+      expect(client.cardUpdates[0]?.[1]).toMatchObject({
+        card_type: "vote_interaction",
+        main_title: { title },
+        checkbox: {
+          disable: true,
+          option_list: [{ text: detail, is_checked: true }],
+        },
+        submit_button: { key: "completed", text: button },
+      });
+    },
+  );
 
   it("keeps a late card outside an existing plain stream and falls back proactively", async () => {
     const client = new FakeClient();
