@@ -1191,6 +1191,94 @@ describe("WeComAgentGateway", () => {
     expect(runtime.requests).toHaveLength(1);
   });
 
+  it("keeps rapid file and text callbacks serialized through slow media materialization", async () => {
+    let releaseFile!: () => void;
+    const fileReady = new Promise<void>((resolve) => {
+      releaseFile = resolve;
+    });
+    const materialized: string[] = [];
+    class SlowMediaTransport extends FakeTransport {
+      override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
+        "stream-reply-update",
+        "proactive-message",
+        "media-download",
+        "multimodal-input",
+      ]);
+      readonly inputModalities: ReadonlySet<MediaType> = new Set(["file"]);
+
+      async materializeInbound(
+        inbound: InboundMessage,
+      ): Promise<MaterializedInboundMessage> {
+        materialized.push(inbound.id);
+        if (inbound.id === "rapid-file") await fileReady;
+        return {
+          message: {
+            ...inbound,
+            parts: inbound.parts.map((part) =>
+              part.type === "file"
+                ? {
+                    type: "file" as const,
+                    path: "/tmp/compatibility-fixture.txt",
+                    name: "fixture.txt",
+                    mimeType: "text/plain",
+                    sizeBytes: 7,
+                  }
+                : part,
+            ),
+          },
+          release: async () => undefined,
+        };
+      }
+    }
+    const seen: string[] = [];
+    const runtime: AgentRuntimeAdapter = {
+      id: "ordered-media-runtime",
+      contractVersion: 1,
+      capabilities: new Set(["multimodal-input"]),
+      async *run(request) {
+        seen.push(request.message.id);
+        yield { type: "message-completed", text: request.message.id };
+      },
+      async health() {
+        return { ok: true };
+      },
+    };
+    const transport = new SlowMediaTransport();
+    const gateway = new WeComAgentGateway({
+      transport,
+      adapters: [runtime],
+      router: new StaticRuntimeRouter(runtime.id),
+      store: new MemoryGatewayStore(),
+    });
+    await gateway.start();
+
+    const file = transport.receive({
+      ...message("rapid-file"),
+      parts: [
+        {
+          type: "file",
+          url: "https://example.invalid/encrypted",
+          name: "fixture.txt",
+        },
+      ],
+    });
+    await waitFor(() => materialized.length === 1);
+    const text = transport.receive({
+      ...message("rapid-text"),
+      parts: [{ type: "text", text: "读取刚才的文件" }],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    expect(materialized).toEqual(["rapid-file"]);
+    expect(seen).toEqual([]);
+    releaseFile();
+    await Promise.all([file, text]);
+    await gateway.stop();
+
+    expect(materialized).toEqual(["rapid-file", "rapid-text"]);
+    expect(seen).toEqual(["rapid-file", "rapid-text"]);
+  });
+
   it("resolves a write approval only from the same conversation and sender", async () => {
     const decisions: string[] = [];
     const lifecycle: string[] = [];

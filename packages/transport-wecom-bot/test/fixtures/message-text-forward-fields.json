@@ -1,0 +1,24 @@
+{
+  "cmd": "aibot_msg_callback",
+  "headers": {
+    "req_id": "req-forward-compatible",
+    "future_header": "ignored"
+  },
+  "body": {
+    "msgid": "msg-forward-compatible",
+    "msgtype": "text",
+    "chattype": "single",
+    "create_time": 1788192000,
+    "from": {
+      "userid": "user-fixture",
+      "future_sender_field": true
+    },
+    "text": {
+      "content": "保留已知字段",
+      "future_text_field": {
+        "shape": "ignored"
+      }
+    },
+    "future_body_field": ["ignored"]
+  }
+}

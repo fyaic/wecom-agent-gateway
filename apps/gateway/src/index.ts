@@ -163,6 +163,14 @@ const transport = new WeComBotTransport({
     if (level === "error" || level === "warn") console.error(output);
     else console.log(output);
   },
+  onUnsupportedFrame: ({ frameKind, type }) =>
+    console.warn(
+      JSON.stringify({
+        event: "wecom_unsupported_frame",
+        frameKind,
+        type,
+      }),
+    ),
   mediaTempRoot: process.env.WECOM_MEDIA_TEMP_ROOT || undefined,
   mediaMaxBytes,
   mediaRetentionMs: positiveInteger(

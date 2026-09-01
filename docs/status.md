@@ -1,6 +1,6 @@
 # 工作状态
 
-更新于 2026-08-28。
+更新于 2026-09-01。
 
 ## 已完成并有自动化验证
 
@@ -12,6 +12,7 @@
 | 可变 Bot 消息与流式合并                         | 完成并自动化验证          | 中性即时回执、250ms 增量合并、同一消息最终化                                       |
 | 引用/回复消息保真                               | 完成并自动化验证          | 中立 quote parts、引用媒体物化、全参考 Adapter 映射；未声明 capability fail closed |
 | 官方非阻塞流式背压                              | 完成并自动化/真实验证     | ack 未完成时跳过旧 partial；最终帧必发并保留 durable outbox                        |
+| 官方上游兼容矩阵                                | M3.0-B 自动化通过         | 精确版本台账、晚 ACK/队列、未知 frame、快速 file+text、final/media 恢复            |
 | 回复 feedback 事件                              | 完成并自动化/真实验证     | 首帧关联、ChannelFeedbackEvent；不创建 Agent turn，不记录用户/会话 ID              |
 | 静态 enter_chat 欢迎                            | 完成并自动化验证          | 可选 2048-byte 文本、五秒官方回复路径；不启动 Kernel                               |
 | 非语义事件 ACL                                  | 完成并自动化验证          | feedback/enter_chat 复用 scoped policy；拒绝事件不回复、不启动 Kernel              |
@@ -120,6 +121,7 @@
 | 2026-09-01 | 私聊审批过期与陈旧点击        | 通过   | 15.002s 自动过期；之后点击旧卡不执行工具，卡片原位显示“操作已失效”，唯一测试标题查询为 0 条              |
 | 2026-09-01 | 审批中进程强杀与重启          | 通过   | 审批卡送达后强杀 Gateway；新进程启动后旧卡批准只命中失效回调，不恢复 Agent、不执行工具，待办查询为 0 条  |
 | 2026-09-01 | 私聊与授权群普通消息基线      | 通过   | 私聊严格回复约 5.5s；群聊真实 @Bot 回执 492ms、首文本 3.827s、总计 5.573s，均无默认动作卡                |
+| 2026-09-01 | M3.0-B SDK 兼容回归           | 通过   | Pi 私聊严格回复约 11.6s；群聊真实 @Bot 回执 500ms、首文本 2.893s、总计 3.855s；Outbox 零积压/死信        |
 | 2026-08-24 | 本机 Kimi ACP 两轮 smoke      | 通过   | 官方 ACP v1；流式和 session 恢复通过，协商图片输入能力，总耗时 13.0s                                     |
 | 2026-08-24 | 私聊 → Kimi ACP → 流式回复    | 通过   | Channel 回执 418ms、Kimi 首文本 5.68s、端到端 6.42s；独立 Kimi session 写入                              |
 | 2026-08-24 | 同一私聊图片 → Kimi ACP       | 通过   | 仍为同一 session；物化 356ms、首文本 10.97s、总计 13.23s，Outbox 全投递且临时目录归零                    |
@@ -340,6 +342,23 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
   凭据，不收集/中介 Claude.ai token 或共享订阅额度；加入依赖前重跑许可和公开发布审计。
 - 详细协议映射、安全边界及 C0–C3 验收见
   [`claude-code-adapter-evaluation.md`](claude-code-adapter-evaluation.md)。
+
+### 2026-09-01 M3.0-B 上游兼容矩阵
+
+- 复核 npm 与官方仓库，Transport 继续精确锁定 `@wecom/aibot-node-sdk 1.0.7`；官方 OpenClaw 插件
+  `2026.8.17` 只作为真实故障信号，不作为依赖或 Kernel 逻辑来源。
+- 新增脱敏 JSON fixtures：已知消息出现未来字段仍保持既有语义；未知消息与未知事件只产生
+  `wecom_unsupported_frame` 的有界类型诊断，不再转换成空文本 Agent turn。诊断不含原 frame、用户、
+  会话、request ID、媒体 URL 或 AES key。
+- 新增 late-ACK fake，验证陈旧 partial 可跳过而 final 始终提交；SDK 队列溢出错误保持上抛，由耐久
+  Outbox 的已有有界重试/死信语义承接，Transport 不伪报 delivered。
+- 新增慢文件物化与紧随文本的同会话并发 fixture，确认从 admission、媒体物化到 Kernel 完成保持原始
+  顺序；已有重复入站、stream supersede、final 重试、媒体 spool 恢复共同组成兼容门。
+- 固定入口为 `pnpm test:m3-upstream-compatibility`，版本、问题簇、采用/规避状态和升级步骤见
+  [`upstream-compatibility.md`](upstream-compatibility.md)。真实 HTTP 代理下载/解密仍明确未声明通过。
+- 授权私聊与测试群普通文本已完成真实回归；群聊服务端在 3.855 秒内完成并投递 final。macOS 企业微信曾出现
+  会话列表已显示 final、当前打开气泡仍短暂停在思考态的陈旧渲染，切换会话后同一气泡正确重绘为 final；
+  该现象记录为官方客户端兼容观察项，不改变 Gateway delivery 结论，也不声称已由本项目修复。
 
 ### M5：生产运行与韧性
 

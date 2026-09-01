@@ -1,0 +1,21 @@
+{
+  "cmd": "aibot_event_callback",
+  "headers": {
+    "req_id": "req-unknown-event"
+  },
+  "body": {
+    "msgid": "event-unknown",
+    "msgtype": "event",
+    "chattype": "single",
+    "create_time": 1788192000,
+    "from": {
+      "userid": "user-fixture"
+    },
+    "event": {
+      "eventtype": "future_event",
+      "future_event": {
+        "value": "diagnostic-only"
+      }
+    }
+  }
+}

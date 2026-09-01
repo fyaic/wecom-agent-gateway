@@ -1,0 +1,18 @@
+{
+  "cmd": "aibot_msg_callback",
+  "headers": {
+    "req_id": "req-unknown-message"
+  },
+  "body": {
+    "msgid": "msg-unknown-message",
+    "msgtype": "future_message",
+    "chattype": "single",
+    "create_time": 1788192000,
+    "from": {
+      "userid": "user-fixture"
+    },
+    "future_message": {
+      "content": "不得转换成空文本 Agent turn"
+    }
+  }
+}

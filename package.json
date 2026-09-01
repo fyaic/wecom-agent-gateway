@@ -52,6 +52,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:m3-quote-approval": "vitest run packages/runtime-contract/src/index.test.ts packages/transport-wecom-bot/test/transport.test.ts packages/channel-core/test/gateway.test.ts packages/adapter-codex/test/app-server-adapter.test.ts packages/storage-sqlite/test/store.test.ts",
+    "test:m3-upstream-compatibility": "vitest run packages/transport-wecom-bot/test/transport.test.ts packages/channel-core/test/gateway.test.ts packages/storage-sqlite/test/store.test.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "public:check": "tsx scripts/check-public-readiness.ts",
