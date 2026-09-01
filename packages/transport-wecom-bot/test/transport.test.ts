@@ -38,7 +38,7 @@ class FakeClient {
     this.replies.push(args);
     if (this.replyError) throw this.replyError;
   }
-  async replyStreamNonBlocking(...args: any[]): Promise<void> {
+  async replyStreamNonBlocking(...args: any[]): Promise<void | "skipped"> {
     this.nonBlockingReplies.push(args);
     if (this.replyError) throw this.replyError;
   }
@@ -76,6 +76,12 @@ class FakeClient {
 }
 
 const directories: string[] = [];
+
+function fixture(name: string): Record<string, unknown> {
+  return JSON.parse(
+    readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8"),
+  ) as Record<string, unknown>;
+}
 
 afterEach(() => {
   for (const directory of directories.splice(0)) {
@@ -236,6 +242,67 @@ describe("WeComBotTransport", () => {
     },
   );
 
+  it("ignores unknown upstream fields while preserving the known message", async () => {
+    const client = new FakeClient();
+    const received: InboundMessage[] = [];
+    const unsupported: unknown[] = [];
+    const transport = new WeComBotTransport({
+      accountId: "bot-a",
+      botId: "id",
+      secret: "secret",
+      clientFactory: () => client,
+      onUnsupportedFrame: (event) => unsupported.push(event),
+    });
+    await transport.start(async (message) => {
+      received.push(message);
+    });
+
+    client.listeners.get("message")?.(
+      fixture("message-text-forward-fields.json"),
+    );
+    await Promise.resolve();
+
+    expect(received).toEqual([
+      expect.objectContaining({
+        id: "msg-forward-compatible",
+        conversationId: "user-fixture",
+        parts: [{ type: "text", text: "保留已知字段" }],
+        replyReference: { requestId: "req-forward-compatible" },
+      }),
+    ]);
+    expect(unsupported).toEqual([]);
+  });
+
+  it("diagnoses unknown messages and events without creating an Agent turn", async () => {
+    const client = new FakeClient();
+    const received: InboundMessage[] = [];
+    const unsupported: unknown[] = [];
+    const transport = new WeComBotTransport({
+      accountId: "bot-a",
+      botId: "id",
+      secret: "secret",
+      clientFactory: () => client,
+      onUnsupportedFrame: (event) => unsupported.push(event),
+    });
+    await transport.start(async (message) => {
+      received.push(message);
+    });
+
+    client.listeners.get("message")?.(fixture("message-unknown-type.json"));
+    client.listeners.get("event")?.(fixture("event-unknown-type.json"));
+    client.listeners.get("message")?.({
+      body: { msgtype: "bad\nprivate-payload" },
+    });
+    await Promise.resolve();
+
+    expect(received).toEqual([]);
+    expect(unsupported).toEqual([
+      { frameKind: "message", type: "future_message" },
+      { frameKind: "event", type: "future_event" },
+      { frameKind: "message", type: "unknown" },
+    ]);
+  });
+
   it("declares exact inbound and outbound media modalities", () => {
     const transport = new WeComBotTransport({
       accountId: "bot-a",
@@ -382,6 +449,91 @@ describe("WeComBotTransport", () => {
       "chat-1",
       { msgtype: "markdown", markdown: { content: "提醒" } },
     ]);
+  });
+
+  it("drops stale partials behind a late ACK but always submits the final frame", async () => {
+    class LateAckClient extends FakeClient {
+      private pending = false;
+      private releaseAck!: () => void;
+      private readonly ack = new Promise<void>((resolve) => {
+        this.releaseAck = resolve;
+      });
+
+      release(): void {
+        this.releaseAck();
+      }
+
+      override async replyStreamNonBlocking(
+        ...args: any[]
+      ): Promise<void | "skipped"> {
+        this.nonBlockingReplies.push(args);
+        const final = args[3] === true;
+        if (!final && this.pending) return "skipped";
+        if (!final) this.pending = true;
+        await this.ack;
+        if (!final) this.pending = false;
+      }
+    }
+
+    const client = new LateAckClient();
+    const transport = new WeComBotTransport({
+      accountId: "bot-a",
+      botId: "id",
+      secret: "secret",
+      clientFactory: () => client,
+    });
+    const command = (text: string, final: boolean) => ({
+      type: "reply" as const,
+      accountId: "bot-a",
+      conversationId: "chat-1",
+      replyReference: { requestId: "req-late-ack" },
+      streamId: "stream-late-ack",
+      text,
+      final,
+    });
+
+    const first = transport.deliver(command("partial-1", false));
+    await Promise.resolve();
+    await transport.deliver(command("partial-2", false));
+    const final = transport.deliver(command("final", true));
+    await Promise.resolve();
+
+    expect(client.nonBlockingReplies.map((args) => [args[2], args[3]])).toEqual(
+      [
+        ["partial-1", false],
+        ["partial-2", false],
+        ["final", true],
+      ],
+    );
+    client.release();
+    await Promise.all([first, final]);
+  });
+
+  it("surfaces official reply-queue saturation for the durable outbox to retry", async () => {
+    class SaturatedClient extends FakeClient {
+      override async replyStreamNonBlocking(): Promise<void> {
+        throw new Error("Reply queue exceeds configured maximum");
+      }
+    }
+    const transport = new WeComBotTransport({
+      accountId: "bot-a",
+      botId: "id",
+      secret: "secret",
+      maxReplyQueueSize: 1,
+      clientFactory: () => new SaturatedClient(),
+    });
+
+    await expect(
+      transport.deliver({
+        type: "reply",
+        accountId: "bot-a",
+        conversationId: "chat-1",
+        replyReference: { requestId: "req-saturated" },
+        streamId: "stream-saturated",
+        text: "durable final",
+        final: true,
+      }),
+    ).rejects.toThrow("Reply queue exceeds configured maximum");
   });
 
   it("normalizes card callbacks and uses the official card update method", async () => {

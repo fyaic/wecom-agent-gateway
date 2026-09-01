@@ -264,6 +264,7 @@ allowlist 内。媒体路径还必须位于 `WECOM_MEDIA_OUTPUT_ROOTS` 允许目
 | 增加另一种 Agent         | [Adapter 开发指南](docs/adapter-authoring.md)      |
 | 理解卡片和交互回调       | [交互卡片设计](docs/interaction-cards.md)          |
 | 部署和运维 Gateway       | [生产部署基线](docs/deployment.md)                 |
+| 检查官方上游兼容性       | [上游兼容矩阵](docs/upstream-compatibility.md)     |
 | 核对当前能力和已知缺口   | [项目状态](docs/status.md) 与 [路线图](ROADMAP.md) |
 
 ## 参与项目

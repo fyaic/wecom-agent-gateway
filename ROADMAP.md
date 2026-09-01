@@ -60,10 +60,12 @@ in [`docs/ecosystem-watch-and-mainline-plan.md`](docs/ecosystem-watch-and-mainli
       fallback also retains a visible `expired` semantic instead of saying that
       the operation completed.
 
-- [ ] Turn current upstream community signals into a deterministic compatibility
-      matrix: late/duplicate acknowledgements, queue saturation, unknown frame
-      fields, rapid text-plus-media ingress, final/media deduplication, and proxy
-      isolation.
+- [x] Turn current upstream community signals into a deterministic compatibility
+      matrix: late acknowledgements, queue saturation, unknown frame fields,
+      rapid text-plus-media ingress, and final/media recovery. Duplicate ACK
+      correlation remains owned by the pinned official SDK; Kernel subprocesses
+      cannot pollute Transport globals. Real HTTP proxy download/decrypt remains
+      an explicitly tracked deployment check.
 - [ ] Certify native WeCom video callbacks as a transport/media lifecycle; model
       understanding is explicitly outside this acceptance.
 

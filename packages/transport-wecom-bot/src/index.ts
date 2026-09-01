@@ -130,6 +130,11 @@ export interface WeComBotTransportOptions {
     level: "debug" | "info" | "warn" | "error",
     message: string,
   ) => void;
+  /** Privacy-safe notice for an upstream frame the Runtime Contract does not support. */
+  onUnsupportedFrame?: (event: {
+    frameKind: "message" | "event";
+    type: string;
+  }) => void;
   mediaTempRoot?: string;
   mediaMaxBytes?: number;
   mediaRetentionMs?: number;
@@ -218,12 +223,26 @@ export class WeComBotTransport implements ChannelTransport {
     this.client.on("error", (error: unknown) => this.reportError(error));
     this.client.on("message", (frame: WeComFrame) => {
       try {
-        void onMessage(this.normalize(frame)).catch((error: unknown) =>
+        const message = this.normalize(frame);
+        if (!message) return;
+        void onMessage(message).catch((error: unknown) =>
           this.reportError(error),
         );
       } catch (error) {
         this.reportError(error);
       }
+    });
+    this.client.on("event", (frame: WeComFrame) => {
+      const type = eventType(frame.body);
+      if (
+        type === "enter_chat" ||
+        type === "template_card_event" ||
+        type === "feedback_event" ||
+        type === "disconnected_event"
+      ) {
+        return;
+      }
+      this.reportUnsupportedFrame("event", type);
     });
     this.client.on("event.template_card_event", (frame: WeComFrame) => {
       try {
@@ -497,8 +516,16 @@ export class WeComBotTransport implements ChannelTransport {
     return this.client.uploadMedia(buffer, options);
   }
 
-  private normalize(frame: WeComFrame): InboundMessage {
+  private normalize(frame: WeComFrame): InboundMessage | undefined {
     const body = frame.body ?? {};
+    const parts = normalizeParts(body);
+    if (!parts) {
+      this.reportUnsupportedFrame(
+        "message",
+        stringValue(body.msgtype) ?? "missing",
+      );
+      return undefined;
+    }
     const from = asRecord(body.from);
     const senderId =
       stringValue(from.userid) ?? stringValue(body.userid) ?? "unknown";
@@ -518,7 +545,7 @@ export class WeComBotTransport implements ChannelTransport {
       conversationType: isGroup ? "group" : "direct",
       senderId,
       receivedAt: timestamp(body.create_time),
-      parts: normalizeParts(body),
+      parts,
       quote: normalizeQuote(body.quote),
       replyReference: { requestId },
       metadata: { msgtype: body.msgtype, chattype: body.chattype },
@@ -602,6 +629,16 @@ export class WeComBotTransport implements ChannelTransport {
     this.options.onError?.(
       error instanceof Error ? error : new Error(String(error)),
     );
+  }
+
+  private reportUnsupportedFrame(
+    frameKind: "message" | "event",
+    type: string,
+  ): void {
+    this.options.onUnsupportedFrame?.({
+      frameKind,
+      type: diagnosticFrameType(type),
+    });
   }
 
   private sdkLogger(): WeComSdkLogger {
@@ -783,7 +820,9 @@ function reconnectAttempts(value: number | undefined): number {
   return optionalAttempts(value ?? -1, "WeCom SDK reconnect attempts")!;
 }
 
-function normalizeParts(body: Record<string, unknown>): MessagePart[] {
+function normalizeParts(
+  body: Record<string, unknown>,
+): MessagePart[] | undefined {
   const msgtype = stringValue(body.msgtype);
   if (msgtype === "text") {
     return [
@@ -822,14 +861,24 @@ function normalizeParts(body: Record<string, unknown>): MessagePart[] {
     const payload = asRecord(body[msgtype]);
     return [mediaPart(msgtype, payload)];
   }
-  return [{ type: "text", text: "" }];
+  return undefined;
 }
 
 function normalizeQuote(value: unknown): InboundMessage["quote"] {
   const quote = asRecord(value);
   if (Object.keys(quote).length === 0) return undefined;
   const parts = normalizeParts(quote);
+  if (!parts) return undefined;
   return { parts };
+}
+
+function eventType(body: Record<string, unknown> | undefined): string {
+  const event = asRecord(asRecord(body).event);
+  return stringValue(event.eventtype) ?? "missing";
+}
+
+function diagnosticFrameType(value: string): string {
+  return /^[A-Za-z0-9_.:-]{1,64}$/.test(value) ? value : "unknown";
 }
 
 function mediaPart(
