@@ -83,6 +83,10 @@ in [`docs/ecosystem-watch-and-mainline-plan.md`](docs/ecosystem-watch-and-mainli
 
 - Extract the existing Adapter contract tests into an independently runnable
   conformance kit and certify one clean-room external Adapter.
+- Add Claude Code as the next reference Kernel through the official Claude
+  Agent SDK, with streaming, resume, cancellation, image, approval, and native
+  ask-user semantics. Keep it planned until deterministic and real WeCom
+  acceptance pass; users must bring and manage their own Anthropic credential.
 - Track ACP capability negotiation and document an AG-UI event mapping without
   making either protocol a Core dependency.
 - Specify a channel-neutral Transport SPI and validate it with a loopback

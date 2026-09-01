@@ -55,6 +55,7 @@ README、源码、release 和 issue 作为证据。
 | Transport 套件探索     | [`theokit-gateways`](https://github.com/usetheokit/theokit-gateways)，2026-08-31 活跃，10 个平台 Adapter + 中立 Core、0 stars                                                                                                   | transport-agnostic core、Adapter conformance、每个平台明确区分“发送已接受”与“真实送达”                               | 项目很新且缺少社区验证；部分平台尚未真实验收，不能把 package 数量当作生产成熟度               |
 | 成熟 IM Bridge 框架    | [`mautrix-go`](https://github.com/mautrix/go) `v0.30.0`、[`matterbridge`](https://github.com/42wim/matterbridge)                                                                                                                | Transport/状态存储拆分、房间/身份映射、桥接扩展治理和长期兼容思路                                                    | puppeting 身份模型；最低公分母式消息转发；旧项目的全部设计                                    |
 | Agent 协议             | [`ACP`](https://github.com/agentclientprotocol/agent-client-protocol) schema `v1.21.0`、[`AG-UI`](https://github.com/ag-ui-protocol/ag-ui) 2026-08-27 release                                                                   | ACP 的版本/能力协商；AG-UI 的事件化运行、状态、工具和 human-in-the-loop 表达                                         | 把任一协议定为 Core 内部模型；假设所有 Kernel 都支持相同交互                                  |
+| 主流 Kernel SDK        | [`Claude Agent SDK`](https://github.com/anthropics/claude-agent-sdk-typescript) `0.3.252` / Claude Code `2.1.252`                                                                                                               | 官方流式、session resume、取消、图片、工具审批和 `AskUserQuestion`；可检验第五种 Kernel 映射                         | PTY 抓屏；共享订阅凭据；把受 Commercial Terms 管理的 SDK 当作本项目 MIT 代码                  |
 | IM 原生 Agent 产品     | [`Mattermost Agents`](https://github.com/mattermost/mattermost-plugin-agents) `v2.5.3`                                                                                                                                          | thread/channel 原生 UX、反馈、摘要入口、流式 benchmark 和多 provider 评估                                            | 把 Gateway 变成 IM 内的 Agent 产品或知识应用                                                  |
 
 ### 对竞品形态的判断
@@ -132,7 +133,9 @@ Core/Outbox 状态和清理结果，不能只记录“看到了回复”。
 
 - 从现有 contract tests 提取可独立运行的 Adapter conformance kit，输出机器可读 capability/结果清单。
 - 外部模板加入最小文本、媒体、引用、取消、交互降级和错误终态示例；不要求 Kernel 虚报不支持的能力。
-- 选择一个仓库外 Kernel/协议做 clean-room 接入案例，优先考察 ACP 稳定实现或 OpenCode；不以 star 数决定。
+- Claude Code 作为下一新增参考 Kernel 的第一候选，优先使用官方 Agent SDK；完成其 streaming、resume、cancel、
+  image、approval 和 ask-user 映射。详见 [`claude-code-adapter-evaluation.md`](claude-code-adapter-evaluation.md)。
+- 再选择一个仓库外 Kernel/协议做 clean-room 接入案例，考察 ACP 稳定实现或 OpenCode；不以 star 数决定。
 - 跟踪 ACP 的 negotiated `protocolVersion` 和 capability，而不是用 schema artifact 版本推断 wire compatibility。
 - 写一份 AG-UI mapping note，仅评估 run/status/tool/interaction event 的转换价值，不让 AG-UI 成为 Core 依赖。
 
@@ -172,7 +175,7 @@ fail closed；真实 WeCom smoke 有可公开的脱敏证据。
 | 3    | M3.0-C 原生视频与连续组合消息矩阵          | A/B  | Media/Transport tests                     | 待执行   |
 | 4    | M3.1-A Linux/systemd soak + 宿主网络故障   | M3.0 | deployment、observability、验收报告       | 待执行   |
 | 5    | M3.1-B 多实例 ADR 与双 owner fail-fast     | M3.0 | ADR、启动/租约边界                        | 待执行   |
-| 6    | M3.2 Adapter conformance kit + 外部案例    | M3.0 | SDK、tests、examples                      | 待执行   |
+| 6    | M3.2 conformance kit + Claude Code Adapter | M3.0 | SDK、Adapter、tests、真实案例             | 待执行   |
 | 7    | M3.3 Transport SPI ADR + loopback contract | M3.1 | Contract/Core/新 Transport 测试包         | 待执行   |
 | 8    | M3.4 事件和可选交互扩展                    | 前项 | 按独立 ADR                                | 暂缓     |
 

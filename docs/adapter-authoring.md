@@ -99,6 +99,11 @@ Kernel 自己拥有工具不等于 `tools`；模型支持图片也不等于 Adap
 | OpenClaw Gateway      | WebSocket v4        | Client `2026.8.1-beta.2`；Gateway `2026.7.1-2` | 流式、恢复、回复动作、取消、状态；image/audio/video/file 输入                              |
 | Pi Agent              | 官方 JSONL RPC      | Pi `0.84.2`；GLM-5.2 文本、GLM-4.6V 图片通过   | 流式/恢复/回复动作/取消/状态；动态图片输入；原生选择/确认/文本交互；默认 2-worker 有界并发 |
 
+Claude Code 已于 2026-09-01 纳入下一参考 Kernel 的范围，但尚未加入“已验证”矩阵。计划使用官方 Claude
+Agent SDK，不解析 PTY/TUI；在 streaming、resume、cancel、image、approval、`AskUserQuestion` 和真实
+企业微信矩阵全部通过前，不声明支持。协议与认证/条款边界见
+[`claude-code-adapter-evaluation.md`](claude-code-adapter-evaluation.md)。
+
 OpenClaw 当前客户端与 Gateway 跨 release train，已通过 `agent.wait + chat.history` 终态对账覆盖事件间隙；
 升级任一侧时必须重跑 fake contract、本机两轮 smoke、企业微信私聊和群聊矩阵。
 

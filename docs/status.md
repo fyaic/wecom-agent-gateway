@@ -326,6 +326,18 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
   M3.0 真实/兼容收口 → M3.1 生产所有权 → M3.2 Adapter 生态 → M3.3 Transport SPI 排序，并为每阶段
   写明退出条件。卡片和业务 UI 继续排在 IM 保真、生产 soak 与生态 conformance 之后。
 
+### 2026-09-01 Claude Code Kernel 决策
+
+- Claude Code 正式纳入第五个参考 Kernel 的范围，但保持 planned，不写入“已支持”或真实验证矩阵，也不抢占
+  M3.0 的企业微信兼容收口。
+- 首选官方 Claude Agent SDK：其 `query()`/partial event、session `resume`、`AbortController`、图片输入、
+  `canUseTool` 和 `AskUserQuestion` 能分别映射 Runtime Contract 的流式、恢复、取消、媒体、审批和 live interaction；
+  不采用 PTY 抓屏或在 Gateway 中重造 Agent loop。
+- SDK/Claude Code 受 Anthropic Commercial Terms 管理。未来 Adapter 必须可选、保持官方 binary 不修改、用户自备
+  凭据，不收集/中介 Claude.ai token 或共享订阅额度；加入依赖前重跑许可和公开发布审计。
+- 详细协议映射、安全边界及 C0–C3 验收见
+  [`claude-code-adapter-evaluation.md`](claude-code-adapter-evaluation.md)。
+
 ### M5：生产运行与韧性
 
 - 已提供 Linux/systemd、Dockerfile/Compose、专用用户和只读/最小权限参考配置；容器不打包任何凭据或

@@ -1,6 +1,6 @@
 # 企业微信官方与周边生态调研
 
-调研快照：2026-08-31；Kernel 协议补充于 2026-08-24；卡片复核于 2026-08-25。版本和 commit 是为了让结论可复核，
+调研快照：2026-09-01；Kernel 协议补充于 2026-09-01；卡片复核于 2026-08-25。版本和 commit 是为了让结论可复核，
 不表示项目永久固定在这些版本。
 
 近期同类项目、官方/社区 issue 聚类以及下一阶段带退出条件的优先级，统一维护在
@@ -176,6 +176,18 @@ Pi 官方 RPC 同时定义了
 输入映射发送者与会话绑定的下一条纯文本，最后以原生 response 恢复同一 tool call，不生成 synthetic
 Prompt。本机 Pi `0.84.2` 已用仓库内无副作用 extension 真实产生 select request、回传 value 并继续原
 run；企业微信私聊 select/input 和授权群 select 均已完成真实点击、原 run 恢复与重复 callback 幂等验收。
+
+## Kernel 协议补充：Claude Code（planned）
+
+2026-09-01 核对官方 Claude Agent SDK 后，Claude Code 纳入第五个参考 Kernel 范围。官方 `query()`
+async generator、partial stream event、session `resume`、`AbortController`、base64 图片输入、
+`canUseTool` 和 `AskUserQuestion` 可分别映射现有流式、恢复、取消、多模态、审批和 Interaction Broker。
+首选官方 SDK，不采用 PTY/TUI 解析，也不在 Gateway 内重造 Agent loop。
+
+该 SDK 与 Claude Code binary 受 Anthropic Commercial Terms 管理，并非本项目 MIT 代码。计划中的
+Adapter 保持可选、用户自备并直接管理凭据，不收集或中介 Claude.ai token/订阅额度；在完成 deterministic
+contract、真实企业微信和许可审计前保持 planned。详见
+[`claude-code-adapter-evaluation.md`](claude-code-adapter-evaluation.md)。
 
 ## Kernel 协议补充：OpenClaw Gateway Client
 

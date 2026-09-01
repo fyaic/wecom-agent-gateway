@@ -9,6 +9,7 @@
 - [`real-wecom-runbook.md`](real-wecom-runbook.md)：真实 Bot 凭据、白名单与收发联调手册。
 - [`status.md`](status.md)：实际完成项、验证结果、未验证项和下一步。
 - [`adapter-authoring.md`](adapter-authoring.md)：第三方 Kernel Adapter 的 v1 契约、能力语义与兼容矩阵。
+- [`claude-code-adapter-evaluation.md`](claude-code-adapter-evaluation.md)：Claude Code 作为第五个参考 Kernel 的官方 SDK、协议映射、认证/条款边界与分阶段验收计划。
 - [`deployment.md`](deployment.md)：Linux/systemd、容器、健康检查和单实例生产边界。
 - [`licensing.md`](licensing.md)：项目许可证、上游来源与第三方代码引入规则。
 - [`public-release-checklist.md`](public-release-checklist.md)：切换公开可见性前的阻塞检查清单。
