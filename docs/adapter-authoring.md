@@ -15,10 +15,11 @@ Adapter 必须提供：
 - `run()`、`health()`，以及需要时的无语义 `start()`/`stop()`、`cancel()`；
 - opaque session 的首次创建和恢复；上游 session 格式变化时更新 `sessionCompatibilityId`。
 
-接入必须运行 `exerciseTextRuntimeContract()`；声明 `reply-actions` 时还必须运行
-`exerciseReplyActionRuntimeContract()`，并以 deterministic fake 覆盖 wire protocol、错误、取消、
-多模态和事件间隙。真实 smoke 必须分开记录 Channel 回执、Kernel 首事件、首文本和最终完成，不能用
-总耗时猜测缺陷所在层。
+接入必须先运行独立 [`Adapter Conformance Kit`](adapter-conformance.md)；它按 capability 检查文本、流式、
+session、引用、提供 fixture 的媒体、reply-action 幂等和显式 cancel，并输出不含用户数据的 JSON。旧的
+`exerciseTextRuntimeContract()` / `exerciseReplyActionRuntimeContract()` 仍可用于 package 内单测，但不能代替
+完整报告。Kernel 特有的 wire、错误、权限、多模态和事件间隙继续使用 deterministic fake；真实 smoke
+必须分开记录 Channel 回执、Kernel 首事件、首文本和最终完成，不能用总耗时猜测缺陷所在层。
 
 ## 外部 Adapter SDK
 
@@ -62,6 +63,21 @@ GATEWAY_EXTERNAL_ADAPTER_CONFIG_JSON={"model":"adapter-owned-value"}
 external 是显式可信的进程内扩展，不是沙箱；模块仍可能通过 Node 访问宿主环境。不可信或需要强隔离的
 Kernel 应使用 ACP 子进程和环境 allowlist。Gateway SDK 不负责 Agent 的模型、Prompt、工具策略或思考。
 
+复制模板或实现仓库外 Adapter 后，可以直接通过模块路径认证，不必修改 Gateway：
+
+```bash
+pnpm --silent conformance:adapter \
+  --module ./path/to/adapter/src/index.ts \
+  --base-directory . \
+  --image ./path/to/test-image.png \
+  --exercise-cancel \
+  --pretty
+```
+
+只有目标 Adapter 声明图片和 cancel 时才执行相应检查；未提供 fixture 或需要 Kernel 专用 fake 的能力会明确
+显示 `skipped`。[`clean-room-adapter`](../examples/clean-room-adapter) 的运行时清单只依赖公共 SDK，其固定
+报告位于 [`evidence/adapter-conformance-clean-room.json`](evidence/adapter-conformance-clean-room.json)。
+
 ## Capability 语义
 
 | Capability                | v1 含义                                                                       |
@@ -98,6 +114,7 @@ Kernel 自己拥有工具不等于 `tools`；模型支持图片也不等于 Adap
 | Kimi Code（通用 ACP） | `kimi acp`          | Kimi `0.36.1`                                  | 流式、恢复、回复动作、取消、权限、状态、图片输入；真实企业微信私聊已通过                   |
 | OpenClaw Gateway      | WebSocket v4        | Client `2026.8.1-beta.2`；Gateway `2026.7.1-2` | 流式、恢复、回复动作、取消、状态；image/audio/video/file 输入                              |
 | Pi Agent              | 官方 JSONL RPC      | Pi `0.84.2`；GLM-5.2 文本、GLM-4.6V 图片通过   | 流式/恢复/回复动作/取消/状态；动态图片输入；原生选择/确认/文本交互；默认 2-worker 有界并发 |
+| Clean-room 外部示例   | 公共 Adapter SDK    | Contract v1 / report schema v1                 | 文本、流式、恢复、引用、图片、回复动作幂等、取消；不导入 Core/Transport                    |
 
 Claude Code 已于 2026-09-01 纳入下一参考 Kernel 的范围，但尚未加入“已验证”矩阵。计划使用官方 Claude
 Agent SDK，不解析 PTY/TUI；在 streaming、resume、cancel、image、approval、`AskUserQuestion` 和真实

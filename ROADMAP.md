@@ -91,8 +91,8 @@ in [`docs/ecosystem-watch-and-mainline-plan.md`](docs/ecosystem-watch-and-mainli
 
 ### M3.2: ecosystem conformance
 
-- Extract the existing Adapter contract tests into an independently runnable
-  conformance kit and certify one clean-room external Adapter.
+- [x] Extract the Adapter checks into an independently runnable conformance kit
+      with a deterministic JSON report, and certify one SDK-only clean-room Adapter.
 - Add Claude Code as the next reference Kernel through the official Claude
   Agent SDK, with streaming, resume, cancellation, image, approval, and native
   ask-user semantics. Keep it planned until deterministic and real WeCom

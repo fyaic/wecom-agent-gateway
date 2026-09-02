@@ -22,7 +22,8 @@ WeCom Agent Gateway 的主线定位保持不变：
 2. **上游兼容性**：官方社区已经暴露晚 ACK、连续消息、媒体重复、事件类型漂移、代理污染和队列溢出等风险，
    需要变成我们的固定回归矩阵。
 3. **生产所有权**：当前明确支持单实例；多实例的 Bot 连接所有权、会话顺序、共享背压和 fencing 尚未设计完成。
-4. **生态可接入性**：已有外部 Adapter SDK，但还需要独立 conformance kit、最小示例和第三方 Kernel 的可复核接入证据。
+4. **生态可接入性**：外部 Adapter SDK、独立 conformance kit、机器可读报告和 SDK-only clean-room 示例已经
+   完成；下一步是用真实仓库外 Kernel 验证发布边界，并接入 Claude Code。
 5. **Transport 扩展边界**：Runtime Contract 已经中立，但增加第二种 IM 前仍需写清 Transport SPI、能力协商和一致性要求。
 
 因此，近期不以新增卡片主题、自然语言路由、Agent 推理、办公工具数量或“支持更多 IM”的宣传数字作为主线。
@@ -135,8 +136,10 @@ Core/Outbox 状态和清理结果，不能只记录“看到了回复”。
 
 交付：
 
-- 从现有 contract tests 提取可独立运行的 Adapter conformance kit，输出机器可读 capability/结果清单。
-- 外部模板加入最小文本、媒体、引用、取消、交互降级和错误终态示例；不要求 Kernel 虚报不支持的能力。
+- ~~从现有 contract tests 提取可独立运行的 Adapter conformance kit，输出机器可读 capability/结果清单。~~
+  2026-09-02 已完成 schema v1 JSON、隐私安全错误码和 SDK-only clean-room 认证。
+- clean-room 示例已覆盖文本、流式、session、引用、图片、reply-action 幂等和取消；审批、工具、状态、输出
+  媒体和 live interaction 继续要求 Kernel 专用 deterministic probe，不允许由声明冒充通过。
 - Claude Code 作为下一新增参考 Kernel 的第一候选，优先使用官方 Agent SDK；完成其 streaming、resume、cancel、
   image、approval 和 ask-user 映射。详见 [`claude-code-adapter-evaluation.md`](claude-code-adapter-evaluation.md)。
 - 再选择一个仓库外 Kernel/协议做 clean-room 接入案例，考察 ACP 稳定实现或 OpenCode；不以 star 数决定。
@@ -179,7 +182,7 @@ fail closed；真实 WeCom smoke 有可公开的脱敏证据。
 | 3    | M3.0-C 原生视频与连续组合消息矩阵          | A/B  | Media/Transport tests                     | 自动化闭环；真实原生 callback 待验收   |
 | 4    | M3.1-A Linux/systemd soak + 宿主网络故障   | M3.0 | deployment、observability、验收报告       | 待执行                                 |
 | 5    | M3.1-B 多实例 ADR 与双 owner fail-fast     | M3.0 | ADR、启动/租约边界                        | single-active 闭环；active-active 暂缓 |
-| 6    | M3.2 conformance kit + Claude Code Adapter | M3.0 | SDK、Adapter、tests、真实案例             | 待执行                                 |
+| 6    | M3.2 conformance kit + Claude Code Adapter | M3.0 | SDK、Adapter、tests、真实案例             | Kit/clean-room 完成；Claude 待实现     |
 | 7    | M3.3 Transport SPI ADR + loopback contract | M3.1 | Contract/Core/新 Transport 测试包         | 待执行                                 |
 | 8    | M3.4 事件和可选交互扩展                    | 前项 | 按独立 ADR                                | 暂缓                                   |
 

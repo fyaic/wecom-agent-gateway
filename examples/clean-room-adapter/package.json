@@ -1,0 +1,14 @@
+{
+  "name": "@fyaic/clean-room-echo-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Clean-room Adapter example depending only on the public Adapter SDK",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@fyaic/wecom-adapter-sdk": "workspace:*"
+  }
+}

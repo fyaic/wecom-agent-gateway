@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": 1,
+  "adapter": {
+    "id": "clean-room-echo",
+    "sessionCompatibilityId": "clean-room-echo:v1",
+    "capabilities": [
+      "cancel",
+      "interaction-resume",
+      "multimodal-input",
+      "quoted-context",
+      "reply-actions",
+      "resume",
+      "streaming"
+    ],
+    "inputModalities": ["image"],
+    "outputModalities": []
+  },
+  "passed": true,
+  "summary": {
+    "passed": 8,
+    "failed": 0,
+    "skipped": 2
+  },
+  "checks": [
+    {
+      "id": "adapter.compatibility",
+      "status": "passed"
+    },
+    {
+      "id": "lifecycle.start",
+      "status": "skipped",
+      "code": "optional-method-not-declared"
+    },
+    {
+      "id": "adapter.health",
+      "status": "passed"
+    },
+    {
+      "id": "turn.text",
+      "status": "passed"
+    },
+    {
+      "id": "turn.session-resume",
+      "status": "passed"
+    },
+    {
+      "id": "turn.quoted-context",
+      "status": "passed"
+    },
+    {
+      "id": "turn.media.image",
+      "status": "passed"
+    },
+    {
+      "id": "interaction.reply-actions",
+      "status": "passed"
+    },
+    {
+      "id": "turn.cancel",
+      "status": "passed"
+    },
+    {
+      "id": "lifecycle.stop",
+      "status": "skipped",
+      "code": "optional-method-not-declared"
+    }
+  ]
+}

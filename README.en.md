@@ -92,7 +92,7 @@ pnpm install --frozen-lockfile
 pnpm run ci
 ```
 
-The 215 deterministic tests traverse the Runtime Contract, Gateway Core,
+The 220 deterministic tests traverse the Runtime Contract, Gateway Core,
 official SDK mapping, sessions, streaming, media, outbox, Interaction Broker,
 and every reference Adapter. They spend no model quota and contact no real Bot.
 
@@ -163,7 +163,10 @@ One Gateway process hosts one explicitly selected Kernel. Add another Kernel
 with the [Adapter authoring guide](docs/adapter-authoring.md),
 `@fyaic/wecom-adapter-sdk`, and the runnable
 [Adapter template](examples/adapter-template), without modifying the Gateway
-registry.
+registry. The [clean-room Adapter](examples/clean-room-adapter) depends only on
+the public SDK and has a reproducible
+[machine-readable report](docs/evidence/adapter-conformance-clean-room.json).
+Run `pnpm conformance:adapter --module <adapter>` without connecting WeCom.
 
 The [verified case portfolio](docs/verified-kernel-cases.en.md) separates real
 WeCom evidence from deterministic and local protocol tests. The
@@ -251,7 +254,7 @@ and [ADRs](docs/README.md) for the full contract.
 ## Project status
 
 The project is in **Public Preview**; a stable v1 API is not promised. The
-current baseline has 215 deterministic tests and real acceptance evidence for
+current baseline has 220 deterministic tests and real acceptance evidence for
 direct/group conversations, mutable streaming, session recovery,
 image/file/MP4 transfer, proactive media, managed restarts, and four Kernel
 families. Cross-process SQLite outbox recovery, isolated Linux network

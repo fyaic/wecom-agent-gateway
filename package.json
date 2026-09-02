@@ -55,6 +55,8 @@
     "test:m3-upstream-compatibility": "vitest run packages/transport-wecom-bot/test/transport.test.ts packages/channel-core/test/gateway.test.ts packages/storage-sqlite/test/store.test.ts",
     "test:m3-native-media": "vitest run packages/transport-wecom-bot/test/transport.test.ts packages/channel-core/test/gateway.test.ts packages/adapter-pi/test/adapter.test.ts packages/adapter-codex/test/app-server-adapter.test.ts packages/adapter-acp/test/adapter.test.ts packages/adapter-openclaw/test/adapter.test.ts",
     "test:m3-owner": "vitest run apps/gateway/test/bot-owner-lock.test.ts scripts/deployment-artifacts.test.ts",
+    "conformance:adapter": "tsx packages/adapter-conformance/src/cli.ts",
+    "test:m3-conformance": "vitest run packages/adapter-conformance/test/conformance.test.ts examples/clean-room-adapter/test/behavior.test.ts packages/adapter-sdk/test/index.test.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "public:check": "tsx scripts/check-public-readiness.ts",

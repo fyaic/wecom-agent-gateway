@@ -75,6 +75,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/runtime-contract
 
+  examples/clean-room-adapter:
+    dependencies:
+      '@fyaic/wecom-adapter-sdk':
+        specifier: workspace:*
+        version: link:../../packages/adapter-sdk
+
   packages/adapter-acp:
     dependencies:
       '@agentclientprotocol/sdk':
@@ -92,6 +98,15 @@ importers:
       '@openai/codex-sdk':
         specifier: 0.148.0
         version: 0.148.0
+
+  packages/adapter-conformance:
+    dependencies:
+      '@fyaic/wecom-adapter-sdk':
+        specifier: workspace:*
+        version: link:../adapter-sdk
+      '@fyaic/wecom-runtime-contract':
+        specifier: workspace:*
+        version: link:../runtime-contract
 
   packages/adapter-openclaw:
     dependencies:

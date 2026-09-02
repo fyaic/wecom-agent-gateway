@@ -1,0 +1,15 @@
+{
+  "name": "@fyaic/wecom-adapter-conformance",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vendor-neutral conformance runner for WeCom Agent Gateway runtime adapters",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@fyaic/wecom-adapter-sdk": "workspace:*",
+    "@fyaic/wecom-runtime-contract": "workspace:*"
+  }
+}
