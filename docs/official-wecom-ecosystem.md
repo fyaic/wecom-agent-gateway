@@ -208,6 +208,9 @@ OpenClaw 官方将外部应用边界定义为
 approval 与 `chat.abort`，但没有通用 ask-user/elicitation request-response 方法。OpenClaw 进程内部虽可
 处理 MCP/Codex elicitation，不代表 Gateway Client 能接管该阻塞请求；本项目因此不伪造 live resume。
 
+2026-09-02 将 Client/Protocol 精确升级到 `2026.8.1-beta.3` 后，deterministic contract、完整 CI 和本机
+真实 Gateway 两轮严格回复/同 session 恢复均通过；没有观察到上述能力边界变化。
+
 官方 [ACP v1 Overview](https://github.com/agentclientprotocol/agent-client-protocol/blob/main/docs/protocol/v1/overview.mdx)
 列出的 Agent→Client 基线请求是 `session/request_permission`，语义明确为工具调用授权；普通输入仍由
 Client→Agent 的 `session/prompt` 发起。当前协议没有独立用户澄清方法，所以 ACP Adapter 维持审批映射，
