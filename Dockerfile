@@ -5,6 +5,7 @@ ENV GATEWAY_OBSERVABILITY_ENABLED=true
 ENV GATEWAY_OBSERVABILITY_HOST=127.0.0.1
 ENV GATEWAY_OBSERVABILITY_PORT=9464
 ENV GATEWAY_DATABASE_PATH=/var/lib/wecom-agent-gateway/gateway.db
+ENV GATEWAY_OWNER_LOCK_ROOT=/var/lib/wecom-agent-gateway/owner-locks
 ENV GATEWAY_MEDIA_SPOOL_ROOT=/var/lib/wecom-agent-gateway/media-spool
 ENV GATEWAY_CONTROL_SOCKET=/var/lib/wecom-agent-gateway/gateway-control.sock
 

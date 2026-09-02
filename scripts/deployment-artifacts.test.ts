@@ -19,8 +19,14 @@ describe("production deployment artifacts", () => {
     expect(dockerfile).toContain("USER 10001:10001");
     expect(dockerfile).toContain('CMD ["pnpm", "healthcheck"]');
     expect(dockerfile).not.toContain("WECOM_BOT_SECRET=");
+    expect(dockerfile).toContain(
+      "GATEWAY_OWNER_LOCK_ROOT=/var/lib/wecom-agent-gateway/owner-locks",
+    );
     expect(compose).toContain("read_only: true");
     expect(compose).toContain("no-new-privileges:true");
+    expect(compose).toContain(
+      "GATEWAY_OWNER_LOCK_ROOT: /var/lib/wecom-agent-gateway/owner-locks",
+    );
     expect(compose).not.toMatch(/^\s+ports:/m);
   });
 
@@ -33,6 +39,9 @@ describe("production deployment artifacts", () => {
     expect(unit).toContain("UMask=0077");
     expect(unit).toContain("NoNewPrivileges=true");
     expect(unit).not.toContain("WECOM_BOT_SECRET=");
+    expect(unit).toContain(
+      "GATEWAY_OWNER_LOCK_ROOT=/var/lib/wecom-agent-gateway/owner-locks",
+    );
   });
 
   it("revalidates tagged source before publishing version-matched notes", async () => {

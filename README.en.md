@@ -92,7 +92,7 @@ pnpm install --frozen-lockfile
 pnpm run ci
 ```
 
-The 197 deterministic tests traverse the Runtime Contract, Gateway Core,
+The 215 deterministic tests traverse the Runtime Contract, Gateway Core,
 official SDK mapping, sessions, streaming, media, outbox, Interaction Broker,
 and every reference Adapter. They spend no model quota and contact no real Bot.
 
@@ -228,6 +228,8 @@ matching scoped allowlist, and media still obeys `WECOM_MEDIA_OUTPUT_ROOTS`.
 ## Reliability and security semantics
 
 - Turns are ordered per conversation and concurrent across conversations.
+- A second local Gateway for the same Bot fails before the official SDK is
+  connected; cross-host active-active remains unsupported.
 - Delivery is **at-least-once**, not exactly-once.
 - Expired passive streams can fall back to official proactive push.
 - Inbound media is ephemeral; outbound media is copied into a verified,
@@ -249,7 +251,7 @@ and [ADRs](docs/README.md) for the full contract.
 ## Project status
 
 The project is in **Public Preview**; a stable v1 API is not promised. The
-current baseline has 197 deterministic tests and real acceptance evidence for
+current baseline has 215 deterministic tests and real acceptance evidence for
 direct/group conversations, mutable streaming, session recovery,
 image/file/MP4 transfer, proactive media, managed restarts, and four Kernel
 families. Cross-process SQLite outbox recovery, isolated Linux network
@@ -257,7 +259,7 @@ detach/recovery, read-only storage, bounded-capacity exhaustion, and managed
 macOS re-authentication also have evidence.
 
 Host-level NIC loss, a native WeCom `msgtype=video` callback, and
-multi-instance ownership/order remain on the roadmap.
+cross-host multi-instance fencing/order remain on the roadmap.
 
 | If you want to…                | Start here                                                |
 | ------------------------------ | --------------------------------------------------------- |

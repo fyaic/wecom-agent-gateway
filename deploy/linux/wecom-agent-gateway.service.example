@@ -12,6 +12,7 @@ WorkingDirectory=/opt/wecom-agent-gateway
 EnvironmentFile=/etc/wecom-agent-gateway/gateway.env
 Environment=NODE_ENV=production
 Environment=GATEWAY_DATABASE_PATH=/var/lib/wecom-agent-gateway/gateway.db
+Environment=GATEWAY_OWNER_LOCK_ROOT=/var/lib/wecom-agent-gateway/owner-locks
 Environment=GATEWAY_MEDIA_SPOOL_ROOT=/var/lib/wecom-agent-gateway/media-spool
 Environment=GATEWAY_CONTROL_SOCKET=/var/lib/wecom-agent-gateway/gateway-control.sock
 Environment=GATEWAY_OBSERVABILITY_ENABLED=true

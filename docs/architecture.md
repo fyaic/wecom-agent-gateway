@@ -350,6 +350,11 @@ pending ──同 stream 新版本──→ superseded
 - 投递按 `accountId + conversationId` 串行，保持单会话顺序；不同会话并发，历史积压不会造成全局队头阻塞。
 - 投递事件只输出命令类型、阶段和尝试次数，不输出消息、会话或目标 ID。
 
+应用启动还在 Store、Kernel 和官方 SDK 之前获取本机 Bot owner lock。同一 Bot 的第二进程快速失败，
+避免两个 WebSocket consumer 各自维护会话顺序。它与 Outbox record lease 是两个层次：前者保护连接
+进程，后者保护单条 durable delivery；两者都不构成跨主机 fencing 或 active-active。详见
+[`ADR 0026`](adr/0026-single-bot-process-ownership.md)。
+
 这是 **at-least-once**，不是 exactly-once：远端已接受、进程却在本地完成事务前崩溃时，租约
 过期后可能再次发送。下游可用稳定 stream/request 语义做幂等或更新；共享式多实例背压和图形化
 死信审批界面仍属于后续可靠性工作。
