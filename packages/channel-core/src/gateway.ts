@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  assertChannelTransportCompatible,
   assertRuntimeAdapterCompatible,
   type AgentMediaOutput,
   type AgentRuntimeAdapter,
@@ -258,6 +259,7 @@ export class WeComAgentGateway {
   private stopping = false;
 
   constructor(private readonly options: GatewayOptions) {
+    assertChannelTransportCompatible(options.transport);
     const adapters = Array.from(options.adapters);
     for (const adapter of adapters) assertRuntimeAdapterCompatible(adapter);
     this.adapters = new Map(adapters.map((adapter) => [adapter.id, adapter]));

@@ -15,8 +15,10 @@ import type {
   ChannelTransport,
   DeliveryReceipt,
   InboundMessage,
+  MediaType,
   OutboundCommand,
 } from "@fyaic/wecom-runtime-contract";
+import { CHANNEL_TRANSPORT_CONTRACT_VERSION } from "@fyaic/wecom-runtime-contract";
 import { LocalMediaSpool } from "@fyaic/wecom-media-spool-local";
 import {
   StaticRuntimeRouter,
@@ -67,10 +69,12 @@ describe("durable media recovery", () => {
 
     class RecoveryTransport implements ChannelTransport {
       readonly id = "recovery-transport";
+      readonly contractVersion = CHANNEL_TRANSPORT_CONTRACT_VERSION;
       readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
         "media-upload",
         "multimodal-output",
       ]);
+      readonly outputModalities: ReadonlySet<MediaType> = new Set(["image"]);
       readonly commands: OutboundCommand[] = [];
       async start(
         _onMessage: (message: InboundMessage) => Promise<void>,

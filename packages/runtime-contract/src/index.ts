@@ -1,6 +1,11 @@
 export type ConversationType = "direct" | "group";
 export type MediaType = "image" | "audio" | "video" | "file";
 
+/** Major version of the Channel Transport boundary. */
+export const CHANNEL_TRANSPORT_CONTRACT_VERSION = 1 as const;
+export type ChannelTransportContractVersion =
+  typeof CHANNEL_TRANSPORT_CONTRACT_VERSION;
+
 /** Major version of the host/adapter boundary. Bump only for incompatible semantics. */
 export const RUNTIME_CONTRACT_VERSION = 1 as const;
 export type RuntimeContractVersion = typeof RUNTIME_CONTRACT_VERSION;
@@ -212,7 +217,9 @@ export interface MediaSpool {
 }
 
 export interface DeliveryReceipt {
+  /** Opaque Transport acceptance identifier; not proof of user visibility. */
   id: string;
+  /** Time the Transport accepted the command, not provider-visible delivery. */
   acceptedAt: string;
 }
 
@@ -242,6 +249,7 @@ export interface ChannelEnterChatEvent extends ChannelContextEvent {}
 
 export interface ChannelTransport {
   readonly id: string;
+  readonly contractVersion: ChannelTransportContractVersion;
   readonly capabilities: ReadonlySet<ChannelCapability>;
   /** Exact inbound media types this transport can materialize. */
   readonly inputModalities?: ReadonlySet<MediaType>;
@@ -257,8 +265,114 @@ export interface ChannelTransport {
   materializeInbound?(
     message: InboundMessage,
   ): Promise<MaterializedInboundMessage>;
+  /**
+   * Accept an outbound command. Resolution means Transport acceptance only;
+   * durable intent belongs to Core/Outbox and end-user visibility is vendor-specific.
+   */
   deliver(command: OutboundCommand): Promise<DeliveryReceipt>;
   health(): Promise<{ ok: boolean; detail?: string }>;
+}
+
+/** Runtime guard for JavaScript Transports that can bypass TypeScript checks. */
+export function assertChannelTransportCompatible(
+  transport: Pick<
+    ChannelTransport,
+    | "id"
+    | "contractVersion"
+    | "capabilities"
+    | "inputModalities"
+    | "outputModalities"
+    | "materializeInbound"
+  >,
+): void {
+  if (
+    typeof transport.id !== "string" ||
+    transport.id.length > 128 ||
+    !/^[a-z0-9][a-z0-9._-]*$/i.test(transport.id)
+  ) {
+    throw new Error("Transport id must use a stable non-empty identifier");
+  }
+  if (transport.contractVersion !== CHANNEL_TRANSPORT_CONTRACT_VERSION) {
+    throw new Error(
+      `Transport ${transport.id} does not support channel transport contract v${CHANNEL_TRANSPORT_CONTRACT_VERSION}`,
+    );
+  }
+  assertStringSet(transport.capabilities, CHANNEL_CAPABILITIES, "capability");
+  assertStringSet(transport.inputModalities, MEDIA_TYPES, "input modality");
+  assertStringSet(transport.outputModalities, MEDIA_TYPES, "output modality");
+  const input = transport.inputModalities ?? new Set<MediaType>();
+  const output = transport.outputModalities ?? new Set<MediaType>();
+  if (
+    transport.capabilities.has("multimodal-input") !== input.size > 0 ||
+    (input.size > 0 &&
+      (!transport.capabilities.has("media-download") ||
+        typeof transport.materializeInbound !== "function"))
+  ) {
+    throw new Error("Transport input capability declaration is inconsistent");
+  }
+  if (
+    transport.capabilities.has("multimodal-output") !== output.size > 0 ||
+    (output.size > 0 && !transport.capabilities.has("media-upload"))
+  ) {
+    throw new Error("Transport output capability declaration is inconsistent");
+  }
+  if (
+    transport.capabilities.has("interactive-presentation") &&
+    !transport.capabilities.has("structured-presentation")
+  ) {
+    throw new Error(
+      "Interactive presentation requires structured presentation",
+    );
+  }
+  if (
+    transport.capabilities.has("reply-with-presentation") &&
+    (!transport.capabilities.has("structured-presentation") ||
+      !transport.capabilities.has("stream-reply-update"))
+  ) {
+    throw new Error(
+      "Reply presentation requires structured streaming presentation",
+    );
+  }
+}
+
+const CHANNEL_CAPABILITIES: ReadonlySet<string> = new Set<ChannelCapability>([
+  "stream-reply-update",
+  "proactive-message",
+  "media-download",
+  "media-upload",
+  "multimodal-input",
+  "multimodal-output",
+  "structured-presentation",
+  "interactive-presentation",
+  "reply-feedback",
+  "static-welcome",
+  "reply-with-presentation",
+]);
+const MEDIA_TYPES: ReadonlySet<string> = new Set<MediaType>([
+  "image",
+  "audio",
+  "video",
+  "file",
+]);
+
+function assertStringSet(
+  value: ReadonlySet<string> | undefined,
+  allowed: ReadonlySet<string>,
+  label: string,
+): void {
+  if (value === undefined) return;
+  if (
+    typeof value !== "object" ||
+    typeof value[Symbol.iterator] !== "function" ||
+    typeof value.has !== "function"
+  ) {
+    throw new Error(`Transport ${label} declaration must be a ReadonlySet`);
+  }
+  for (const item of value) {
+    if (!allowed.has(item)) {
+      throw new Error(`Transport declares an unknown ${label}`);
+    }
+  }
 }
 
 export type RuntimeCapability =

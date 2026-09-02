@@ -1,0 +1,17 @@
+{
+  "name": "@fyaic/transport-conformance",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Executable conformance checks for Channel Transport Contract v1",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@fyaic/wecom-runtime-contract": "workspace:*"
+  },
+  "devDependencies": {
+    "@fyaic/transport-loopback": "workspace:*"
+  }
+}

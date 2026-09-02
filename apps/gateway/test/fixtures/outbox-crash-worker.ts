@@ -6,6 +6,7 @@ import type {
   InboundMessage,
   OutboundCommand,
 } from "@fyaic/wecom-runtime-contract";
+import { CHANNEL_TRANSPORT_CONTRACT_VERSION } from "@fyaic/wecom-runtime-contract";
 import {
   StaticRuntimeRouter,
   WeComAgentGateway,
@@ -17,6 +18,7 @@ if (!databasePath) throw new Error("A SQLite database path is required");
 
 class BlockingTransport implements ChannelTransport {
   readonly id = "blocking-crash-transport";
+  readonly contractVersion = CHANNEL_TRANSPORT_CONTRACT_VERSION;
   readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
     "proactive-message",
   ]);

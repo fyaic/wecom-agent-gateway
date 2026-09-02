@@ -92,7 +92,7 @@ pnpm install --frozen-lockfile
 pnpm run ci
 ```
 
-The 220 deterministic tests traverse the Runtime Contract, Gateway Core,
+More than 230 deterministic tests traverse the Runtime Contract, Gateway Core,
 official SDK mapping, sessions, streaming, media, outbox, Interaction Broker,
 and every reference Adapter. They spend no model quota and contact no real Bot.
 
@@ -171,6 +171,11 @@ Claude Code also has an [isolated C0 experimental package](packages/adapter-clau
 using the official Agent SDK. It currently proves only deterministic text,
 streaming, session, and cancellation protocol behavior; it is not registered by
 the default Gateway and is not part of the real validation matrix below.
+The Channel side has the same versioned extension boundary. The vendor-free
+[`transport-loopback`](packages/transport-loopback) passes a fixed
+[22-check machine report](docs/evidence/transport-conformance-loopback.json).
+A new IM can implement Transport v1, but vendor authentication, callbacks, and
+client visibility still require separate evidence; acceptance is not “seen.”
 
 The [verified case portfolio](docs/verified-kernel-cases.en.md) separates real
 WeCom evidence from deterministic and local protocol tests. The
@@ -258,7 +263,7 @@ and [ADRs](docs/README.md) for the full contract.
 ## Project status
 
 The project is in **Public Preview**; a stable v1 API is not promised. The
-current baseline has 220 deterministic tests and real acceptance evidence for
+current baseline has more than 230 deterministic tests and real acceptance evidence for
 direct/group conversations, mutable streaming, session recovery,
 image/file/MP4 transfer, proactive media, managed restarts, and four Kernel
 families. Cross-process SQLite outbox recovery, isolated Linux network
@@ -274,6 +279,7 @@ cross-host multi-instance fencing/order remain on the roadmap.
 | Connect a real Bot             | [15-minute integration guide](docs/getting-started.en.md) |
 | Run the full acceptance matrix | [Real WeCom runbook](docs/real-wecom-runbook.md)          |
 | Add another Agent              | [Adapter authoring guide](docs/adapter-authoring.md)      |
+| Add another IM Channel         | [Transport authoring guide](docs/transport-authoring.md)  |
 | Understand cards and callbacks | [Interaction design](docs/interaction-cards.md)           |
 | Operate the Gateway            | [Deployment baseline](docs/deployment.md)                 |
 | Audit current claims and gaps  | [Status](docs/status.md) and [roadmap](ROADMAP.md)        |

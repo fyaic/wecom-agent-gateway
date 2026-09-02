@@ -102,8 +102,11 @@ in [`docs/ecosystem-watch-and-mainline-plan.md`](docs/ecosystem-watch-and-mainli
   commercial terms separate from the repository's MIT code.
 - Track ACP capability negotiation and document an AG-UI event mapping without
   making either protocol a Core dependency.
-- Specify a channel-neutral Transport SPI and validate it with a loopback
-  Transport before selecting a second production IM.
+- [x] Specify Channel Transport Contract v1, enforce startup capability
+      consistency, and certify a vendor-free loopback Transport with a fixed
+      22-check report before selecting a second production IM.
+- Evaluate the next production Transport only after its vendor-specific
+  authentication, callback, visibility, media, and failure matrix is available.
 
 ## Later
 

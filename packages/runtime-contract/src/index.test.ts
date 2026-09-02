@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { agentInputParts, type InboundMessage } from "./index.js";
+import {
+  CHANNEL_TRANSPORT_CONTRACT_VERSION,
+  agentInputParts,
+  assertChannelTransportCompatible,
+  type ChannelTransport,
+  type InboundMessage,
+} from "./index.js";
 
 describe("agentInputParts", () => {
   it("preserves structured quoted content before the current message", () => {
@@ -40,5 +46,47 @@ describe("agentInputParts", () => {
       parts,
     };
     expect(agentInputParts(message)).toBe(parts);
+  });
+});
+
+describe("assertChannelTransportCompatible", () => {
+  const compatible = {
+    id: "reference-transport",
+    contractVersion: CHANNEL_TRANSPORT_CONTRACT_VERSION,
+    capabilities: new Set(),
+    async start() {},
+    async stop() {},
+    async deliver() {
+      return { id: "receipt", acceptedAt: new Date(0).toISOString() };
+    },
+    async health() {
+      return { ok: true };
+    },
+  } satisfies ChannelTransport;
+
+  it("accepts a v1 Transport", () => {
+    expect(() => assertChannelTransportCompatible(compatible)).not.toThrow();
+  });
+
+  it("rejects incompatible versions and unknown declarations", () => {
+    expect(() =>
+      assertChannelTransportCompatible({
+        ...compatible,
+        contractVersion: 2 as never,
+      }),
+    ).toThrow("does not support channel transport contract v1");
+    expect(() =>
+      assertChannelTransportCompatible({
+        ...compatible,
+        capabilities: new Set(["vendor-private-capability" as never]),
+      }),
+    ).toThrow("unknown capability");
+    expect(() =>
+      assertChannelTransportCompatible({
+        ...compatible,
+        capabilities: new Set(["multimodal-input"]),
+        inputModalities: new Set(["image"]),
+      }),
+    ).toThrow("input capability declaration is inconsistent");
   });
 });

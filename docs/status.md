@@ -18,6 +18,7 @@
 | 非语义事件 ACL                                  | 完成并自动化验证          | feedback/enter_chat 复用 scoped policy；拒绝事件不回复、不启动 Kernel              |
 | Channel/Kernel 分层延迟事件                     | 完成并自动化验证          | 队列、首回执、Kernel 首事件/首文本、完成/失败分别记录                              |
 | Transport/Kernel capability 声明                | 完成并真实验证            | ACP initialize 与 Transport capability 共同约束流式、恢复和多模态                  |
+| Channel Transport Contract v1                   | M3.3 首切片完成           | 启动期版本/能力检查；vendor-free loopback 固定 22 项 conformance                   |
 | 精确输入/输出模态契约                           | 完成并自动化/真实验证     | Core 按 Transport/Adapter 类型集合 fail closed；图片、文件、MP4 链路通过           |
 | 原生视频 callback 生命周期                      | M3.0-C 自动化通过         | 官方无 filename frame、SDK 解密、MIME/权限/清理、Kernel 零调用与后续文本恢复       |
 | Adapter Host 生命周期                           | 完成并自动化验证          | Adapter ready 后开放入口；停入口、排空任务后释放 Adapter                           |
@@ -366,6 +367,18 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
   不携带该 SDK 或 binary，独立 production deploy 检查已确认 SDK absent 而 Runtime Contract present。
 - 本机没有可用 Claude 凭据，因此 C1 真实 Kernel、企业微信私聊/群聊、图片、审批和 `AskUserQuestion` 仍为
   明确未通过项；README 不把它计入已支持或真实 Kernel 数量。
+
+### 2026-09-02 Transport SPI 与发布运行面
+
+- Channel Transport Contract v1 现要求稳定 `id`、`contractVersion`、capability 和精确媒体集合；Gateway 在
+  Adapter 启动、厂商连接和入站开放前拒绝版本或能力矛盾的 Transport。
+- vendor-free `transport-loopback` 与独立 conformance runner 已覆盖 22 项 lifecycle、单聊/群聊、引用、
+  feedback/enter-chat、媒体、流式/主动投递和交互；固定 JSON 报告由 CI 防漂移，异常正文不会写入报告。
+- 送达口径固定为 Core durable intent → Transport accepted → vendor/client visible；公共 `DeliveryReceipt`
+  只证明第二层，不把 HTTP 200、SDK ack 或本地入队虚报为用户可见/已读。
+- Node 22 基础镜像新 digest 已完成真实 pull、GitHub CI/CodeQL 和生产镜像构建；镜像约 149 MB、以
+  `10001:10001` 运行，`--no-optional` 确认不携带 Claude SDK/binary。
+- 合并后受管 Gateway 保持 ready；Outbox `pending=0`、`leased=0`、`dead=0`，本轮没有重启或切换当前 Kernel。
 
 ### 2026-09-01 M3.0-B 上游兼容矩阵
 

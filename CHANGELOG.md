@@ -8,6 +8,9 @@ tagged.
 
 ### Added
 
+- A versioned Channel Transport Contract, startup compatibility guard,
+  vendor-free loopback reference, and privacy-safe 22-check Transport
+  conformance report with explicit acceptance-versus-visibility semantics.
 - An isolated experimental Claude Code C0 Adapter using the pinned official
   Agent SDK, with deterministic streaming/session/cancellation fixtures,
   fail-closed media handling, isolated settings, and exact license review.
