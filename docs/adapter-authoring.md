@@ -108,11 +108,11 @@ Kernel 自己拥有工具不等于 `tools`；模型支持图片也不等于 Adap
 
 | Adapter               | 上游接口            | 固定/实测版本                                  | 已验证能力                                                                                 |
 | --------------------- | ------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Codex SDK 对照实现    | `@openai/codex-sdk` | SDK `0.148.0`                                  | 文本流式、session 恢复、reply-action continuation                                          |
+| Codex SDK 对照实现    | `@openai/codex-sdk` | SDK `0.151.0`                                  | 文本流式、session 恢复、reply-action continuation；升级后真实两轮通过                      |
 | Codex App Server      | JSONL App Server    | CLI `0.145.0`                                  | 流式、恢复、回复动作、原生 ask-user、取消、状态、审批、RuntimeTool、图片/音频输入          |
 | 通用 ACP              | ACP v1 stdio        | `@agentclientprotocol/sdk 1.4.0`               | 流式/取消/权限；session load 可用时动态开放恢复、回复动作和输入模态                        |
 | Kimi Code（通用 ACP） | `kimi acp`          | Kimi `0.36.1`                                  | 流式、恢复、回复动作、取消、权限、状态、图片输入；真实企业微信私聊已通过                   |
-| OpenClaw Gateway      | WebSocket v4        | Client `2026.8.1-beta.2`；Gateway `2026.7.1-2` | 流式、恢复、回复动作、取消、状态；image/audio/video/file 输入                              |
+| OpenClaw Gateway      | WebSocket v4        | Client `2026.8.1-beta.3`；Gateway `2026.7.1-2` | 流式、恢复、回复动作、取消、状态；image/audio/video/file 输入；升级后真实两轮通过          |
 | Pi Agent              | 官方 JSONL RPC      | Pi `0.84.2`；GLM-5.2 文本、GLM-4.6V 图片通过   | 流式/恢复/回复动作/取消/状态；动态图片输入；原生选择/确认/文本交互；默认 2-worker 有界并发 |
 | Clean-room 外部示例   | 公共 Adapter SDK    | Contract v1 / report schema v1                 | 文本、流式、恢复、引用、图片、回复动作幂等、取消；不导入 Core/Transport                    |
 
