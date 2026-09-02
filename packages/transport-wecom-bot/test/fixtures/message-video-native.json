@@ -1,0 +1,20 @@
+{
+  "cmd": "aibot_msg_callback",
+  "headers": {
+    "req_id": "req-native-video"
+  },
+  "body": {
+    "msgid": "msg-native-video",
+    "aibotid": "bot-fixture",
+    "msgtype": "video",
+    "chattype": "single",
+    "create_time": 1788278400,
+    "from": {
+      "userid": "user-fixture"
+    },
+    "video": {
+      "url": "https://example.invalid/native-video",
+      "aeskey": "native-video-key"
+    }
+  }
+}

@@ -1,6 +1,6 @@
 # 工作状态
 
-更新于 2026-09-01。
+更新于 2026-09-02。
 
 ## 已完成并有自动化验证
 
@@ -19,6 +19,7 @@
 | Channel/Kernel 分层延迟事件                     | 完成并自动化验证          | 队列、首回执、Kernel 首事件/首文本、完成/失败分别记录                              |
 | Transport/Kernel capability 声明                | 完成并真实验证            | ACP initialize 与 Transport capability 共同约束流式、恢复和多模态                  |
 | 精确输入/输出模态契约                           | 完成并自动化/真实验证     | Core 按 Transport/Adapter 类型集合 fail closed；图片、文件、MP4 链路通过           |
+| 原生视频 callback 生命周期                      | M3.0-C 自动化通过         | 官方无 filename frame、SDK 解密、MIME/权限/清理、Kernel 零调用与后续文本恢复       |
 | Adapter Host 生命周期                           | 完成并自动化验证          | Adapter ready 后开放入口；停入口、排空任务后释放 Adapter                           |
 | 配置驱动 Adapter Registry                       | 完成并自动化验证          | `codex` / `kimi` / 任意 ACP v1 可执行程序；Core 无厂商类型                         |
 | 外部 Adapter SDK 与模板                         | 完成并自动化验证          | 可信模块动态装载、v1/shape/tool 校验；新增 Kernel 无需修改 Registry                |
@@ -122,6 +123,7 @@
 | 2026-09-01 | 审批中进程强杀与重启          | 通过   | 审批卡送达后强杀 Gateway；新进程启动后旧卡批准只命中失效回调，不恢复 Agent、不执行工具，待办查询为 0 条  |
 | 2026-09-01 | 私聊与授权群普通消息基线      | 通过   | 私聊严格回复约 5.5s；群聊真实 @Bot 回执 492ms、首文本 3.827s、总计 5.573s，均无默认动作卡                |
 | 2026-09-01 | M3.0-B SDK 兼容回归           | 通过   | Pi 私聊严格回复约 11.6s；群聊真实 @Bot 回执 500ms、首文本 2.893s、总计 3.855s；Outbox 零积压/死信        |
+| 2026-09-02 | 桌面 MP4 能力拒绝与后续文本   | 通过   | 桌面端仍回调为 file；物化 2.414s、3.177s 明确拒绝且 Pi 零调用；紧随文本 7.405s 完成，临时目录归零        |
 | 2026-08-24 | 本机 Kimi ACP 两轮 smoke      | 通过   | 官方 ACP v1；流式和 session 恢复通过，协商图片输入能力，总耗时 13.0s                                     |
 | 2026-08-24 | 私聊 → Kimi ACP → 流式回复    | 通过   | Channel 回执 418ms、Kimi 首文本 5.68s、端到端 6.42s；独立 Kimi session 写入                              |
 | 2026-08-24 | 同一私聊图片 → Kimi ACP       | 通过   | 仍为同一 session；物化 356ms、首文本 10.97s、总计 13.23s，Outbox 全投递且临时目录归零                    |
@@ -359,6 +361,22 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
 - 授权私聊与测试群普通文本已完成真实回归；群聊服务端在 3.855 秒内完成并投递 final。macOS 企业微信曾出现
   会话列表已显示 final、当前打开气泡仍短暂停在思考态的陈旧渲染，切换会话后同一气泡正确重绘为 final；
   该现象记录为官方客户端兼容观察项，不改变 Gateway delivery 结论，也不声称已由本项目修复。
+
+### 2026-09-02 M3.0-C 原生视频与连续多模态
+
+- 新增与官方 `VideoMessage` 当前类型一致的脱敏 fixture：`video` 只有五分钟下载 URL 与可选独立 AES key，
+  不假定 frame 自带 filename。官方 SDK 下载/解密后，Transport 生成受控 `video.mp4` 名称，检测
+  `video/mp4`，以 `0700/0600` 物化，并在 run 完成或失败时删除目录。
+- Runtime Contract 继续保留独立 `video` 模态，不沿用官方 OpenClaw 插件的 file 降级。当前 Kernel 未声明
+  video input 时，Gateway 在 Kernel 前明确回复“当前 Agent 不支持视频输入”，Kernel 零调用；媒体仍清理，
+  同会话紧随的文本继续执行。
+- 连续消息 fixture 扩为慢 file → image → text：从 admission、媒体物化到 Kernel 完成保持原始顺序，
+  不启发式合并不同 callback，也不让前一条媒体失败污染后续队列。
+- 固定入口为 `pnpm test:m3-native-media`。原生 `msgtype=video` 的真实客户端 callback 仍是退出门；普通
+  MP4 被桌面客户端编码成 file 的结果不能替代它，也不评价模型是否具备视频理解或抽帧工具。
+- 真实 macOS 企业微信通过文件选择器发送公开脱敏 MP4，客户端仍产生 `file` callback。Gateway 在
+  2.414 秒完成下载/解密/受保护物化，3.177 秒以“当前 Agent 不支持文件输入”结束，Pi 零调用；紧随文本
+  正常进入 Pi 并在 7.405 秒完成。临时媒体目录为 0，Outbox `pending/leased/dead` 均为 0，Gateway ready。
 
 ### M5：生产运行与韧性
 

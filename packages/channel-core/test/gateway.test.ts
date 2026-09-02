@@ -1191,7 +1191,7 @@ describe("WeComAgentGateway", () => {
     expect(runtime.requests).toHaveLength(1);
   });
 
-  it("keeps rapid file and text callbacks serialized through slow media materialization", async () => {
+  it("keeps rapid file, image, and text callbacks serialized through slow media materialization", async () => {
     let releaseFile!: () => void;
     const fileReady = new Promise<void>((resolve) => {
       releaseFile = resolve;
@@ -1204,7 +1204,10 @@ describe("WeComAgentGateway", () => {
         "media-download",
         "multimodal-input",
       ]);
-      readonly inputModalities: ReadonlySet<MediaType> = new Set(["file"]);
+      readonly inputModalities: ReadonlySet<MediaType> = new Set([
+        "file",
+        "image",
+      ]);
 
       async materializeInbound(
         inbound: InboundMessage,
@@ -1214,17 +1217,27 @@ describe("WeComAgentGateway", () => {
         return {
           message: {
             ...inbound,
-            parts: inbound.parts.map((part) =>
-              part.type === "file"
-                ? {
-                    type: "file" as const,
-                    path: "/tmp/compatibility-fixture.txt",
-                    name: "fixture.txt",
-                    mimeType: "text/plain",
-                    sizeBytes: 7,
-                  }
-                : part,
-            ),
+            parts: inbound.parts.map((part) => {
+              if (part.type === "file") {
+                return {
+                  type: "file" as const,
+                  path: "/tmp/compatibility-fixture.txt",
+                  name: "fixture.txt",
+                  mimeType: "text/plain",
+                  sizeBytes: 7,
+                };
+              }
+              if (part.type === "image") {
+                return {
+                  type: "image" as const,
+                  path: "/tmp/compatibility-fixture.png",
+                  name: "fixture.png",
+                  mimeType: "image/png",
+                  sizeBytes: 8,
+                };
+              }
+              return part;
+            }),
           },
           release: async () => undefined,
         };
@@ -1235,6 +1248,7 @@ describe("WeComAgentGateway", () => {
       id: "ordered-media-runtime",
       contractVersion: 1,
       capabilities: new Set(["multimodal-input"]),
+      inputModalities: new Set(["file", "image"]),
       async *run(request) {
         seen.push(request.message.id);
         yield { type: "message-completed", text: request.message.id };
@@ -1263,20 +1277,30 @@ describe("WeComAgentGateway", () => {
       ],
     });
     await waitFor(() => materialized.length === 1);
+    const image = transport.receive({
+      ...message("rapid-image"),
+      parts: [
+        {
+          type: "image",
+          url: "https://example.invalid/encrypted-image",
+          name: "fixture.png",
+        },
+      ],
+    });
     const text = transport.receive({
       ...message("rapid-text"),
-      parts: [{ type: "text", text: "读取刚才的文件" }],
+      parts: [{ type: "text", text: "读取刚才的文件与图片" }],
     });
     await new Promise((resolve) => setTimeout(resolve, 5));
 
     expect(materialized).toEqual(["rapid-file"]);
     expect(seen).toEqual([]);
     releaseFile();
-    await Promise.all([file, text]);
+    await Promise.all([file, image, text]);
     await gateway.stop();
 
-    expect(materialized).toEqual(["rapid-file", "rapid-text"]);
-    expect(seen).toEqual(["rapid-file", "rapid-text"]);
+    expect(materialized).toEqual(["rapid-file", "rapid-image", "rapid-text"]);
+    expect(seen).toEqual(["rapid-file", "rapid-image", "rapid-text"]);
   });
 
   it("resolves a write approval only from the same conversation and sender", async () => {
@@ -2740,6 +2764,101 @@ describe("WeComAgentGateway", () => {
     expect(errors).toEqual([
       "Adapter image-only-runtime cannot accept file input",
     ]);
+    expect(transport.commands.at(-1)).toMatchObject({
+      type: "reply",
+      text: "当前 Agent 不支持文件输入。",
+      final: true,
+    });
+  });
+
+  it("releases an unsupported native video and still processes the following text", async () => {
+    let releasedVideos = 0;
+    class VideoTransport extends FakeTransport {
+      readonly inputModalities: ReadonlySet<MediaType> = new Set(["video"]);
+      async materializeInbound(
+        inbound: InboundMessage,
+      ): Promise<MaterializedInboundMessage> {
+        const hasVideo = inbound.parts.some((part) => part.type === "video");
+        return {
+          message: {
+            ...inbound,
+            parts: inbound.parts.map((part) =>
+              part.type === "video"
+                ? {
+                    type: "video" as const,
+                    path: "/protected/native-video.mp4",
+                    name: "native-video.mp4",
+                    mimeType: "video/mp4",
+                    sizeBytes: 12,
+                  }
+                : part,
+            ),
+          },
+          release: async () => {
+            if (hasVideo) releasedVideos += 1;
+          },
+        };
+      }
+    }
+    const runs: string[] = [];
+    const runtime: AgentRuntimeAdapter = {
+      id: "image-only-runtime",
+      contractVersion: 1,
+      capabilities: new Set(["multimodal-input"]),
+      inputModalities: new Set(["image"]),
+      async *run(request) {
+        runs.push(request.message.id);
+        yield { type: "message-completed", text: "text-ok" };
+      },
+      async health() {
+        return { ok: true };
+      },
+    };
+    const errors: string[] = [];
+    const transport = new VideoTransport();
+    const gateway = new WeComAgentGateway({
+      transport,
+      adapters: [runtime],
+      router: new StaticRuntimeRouter(runtime.id),
+      store: new MemoryGatewayStore(),
+      onRuntimeError: (error) => errors.push(error.message),
+    });
+    await gateway.start();
+
+    const video = transport.receive({
+      ...message("unsupported-native-video"),
+      parts: [
+        {
+          type: "video",
+          url: "https://example.invalid/native-video",
+          aesKey: "one-time-key",
+        },
+      ],
+    });
+    const text = transport.receive({
+      ...message("after-native-video"),
+      parts: [{ type: "text", text: "continue" }],
+    });
+    await Promise.all([video, text]);
+    await gateway.stop();
+
+    expect(releasedVideos).toBe(1);
+    expect(runs).toEqual(["after-native-video"]);
+    expect(errors).toEqual([
+      "Adapter image-only-runtime cannot accept video input",
+    ]);
+    expect(transport.commands).toContainEqual(
+      expect.objectContaining({
+        type: "reply",
+        text: "当前 Agent 不支持视频输入。",
+        final: true,
+      }),
+    );
+    expect(transport.commands.at(-1)).toMatchObject({
+      type: "reply",
+      text: "text-ok",
+      final: true,
+    });
   });
 
   it("fails closed before the Kernel when quoted context is undeclared", async () => {

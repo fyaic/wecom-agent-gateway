@@ -1090,7 +1090,7 @@ export class WeComAgentGateway {
         this.notifyRuntimeError(
           error instanceof Error ? error : new Error(String(error)),
         );
-        await reply.close("Agent 处理失败，请稍后重试。");
+        await reply.close(inboundFailureText(error));
       }
       this.notifyLifecycle(
         message,
@@ -3153,18 +3153,54 @@ function assertInboundModalities(
   }
   if (mediaTypes.size === 0) return;
   if (!adapter.capabilities.has("multimodal-input")) {
-    throw new Error(`Adapter ${adapter.id} cannot accept media input`);
+    throw new UnsupportedInboundModalityError(
+      "adapter",
+      mediaTypes.values().next().value!,
+      `Adapter ${adapter.id} cannot accept media input`,
+    );
   }
   for (const type of mediaTypes) {
     if (transport.inputModalities && !transport.inputModalities.has(type)) {
-      throw new Error(
+      throw new UnsupportedInboundModalityError(
+        "transport",
+        type,
         `Transport ${transport.id} cannot materialize ${type} input`,
       );
     }
     if (adapter.inputModalities && !adapter.inputModalities.has(type)) {
-      throw new Error(`Adapter ${adapter.id} cannot accept ${type} input`);
+      throw new UnsupportedInboundModalityError(
+        "adapter",
+        type,
+        `Adapter ${adapter.id} cannot accept ${type} input`,
+      );
     }
   }
+}
+
+class UnsupportedInboundModalityError extends Error {
+  constructor(
+    readonly component: "transport" | "adapter",
+    readonly modality: MediaType,
+    message: string,
+  ) {
+    super(message);
+    this.name = "UnsupportedInboundModalityError";
+  }
+}
+
+function inboundFailureText(error: unknown): string {
+  if (!(error instanceof UnsupportedInboundModalityError)) {
+    return "Agent 处理失败，请稍后重试。";
+  }
+  const label: Record<MediaType, string> = {
+    image: "图片",
+    audio: "语音",
+    video: "视频",
+    file: "文件",
+  };
+  return error.component === "adapter"
+    ? `当前 Agent 不支持${label[error.modality]}输入。`
+    : `当前企业微信通道无法处理${label[error.modality]}输入。`;
 }
 
 function parseApprovalControl(

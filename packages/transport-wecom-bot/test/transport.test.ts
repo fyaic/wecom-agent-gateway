@@ -25,7 +25,10 @@ class FakeClient {
   readonly mediaPushes: any[][] = [];
   readonly uploads: any[][] = [];
   replyError?: unknown;
-  downloadResult = { buffer: Buffer.from("media"), filename: "asset.bin" };
+  downloadResult: { buffer: Buffer; filename?: string } = {
+    buffer: Buffer.from("media"),
+    filename: "asset.bin",
+  };
   readonly downloads: any[][] = [];
   on(event: string, listener: (...args: any[]) => void): void {
     this.listeners.set(event, listener);
@@ -60,7 +63,7 @@ class FakeClient {
   }
   async downloadFile(...args: any[]): Promise<{
     buffer: Buffer;
-    filename: string;
+    filename?: string;
   }> {
     this.downloads.push(args);
     return this.downloadResult;
@@ -1038,6 +1041,68 @@ describe("WeComBotTransport", () => {
         aesKey: "file-key",
       },
     ]);
+  });
+
+  it("materializes an official native video frame without relying on a filename", async () => {
+    const root = mkdtempSync(join(tmpdir(), "wecom-native-video-test-"));
+    directories.push(root);
+    const client = new FakeClient();
+    client.downloadResult = {
+      buffer: Buffer.concat([
+        Buffer.alloc(4),
+        Buffer.from("ftyp"),
+        Buffer.from("isom"),
+      ]),
+      filename: undefined,
+    };
+    const received: InboundMessage[] = [];
+    const transport = new WeComBotTransport({
+      accountId: "bot-a",
+      botId: "id",
+      secret: "secret",
+      clientFactory: () => client,
+      mediaTempRoot: root,
+    });
+    await transport.start(async (message) => {
+      received.push(message);
+    });
+
+    client.listeners.get("message")?.(fixture("message-video-native.json"));
+    await Promise.resolve();
+
+    expect(received).toEqual([
+      expect.objectContaining({
+        id: "msg-native-video",
+        conversationId: "user-fixture",
+        parts: [
+          {
+            type: "video",
+            url: "https://example.invalid/native-video",
+            name: undefined,
+            aesKey: "native-video-key",
+          },
+        ],
+      }),
+    ]);
+    const materialized = await transport.materializeInbound(received[0]!);
+    const video = materialized.message.parts[0];
+    expect(client.downloads).toEqual([
+      ["https://example.invalid/native-video", "native-video-key"],
+    ]);
+    expect(video).toMatchObject({
+      type: "video",
+      name: "00-video.mp4",
+      mimeType: "video/mp4",
+      sizeBytes: 12,
+    });
+    expect(video).not.toHaveProperty("url");
+    expect(video).not.toHaveProperty("aesKey");
+    if (video?.type !== "video" || !video.path) {
+      throw new Error("expected a materialized native video path");
+    }
+    expect(statSync(video.path).mode & 0o777).toBe(0o600);
+    await materialized.release();
+    expect(existsSync(video.path)).toBe(false);
   });
 
   it("downloads and decrypts inbound media into protected ephemeral files", async () => {
