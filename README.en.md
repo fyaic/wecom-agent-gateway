@@ -167,6 +167,10 @@ registry. The [clean-room Adapter](examples/clean-room-adapter) depends only on
 the public SDK and has a reproducible
 [machine-readable report](docs/evidence/adapter-conformance-clean-room.json).
 Run `pnpm conformance:adapter --module <adapter>` without connecting WeCom.
+Claude Code also has an [isolated C0 experimental package](packages/adapter-claude-code)
+using the official Agent SDK. It currently proves only deterministic text,
+streaming, session, and cancellation protocol behavior; it is not registered by
+the default Gateway and is not part of the real validation matrix below.
 
 The [verified case portfolio](docs/verified-kernel-cases.en.md) separates real
 WeCom evidence from deterministic and local protocol tests. The

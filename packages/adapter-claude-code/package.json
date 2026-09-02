@@ -1,0 +1,17 @@
+{
+  "name": "@fyaic/claude-code-runtime-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Optional Claude Code Agent SDK adapter for wecom-agent-gateway",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@fyaic/wecom-runtime-contract": "workspace:*"
+  },
+  "optionalDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.258"
+  }
+}

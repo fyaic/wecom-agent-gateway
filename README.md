@@ -147,6 +147,8 @@ Adapter，并通过 `GATEWAY_ADAPTER=external` 加载，无需修改 Gateway Reg
 [`clean-room-adapter`](examples/clean-room-adapter) 的运行时代码只依赖公共 SDK，并有可重复的
 [`机器认证报告`](docs/evidence/adapter-conformance-clean-room.json)。运行
 `pnpm conformance:adapter --module <adapter>` 可在不连接企业微信的情况下检查第三方 Adapter。
+Claude Code 另有一个使用官方 Agent SDK 的[隔离 C0 实验包](packages/adapter-claude-code)，目前只完成
+确定性的文本/流式/session/取消协议验证，未注册进默认 Gateway，也不属于下方真实验证矩阵。
 
 真实企业微信端到端案例、代表性延迟和复现入口见
 [`docs/verified-kernel-cases.md`](docs/verified-kernel-cases.md)。

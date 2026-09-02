@@ -8,6 +8,9 @@ tagged.
 
 ### Added
 
+- An isolated experimental Claude Code C0 Adapter using the pinned official
+  Agent SDK, with deterministic streaming/session/cancellation fixtures,
+  fail-closed media handling, isolated settings, and exact license review.
 - A 26-second bilingual-README product walkthrough built from a real,
   privacy-cropped WeCom/Pi conversation, covering mutable status/final replies,
   native confirmation and same-task resume, plus proactive text/media delivery.
