@@ -24,7 +24,8 @@ WeCom Agent Gateway 的主线定位保持不变：
 3. **生产所有权**：当前明确支持单实例；多实例的 Bot 连接所有权、会话顺序、共享背压和 fencing 尚未设计完成。
 4. **生态可接入性**：外部 Adapter SDK、独立 conformance kit、机器可读报告和 SDK-only clean-room 示例已经
    完成；下一步是用真实仓库外 Kernel 验证发布边界，并接入 Claude Code。
-5. **Transport 扩展边界**：Runtime Contract 已经中立，但增加第二种 IM 前仍需写清 Transport SPI、能力协商和一致性要求。
+5. **Transport 扩展边界**：版本化 SPI、能力约束、送达层级、loopback reference 与机器 conformance 已完成；
+   增加第二种生产 IM 前仍需选择真实需求和厂商验收环境。
 
 因此，近期不以新增卡片主题、自然语言路由、Agent 推理、办公工具数量或“支持更多 IM”的宣传数字作为主线。
 
@@ -140,8 +141,9 @@ Core/Outbox 状态和清理结果，不能只记录“看到了回复”。
   2026-09-02 已完成 schema v1 JSON、隐私安全错误码和 SDK-only clean-room 认证。
 - clean-room 示例已覆盖文本、流式、session、引用、图片、reply-action 幂等和取消；审批、工具、状态、输出
   媒体和 live interaction 继续要求 Kernel 专用 deterministic probe，不允许由声明冒充通过。
-- Claude Code 作为下一新增参考 Kernel 的第一候选，优先使用官方 Agent SDK；完成其 streaming、resume、cancel、
-  image、approval 和 ask-user 映射。详见 [`claude-code-adapter-evaluation.md`](claude-code-adapter-evaluation.md)。
+- Claude Code C0 已使用官方 Agent SDK `0.3.258` 完成 streaming、resume、cancel 和错误边界；C1/C2 仍需
+  用户自有凭据下的真实 text/session/auth、image、approval 和 ask-user 验收。详见
+  [`claude-code-adapter-evaluation.md`](claude-code-adapter-evaluation.md)。
 - 再选择一个仓库外 Kernel/协议做 clean-room 接入案例，考察 ACP 稳定实现或 OpenCode；不以 star 数决定。
 - 跟踪 ACP 的 negotiated `protocolVersion` 和 capability，而不是用 schema artifact 版本推断 wire compatibility。
 - 写一份 AG-UI mapping note，仅评估 run/status/tool/interaction event 的转换价值，不让 AG-UI 成为 Core 依赖。
@@ -155,11 +157,15 @@ fail closed；真实 WeCom smoke 有可公开的脱敏证据。
 
 交付：
 
-- 编写 Transport SPI ADR：inbound envelope、conversation identity、capability negotiation、reply handle、主动投递、
-  媒体 artifact、interaction callback、delivery receipt、ordering 和 backpressure。
-- 用 loopback/reference Transport 跑 Core conformance，不依赖真实厂商；随后再评估 Bot HTTP Webhook 或另一个 IM。
-- 明确语义分级：`accepted`、`visible/acknowledged`、`durable-final`，不能把厂商 HTTP 200 当最终送达。
-- 为厂商不支持的可变消息、卡片、引用或主动推送定义确定性降级，不追求最低公分母。
+- ~~编写 Transport SPI ADR：inbound envelope、conversation identity、capability negotiation、reply handle、主动投递、
+  媒体 artifact、interaction callback、delivery receipt、ordering 和 backpressure。~~ 2026-09-02 已由
+  Channel Transport Contract v1 与 ADR 0028 固化，Gateway 在任何副作用前执行运行时兼容检查。
+- ~~用 loopback/reference Transport 跑 Core conformance，不依赖真实厂商。~~ vendor-free loopback 已通过固定
+  22 项报告；测试 driver 与生产 SPI 隔离，报告不包含消息、路径、身份、回执 ID 或上游错误正文。
+- ~~明确语义分级，不能把厂商 HTTP 200 当最终送达。~~ 当前固定为 Core durable intent → Transport accepted →
+  vendor-specific visible/acknowledged；公共 `DeliveryReceipt` 只表达第二层。
+- 能力一致性已 fail closed；下一步在有明确使用者和验收环境后评估 Bot HTTP Webhook 或第二个 IM，并为其缺失的
+  可变消息、卡片、引用或主动推送定义确定性降级，不追求最低公分母。
 
 退出条件：第二 Transport package 不引入厂商类型到 Core/Runtime Contract；相同 Core suite 通过；能力缺失有
 显式结果；WeCom 回归无变化。实现第二个商业 IM 不是本阶段的强制退出条件。
@@ -175,16 +181,16 @@ fail closed；真实 WeCom smoke 有可公开的脱敏证据。
 
 ## 执行顺序与工作看板
 
-| 顺序 | 工作包                                     | 依赖 | 预计变更面                                | 当前状态                               |
-| ---- | ------------------------------------------ | ---- | ----------------------------------------- | -------------------------------------- |
-| 1    | M3.0-A 引用 + 审批异常真实矩阵             | 无   | 文档/验收脚本；必要时 Transport/Core 修复 | 部分完成：审批闭环；引用待客户端入口   |
-| 2    | M3.0-B 上游兼容 fixture 与版本台账         | 无   | Transport tests、compatibility 文档       | 自动化与单聊/群聊回归完成；代理待验收  |
-| 3    | M3.0-C 原生视频与连续组合消息矩阵          | A/B  | Media/Transport tests                     | 自动化闭环；真实原生 callback 待验收   |
-| 4    | M3.1-A Linux/systemd soak + 宿主网络故障   | M3.0 | deployment、observability、验收报告       | 待执行                                 |
-| 5    | M3.1-B 多实例 ADR 与双 owner fail-fast     | M3.0 | ADR、启动/租约边界                        | single-active 闭环；active-active 暂缓 |
-| 6    | M3.2 conformance kit + Claude Code Adapter | M3.0 | SDK、Adapter、tests、真实案例             | Kit/clean-room 完成；Claude 待实现     |
-| 7    | M3.3 Transport SPI ADR + loopback contract | M3.1 | Contract/Core/新 Transport 测试包         | 待执行                                 |
-| 8    | M3.4 事件和可选交互扩展                    | 前项 | 按独立 ADR                                | 暂缓                                   |
+| 顺序 | 工作包                                     | 依赖 | 预计变更面                                | 当前状态                                 |
+| ---- | ------------------------------------------ | ---- | ----------------------------------------- | ---------------------------------------- |
+| 1    | M3.0-A 引用 + 审批异常真实矩阵             | 无   | 文档/验收脚本；必要时 Transport/Core 修复 | 部分完成：审批闭环；引用待客户端入口     |
+| 2    | M3.0-B 上游兼容 fixture 与版本台账         | 无   | Transport tests、compatibility 文档       | 自动化与单聊/群聊回归完成；代理待验收    |
+| 3    | M3.0-C 原生视频与连续组合消息矩阵          | A/B  | Media/Transport tests                     | 自动化闭环；真实原生 callback 待验收     |
+| 4    | M3.1-A Linux/systemd soak + 宿主网络故障   | M3.0 | deployment、observability、验收报告       | 待执行                                   |
+| 5    | M3.1-B 多实例 ADR 与双 owner fail-fast     | M3.0 | ADR、启动/租约边界                        | single-active 闭环；active-active 暂缓   |
+| 6    | M3.2 conformance kit + Claude Code Adapter | M3.0 | SDK、Adapter、tests、真实案例             | Kit/clean-room/C0 完成；Claude C1 待凭据 |
+| 7    | M3.3 Transport SPI ADR + loopback contract | M3.1 | Contract/Core/新 Transport 测试包         | v1 SPI + 22 项 loopback 已完成           |
+| 8    | M3.4 事件和可选交互扩展                    | 前项 | 按独立 ADR                                | 暂缓                                     |
 
 每个工作包应保持“小步提交 + 自动化证据 + 必要的真实客户端证据”。遇到上游限制时，先记录明确 capability 和
 降级，不以临时 prompt、sleep、无限重试或人工观察掩盖协议缺口。

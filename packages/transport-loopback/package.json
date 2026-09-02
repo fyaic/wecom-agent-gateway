@@ -1,0 +1,14 @@
+{
+  "name": "@fyaic/transport-loopback",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deterministic reference Transport for the WeCom Agent Gateway SPI",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@fyaic/wecom-runtime-contract": "workspace:*"
+  }
+}

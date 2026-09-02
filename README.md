@@ -79,7 +79,7 @@ pnpm install --frozen-lockfile
 pnpm run ci
 ```
 
-220 项 deterministic tests 会经过 Runtime Contract、Gateway Core、官方 SDK 映射、会话、流式、媒体、
+超过 230 项 deterministic tests 会经过 Runtime Contract、Gateway Core、官方 SDK 映射、会话、流式、媒体、
 Outbox、交互 Broker 和全部参考 Adapter，不消耗模型额度，也不会连接真实 Bot。
 
 ### 接入真实企业微信与一个 Agent
@@ -149,6 +149,10 @@ Adapter，并通过 `GATEWAY_ADAPTER=external` 加载，无需修改 Gateway Reg
 `pnpm conformance:adapter --module <adapter>` 可在不连接企业微信的情况下检查第三方 Adapter。
 Claude Code 另有一个使用官方 Agent SDK 的[隔离 C0 实验包](packages/adapter-claude-code)，目前只完成
 确定性的文本/流式/session/取消协议验证，未注册进默认 Gateway，也不属于下方真实验证矩阵。
+Channel 侧同样有版本化扩展边界：无厂商依赖的
+[`transport-loopback`](packages/transport-loopback) 已通过固定
+[`22 项机器报告`](docs/evidence/transport-conformance-loopback.json)。新 IM 可以实现 Transport v1，
+但仍需独立证明厂商鉴权、回调和客户端可见性，不能把接受回执当作用户已看到。
 
 真实企业微信端到端案例、代表性延迟和复现入口见
 [`docs/verified-kernel-cases.md`](docs/verified-kernel-cases.md)。
@@ -250,7 +254,7 @@ allowlist 内。媒体路径还必须位于 `WECOM_MEDIA_OUTPUT_ROOTS` 允许目
 
 ## 成熟度
 
-项目处于 **Public Preview**，尚未承诺稳定的 v1 API。当前有 220 项 deterministic tests，并完成
+项目处于 **Public Preview**，尚未承诺稳定的 v1 API。当前有超过 230 项 deterministic tests，并完成
 真实企业微信私聊、群聊、流式回复、会话恢复、图片/文件/MP4、主动媒体、受管重启及四类 Kernel
 接入验证。真实 OS 子进程 `SIGKILL` 后的 SQLite Outbox 租约恢复、macOS 受管 Gateway 强杀拉起和
 重新鉴权也已通过；隔离 Linux 网络断开/恢复、持久卷只读和受限 tmpfs 容量耗尽均完成真实故障验收。
@@ -268,6 +272,7 @@ allowlist 内。媒体路径还必须位于 `WECOM_MEDIA_OUTPUT_ROOTS` 允许目
 | 接入一个真实企业微信 Bot | [15 分钟接入指南](docs/getting-started.md)         |
 | 执行完整真实验收         | [真实企业微信联调手册](docs/real-wecom-runbook.md) |
 | 增加另一种 Agent         | [Adapter 开发指南](docs/adapter-authoring.md)      |
+| 增加另一种 IM Channel    | [Transport 接入指南](docs/transport-authoring.md)  |
 | 理解卡片和交互回调       | [交互卡片设计](docs/interaction-cards.md)          |
 | 部署和运维 Gateway       | [生产部署基线](docs/deployment.md)                 |
 | 检查官方上游兼容性       | [上游兼容矩阵](docs/upstream-compatibility.md)     |

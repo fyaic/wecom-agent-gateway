@@ -12,6 +12,7 @@ import type {
   InboundMessage,
   OutboundCommand,
 } from "@fyaic/wecom-runtime-contract";
+import { CHANNEL_TRANSPORT_CONTRACT_VERSION } from "@fyaic/wecom-runtime-contract";
 import {
   StaticRuntimeRouter,
   WeComAgentGateway,
@@ -74,6 +75,7 @@ describe.skipIf(process.platform === "win32")("process crash recovery", () => {
     const commands: OutboundCommand[] = [];
     class RecoveryTransport implements ChannelTransport {
       readonly id = "recovery-transport";
+      readonly contractVersion = CHANNEL_TRANSPORT_CONTRACT_VERSION;
       readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
         "proactive-message",
       ]);

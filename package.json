@@ -57,6 +57,7 @@
     "test:m3-owner": "vitest run apps/gateway/test/bot-owner-lock.test.ts scripts/deployment-artifacts.test.ts",
     "conformance:adapter": "tsx packages/adapter-conformance/src/cli.ts",
     "test:m3-conformance": "vitest run packages/adapter-conformance/test/conformance.test.ts examples/clean-room-adapter/test/behavior.test.ts packages/adapter-sdk/test/index.test.ts",
+    "test:m3-transport": "vitest run packages/runtime-contract/src/index.test.ts packages/transport-loopback/test/loopback.test.ts packages/transport-conformance/test/conformance.test.ts packages/channel-core/test/gateway.test.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "public:check": "tsx scripts/check-public-readiness.ts",

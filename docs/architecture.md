@@ -3,11 +3,9 @@
 ## 目标边界
 
 ```text
-企业微信客户端
+IM 客户端
       ↕
-@wecom/aibot-node-sdk（WebSocket / 回复 / 推送 / 媒体）
-      ↕
-transport-wecom-bot
+Channel Transport v1（企业微信参考实现使用官方 SDK）
       ↕ InboundMessage / OutboundCommand
 channel-core（ACL、幂等、顺序、重试、呈现、指标）
       ↕ AgentRunRequest / AgentRunEvent
@@ -19,7 +17,8 @@ Codex / Pi Agent / Kimi Code / OpenClaw
 
 三条边界必须保持独立：
 
-1. `transport-wecom-bot` 只处理企业微信协议与消息归一化，复用官方 SDK 的认证、心跳、重连、回复、推送和媒体能力。
+1. `transport-wecom-bot` 只处理企业微信协议与消息归一化，复用官方 SDK 的认证、心跳、重连、回复、推送和媒体能力；
+   其他 IM 必须通过相同的版本化 Transport SPI，而不是向 Core 注入厂商类型。
 2. `channel-core` 只处理通用 Channel 编排，不引用 Codex/OpenClaw 类型。
 3. 每个 Agent Kernel 通过 `AgentRuntimeAdapter` 接入；`wecom-cli` 是可注入的工具，不是消息传输层。
 
@@ -28,6 +27,33 @@ Codex / Pi Agent / Kimi Code / OpenClaw
 `structured-presentation` / `interactive-presentation` Transport capability；关闭它或换成不支持卡片的
 IM Transport，不得破坏普通文本、媒体、流式回复或 Agent session。Core 也不得为了卡片从 Agent
 自然语言中猜测意图或解析厂商 JSON。
+
+## Channel Transport SPI
+
+`ChannelTransport` 是版本化运行时边界。每个实现必须声明 `contractVersion`、稳定 ID、capabilities 以及
+精确的输入/输出媒体集合；Gateway 在启动 Adapter 和开放入站前检查版本、字段和能力依赖。媒体输入依赖
+下载/物化能力，媒体输出依赖上传能力，交互卡依赖结构化呈现，组合回复依赖可变流式回复。声明矛盾会在
+任何厂商连接或 Agent turn 前失败。
+
+```text
+厂商 callback/frame
+      ↓ Transport 归一化
+InboundMessage / ChannelFeedbackEvent / ChannelEnterChatEvent
+      ↓ Core：ACL、顺序、背压、session、durable intent
+OutboundCommand
+      ↓ Transport 厂商投递
+DeliveryReceipt（仅 accepted，不代表 visible/read）
+```
+
+`@fyaic/transport-loopback` 不导入企业微信或 Kernel 类型，通过独立 22 项 conformance 证明单聊/群聊、
+引用、非语义事件、媒体、流式/主动回复和交互投影都能只使用公共契约。测试注入面
+`TransportConformanceDriver` 不属于生产 SPI。机器报告位于
+[`evidence/transport-conformance-loopback.json`](evidence/transport-conformance-loopback.json)，详细接入规则见
+[`transport-authoring.md`](transport-authoring.md) 与
+[`ADR 0028`](adr/0028-versioned-transport-spi.md)。
+
+送达严格分层：SQLite/Outbox 表示 Core 已耐久接受意图，`deliver()` 回执表示 Transport 接受命令，厂商或
+客户端是否可见、是否已读仍需独立真实证据。公共契约不会把 HTTP 200 或 SDK 回调统一命名为“已送达”。
 
 引用/回复消息使用独立 `message.quote.parts`，不会塞入 WeCom metadata。Transport 归一化并按与当前
 消息相同的临时目录、总大小和清理规则物化引用媒体；Core 要求 Adapter 声明 `quoted-context`，否则

@@ -180,6 +180,22 @@ importers:
         specifier: workspace:*
         version: link:../runtime-contract
 
+  packages/transport-conformance:
+    dependencies:
+      '@fyaic/wecom-runtime-contract':
+        specifier: workspace:*
+        version: link:../runtime-contract
+    devDependencies:
+      '@fyaic/transport-loopback':
+        specifier: workspace:*
+        version: link:../transport-loopback
+
+  packages/transport-loopback:
+    dependencies:
+      '@fyaic/wecom-runtime-contract':
+        specifier: workspace:*
+        version: link:../runtime-contract
+
   packages/transport-wecom-bot:
     dependencies:
       '@fyaic/wecom-runtime-contract':

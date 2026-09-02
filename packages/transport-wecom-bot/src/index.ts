@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { basename, extname, isAbsolute, join, relative } from "node:path";
 import { WSClient, generateReqId } from "@wecom/aibot-node-sdk";
 import type { TemplateCard } from "@wecom/aibot-node-sdk";
+import { CHANNEL_TRANSPORT_CONTRACT_VERSION } from "@fyaic/wecom-runtime-contract";
 import type {
   AgentMediaOutput,
   ChannelTransport,
@@ -146,6 +147,7 @@ export interface WeComBotTransportOptions {
 
 export class WeComBotTransport implements ChannelTransport {
   readonly id = "wecom-bot";
+  readonly contractVersion = CHANNEL_TRANSPORT_CONTRACT_VERSION;
   readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
     "stream-reply-update",
     "proactive-message",

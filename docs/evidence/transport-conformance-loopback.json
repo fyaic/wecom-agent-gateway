@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": 1,
+  "transport": {
+    "id": "loopback",
+    "capabilities": [
+      "interactive-presentation",
+      "media-download",
+      "media-upload",
+      "multimodal-input",
+      "multimodal-output",
+      "proactive-message",
+      "reply-feedback",
+      "reply-with-presentation",
+      "static-welcome",
+      "stream-reply-update",
+      "structured-presentation"
+    ],
+    "inputModalities": ["audio", "file", "image", "video"],
+    "outputModalities": ["audio", "file", "image", "video"]
+  },
+  "passed": true,
+  "summary": {
+    "passed": 22,
+    "failed": 0,
+    "skipped": 0
+  },
+  "checks": [
+    { "id": "transport.compatibility", "status": "passed" },
+    { "id": "lifecycle.start", "status": "passed" },
+    { "id": "transport.health", "status": "passed" },
+    { "id": "inbound.direct", "status": "passed" },
+    { "id": "inbound.group", "status": "passed" },
+    { "id": "inbound.quoted", "status": "passed" },
+    { "id": "event.feedback", "status": "passed" },
+    { "id": "event.enter-chat", "status": "passed" },
+    { "id": "input.image", "status": "passed" },
+    { "id": "input.audio", "status": "passed" },
+    { "id": "input.video", "status": "passed" },
+    { "id": "input.file", "status": "passed" },
+    { "id": "delivery.reply", "status": "passed" },
+    { "id": "delivery.reply-presentation", "status": "passed" },
+    { "id": "delivery.proactive", "status": "passed" },
+    { "id": "delivery.presentation", "status": "passed" },
+    { "id": "delivery.interaction-update", "status": "passed" },
+    { "id": "output.image", "status": "passed" },
+    { "id": "output.audio", "status": "passed" },
+    { "id": "output.video", "status": "passed" },
+    { "id": "output.file", "status": "passed" },
+    { "id": "lifecycle.stop", "status": "passed" }
+  ]
+}

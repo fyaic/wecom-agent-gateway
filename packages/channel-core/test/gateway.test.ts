@@ -18,6 +18,7 @@ import type {
   OutboundCommand,
   RuntimeCapability,
 } from "@fyaic/wecom-runtime-contract";
+import { CHANNEL_TRANSPORT_CONTRACT_VERSION } from "@fyaic/wecom-runtime-contract";
 import {
   AllowlistPolicy,
   MemoryGatewayStore,
@@ -27,6 +28,7 @@ import {
 
 class FakeTransport implements ChannelTransport {
   readonly id = "fake-wecom";
+  readonly contractVersion = CHANNEL_TRANSPORT_CONTRACT_VERSION;
   readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
     "stream-reply-update",
     "proactive-message",
@@ -2701,6 +2703,12 @@ describe("WeComAgentGateway", () => {
     let released = false;
     let runs = 0;
     class MediaTransport extends FakeTransport {
+      override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
+        "stream-reply-update",
+        "proactive-message",
+        "media-download",
+        "multimodal-input",
+      ]);
       readonly inputModalities: ReadonlySet<MediaType> = new Set([
         "image",
         "file",
@@ -2774,6 +2782,12 @@ describe("WeComAgentGateway", () => {
   it("releases an unsupported native video and still processes the following text", async () => {
     let releasedVideos = 0;
     class VideoTransport extends FakeTransport {
+      override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
+        "stream-reply-update",
+        "proactive-message",
+        "media-download",
+        "multimodal-input",
+      ]);
       readonly inputModalities: ReadonlySet<MediaType> = new Set(["video"]);
       async materializeInbound(
         inbound: InboundMessage,
@@ -2897,6 +2911,7 @@ describe("WeComAgentGateway", () => {
         "media-upload",
         "multimodal-output",
       ]);
+      readonly outputModalities: ReadonlySet<MediaType> = new Set(["file"]);
     }
     const transport = new MediaOutputTransport();
     const runtime: AgentRuntimeAdapter = {
@@ -2964,6 +2979,7 @@ describe("WeComAgentGateway", () => {
         "media-upload",
         "multimodal-output",
       ]);
+      readonly outputModalities: ReadonlySet<MediaType> = new Set(["image"]);
       mediaAttempts = 0;
 
       override async deliver(
