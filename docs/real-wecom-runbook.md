@@ -1,6 +1,6 @@
 # 真实企业微信联调手册
 
-更新于 2026-09-01。本文只覆盖独立测试 Bot，不使用真人账号模拟 Bot，也不从
+更新于 2026-09-02。本文只覆盖独立测试 Bot，不使用真人账号模拟 Bot，也不从
 `wecom-cli` 的加密凭据存储中导出 Secret。
 
 > [!NOTE]
@@ -265,6 +265,24 @@ OpenClaw：Channel 回执 441ms、物化 2.317 秒、首文本 7.786 秒、端�
 能力边界，不是 Channel 失败。两次验收后 Outbox 无 pending/dead，临时媒体目录归零。原生
 `msgtype=video` 的真实客户端回调尚未捕获，但官方 video/file frame 归一化和 MP4 物化已有
 deterministic contract 覆盖，不能把桌面端的消息分类方式误记为 Gateway 缺陷。
+
+M3.0-C 将原生视频验收收紧为独立矩阵。先运行：
+
+```bash
+pnpm test:m3-native-media
+```
+
+真实验收必须从授权成员向 Bot 发送客户端原生视频，并同时检查：SDK 回调确为 `msgtype=video`；下载与
+AES 解密成功；无 filename 时生成受控 `.mp4` 名称；MIME、大小、`0700/0600` 权限正确；当前 Adapter
+不声明 video 时 Kernel 零调用且用户收到明确能力终态；临时目录归零；紧随文本继续处理；Outbox 无
+pending/leased/dead。桌面端通过“文件”或拖放发送而产生的 `msgtype=file` 只能作为 MP4 二进制链路证据，
+不能冒充原生视频 callback；Agent 是否理解视频内容或拥有抽帧工具不属于本验收。
+
+2026-09-02 使用 macOS 企业微信文件选择器发送仓库公开脱敏演示 MP4，客户端再次产生 `file` callback。
+Channel 回执 463ms，下载/解密与物化 2.414 秒，Pi 因只声明 image input 而保持零调用；Gateway 在
+3.177 秒明确回复不支持文件输入。紧随文本未被前一失败污染，首文本 6.696 秒、总计 7.405 秒；临时
+目录为 0，Outbox 638 条 delivered、无 pending/leased/dead，Gateway ready。该轮关闭了桌面端
+file-classified MP4 的失败隔离矩阵，但原生 `msgtype=video` 仍需能产生该 callback 的客户端完成。
 
 同日已完成一次真实图片主动发送：测试图片位于一次性显式允许根目录，正式 Bot 通过官方 SDK
 完成 `uploadMedia` 和 `sendMediaMessage`，只发送到授权私聊；测试输出不包含目标内部 ID、

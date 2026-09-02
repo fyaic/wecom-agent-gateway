@@ -67,7 +67,10 @@ in [`docs/ecosystem-watch-and-mainline-plan.md`](docs/ecosystem-watch-and-mainli
       cannot pollute Transport globals. Real HTTP proxy download/decrypt remains
       an explicitly tracked deployment check.
 - [ ] Certify native WeCom video callbacks as a transport/media lifecycle; model
-      understanding is explicitly outside this acceptance.
+      understanding is explicitly outside this acceptance. The exact official
+      frame, protected materialization, Adapter capability rejection, cleanup,
+      and following-message recovery are deterministic gates; a real native
+      `msgtype=video` callback is still required to close this item.
 
 ### M3.1: production ownership
 
