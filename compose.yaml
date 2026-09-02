@@ -8,6 +8,7 @@ services:
       - .env
     environment:
       GATEWAY_DATABASE_PATH: /var/lib/wecom-agent-gateway/gateway.db
+      GATEWAY_OWNER_LOCK_ROOT: /var/lib/wecom-agent-gateway/owner-locks
       GATEWAY_MEDIA_SPOOL_ROOT: /var/lib/wecom-agent-gateway/media-spool
       GATEWAY_CONTROL_SOCKET: /var/lib/wecom-agent-gateway/gateway-control.sock
       GATEWAY_OBSERVABILITY_ENABLED: "true"

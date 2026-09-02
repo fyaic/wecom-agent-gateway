@@ -23,11 +23,25 @@ import {
   LocalGatewayControlServer,
 } from "@fyaic/wecom-local-control";
 import { createConfiguredAdapter } from "./adapter-registry.js";
+import { acquireBotOwnerLock } from "./bot-owner-lock.js";
 import { redactSecrets } from "./redaction.js";
 import { parseReplyActions } from "./reply-actions.js";
 
 const botId = required("WECOM_BOT_ID");
 const secret = required("WECOM_BOT_SECRET");
+const botOwner = await acquireBotOwnerLock({
+  accountId: botId,
+  root: process.env.GATEWAY_OWNER_LOCK_ROOT || undefined,
+  staleAfterMs: positiveInteger(
+    process.env.GATEWAY_OWNER_LOCK_STALE_MS,
+    30_000,
+  ),
+  heartbeatIntervalMs: positiveInteger(
+    process.env.GATEWAY_OWNER_LOCK_HEARTBEAT_MS,
+    5_000,
+  ),
+});
+console.log(JSON.stringify({ event: "bot_owner_acquired" }));
 const diagnosticSecrets = sensitiveEnvironmentValues(process.env, [
   botId,
   secret,
@@ -369,6 +383,7 @@ const shutdown = async () => {
   await gateway.stop();
   await observabilityServer?.stop();
   store.close();
+  await botOwner.release();
   process.exit(0);
 };
 process.once("SIGINT", () => void shutdown());
@@ -399,6 +414,7 @@ try {
   if (gatewayStarted) await gateway.stop();
   await observabilityServer?.stop();
   store.close();
+  await botOwner.release();
   throw error;
 }
 console.log(

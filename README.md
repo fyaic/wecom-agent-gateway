@@ -79,7 +79,7 @@ pnpm install --frozen-lockfile
 pnpm run ci
 ```
 
-197 项 deterministic tests 会经过 Runtime Contract、Gateway Core、官方 SDK 映射、会话、流式、媒体、
+215 项 deterministic tests 会经过 Runtime Contract、Gateway Core、官方 SDK 映射、会话、流式、媒体、
 Outbox、交互 Broker 和全部参考 Adapter，不消耗模型额度，也不会连接真实 Bot。
 
 ### 接入真实企业微信与一个 Agent
@@ -228,6 +228,7 @@ allowlist 内。媒体路径还必须位于 `WECOM_MEDIA_OUTPUT_ROOTS` 允许目
 ## 可靠性与安全语义
 
 - 同一会话严格有序，不同会话可以并行；
+- 同一 Bot 的第二个本机 Gateway 在连接官方 SDK 前快速失败；跨主机 active-active 仍不受支持；
 - 投递语义是 **at-least-once**，不是 exactly-once；
 - 流式窗口过期时，最终文本可降级为官方主动推送；
 - 入站媒体只在单次 run 内临时存在，结束后清理；
@@ -244,11 +245,11 @@ allowlist 内。媒体路径还必须位于 `WECOM_MEDIA_OUTPUT_ROOTS` 允许目
 
 ## 成熟度
 
-项目处于 **Public Preview**，尚未承诺稳定的 v1 API。当前有 197 项 deterministic tests，并完成
+项目处于 **Public Preview**，尚未承诺稳定的 v1 API。当前有 215 项 deterministic tests，并完成
 真实企业微信私聊、群聊、流式回复、会话恢复、图片/文件/MP4、主动媒体、受管重启及四类 Kernel
 接入验证。真实 OS 子进程 `SIGKILL` 后的 SQLite Outbox 租约恢复、macOS 受管 Gateway 强杀拉起和
 重新鉴权也已通过；隔离 Linux 网络断开/恢复、持久卷只读和受限 tmpfs 容量耗尽均完成真实故障验收。
-宿主机物理网卡中断、原生 `msgtype=video` 客户端回调和多实例全局顺序仍在路线图中。
+宿主机物理网卡中断、原生 `msgtype=video` 客户端回调和跨主机多实例 fencing/全局顺序仍在路线图中。
 
 - 当前能力与真实验收：[`docs/status.md`](docs/status.md)
 - 路线图：[`ROADMAP.md`](ROADMAP.md)

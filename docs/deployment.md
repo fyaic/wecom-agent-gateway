@@ -8,7 +8,8 @@ Outbox 和所选 Kernel Adapter；不会把 Agent 逻辑移进 Channel。
 - Node.js 22、pnpm 11.8.0；
 - 私有 `.env` / EnvironmentFile 权限 `0600`，只属于本地操作者或 system manager；
 - `data`、媒体 spool、Agent 输出根目录和必要 Kernel workspace 使用持久磁盘；
-- 一个数据目录只运行一个 Gateway 实例；当前尚未声明共享 SQLite/多实例全局顺序；
+- 一个 Bot 只运行一个 Gateway 实例；进程级 owner lock 会让同一锁目录中的第二实例快速失败，但当前
+  尚未声明跨主机共享所有权、SQLite 多实例或全局顺序；
 - Kernel 凭据、Bot Secret 和内部 allowlist 不进入镜像、unit、Compose 文件、日志或指标；
 - 部署前执行 `pnpm doctor`，需要真实 Kernel 探测时执行 `pnpm doctor:live`。
 
@@ -22,6 +23,10 @@ Outbox 和所选 Kernel Adapter；不会把 Agent 逻辑移进 Channel。
   `GATEWAY_STORAGE_PRUNE_BATCH_SIZE` 有界删除；pending、leased、dead 以及未恢复交互不会被清理。
 - `GATEWAY_LOG_SDK_MESSAGES=false`、`GATEWAY_LOG_ADAPTER_STDERR=false` 默认阻止原始上游诊断进入日志。
   只有短时故障排查才应开启；开启后仍需把日志视为敏感数据并及时销毁。
+- `GATEWAY_OWNER_LOCK_ROOT` 应位于仅服务用户可写的持久状态目录。锁 key 只含 Bot ID 的不可逆短指纹；
+  同一 Bot 的第二进程在创建 Store、Kernel 或官方 SDK 连接前退出。不要给两个部署配置不同锁目录来
+  绕过保护；该锁不提供跨主机 active-active。完整边界见
+  [`ADR 0026`](adr/0026-single-bot-process-ownership.md)。
 - `CODEX_AGENT_ENV_ALLOWLIST`、`ACP_AGENT_ENV_ALLOWLIST`、`PI_AGENT_ENV_ALLOWLIST` 只填写对应 Kernel
   明确需要的变量名。不要加入 `WECOM_BOT_SECRET`；Gateway 不再把整个宿主环境交给 Codex 子进程。
 

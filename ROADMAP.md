@@ -85,9 +85,9 @@ in [`docs/ecosystem-watch-and-mainline-plan.md`](docs/ecosystem-watch-and-mainli
   detach/reconnect, bounded disk exhaustion, read-only recovery, and macOS
   managed-process restart are already covered.
 - Define multi-instance ownership, shared backpressure, and ordering semantics.
-- Fail fast when two local processes attempt to own the same Bot account, then
-  document connection ownership, conversation fencing, shared admission, and
-  failover semantics before implementing active-active operation.
+- [x] Fail fast when two local processes attempt to own the same Bot account.
+      Connection ownership, conversation fencing, shared admission, and failover
+      semantics are documented as mandatory prerequisites to active-active.
 
 ### M3.2: ecosystem conformance
 
