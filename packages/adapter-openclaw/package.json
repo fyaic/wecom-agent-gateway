@@ -10,6 +10,6 @@
   },
   "dependencies": {
     "@fyaic/wecom-runtime-contract": "workspace:*",
-    "@openclaw/gateway-client": "2026.8.1-beta.2"
+    "@openclaw/gateway-client": "2026.8.1-beta.3"
   }
 }
