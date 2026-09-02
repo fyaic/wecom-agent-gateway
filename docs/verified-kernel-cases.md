@@ -37,6 +37,16 @@ Adapter 返回指定文本；上方卡片来自单独的显式交互请求。默
 | Pi Agent         | 官方 LF JSONL RPC      | 私聊/群聊、恢复、图片、worker pool、ask-user、审批与取消 | 私聊两轮：回执 400/385ms，首文本 3.919/2.638s，完成 4.610/3.382s |
 | 通用 ACP         | ACP v1 stdio           | 真实 stdio 初始化、能力协商、load/cancel/image contract  | Kimi 是当前通用 ACP 路径的真实企业微信端到端实现                 |
 
+## 外部 Adapter 一致性证据
+
+[`clean-room-adapter`](../examples/clean-room-adapter) 的运行时代码只依赖公共 Adapter SDK，不导入 Core、
+Transport 或内置 Kernel。独立工具已验证文本、流式、session 恢复、引用、图片、reply-action 幂等和取消，
+8 项通过、0 项失败、2 个未实现的可选 lifecycle 方法明确跳过。固定
+[`JSON 报告`](evidence/adapter-conformance-clean-room.json) 由 CI 防漂移。
+
+这是扩展契约证据，不是真实 Agent 或企业微信 E2E；第三方 Kernel 仍需独立 fake、真实 Kernel smoke 和
+真实 WeCom 四层验收。
+
 延迟是对应日期和本机环境的观测值，不是 SLA，也不能跨模型直接比较。Channel 回执与 Kernel 首文本
 分层记录，用于区分企微链路问题和模型/Kernel 推理耗时。
 

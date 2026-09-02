@@ -44,6 +44,20 @@ These measurements describe one dated local environment, not an SLA. Channel
 acknowledgement and Kernel first-text latency are recorded separately so that
 transport faults are not confused with model or Kernel reasoning time.
 
+## External Adapter conformance evidence
+
+The runtime code of the [`clean-room-adapter`](../examples/clean-room-adapter)
+depends only on the public Adapter SDK; it imports no Core, Transport, or built-in
+Kernel package. The independent runner passes text, streaming, session resume,
+quoted context, image, reply-action idempotency, and cancellation: eight passed,
+zero failed, and two undeclared optional lifecycle methods explicitly skipped.
+CI keeps the fixed [JSON report](evidence/adapter-conformance-clean-room.json)
+in sync.
+
+This proves the extension contract, not a real Agent or WeCom E2E. A third-party
+Kernel still needs its own deterministic fake, real Kernel smoke, and real WeCom
+acceptance layers.
+
 ## What each case proves
 
 - **Codex** exercises the richest bidirectional host protocol: persistent

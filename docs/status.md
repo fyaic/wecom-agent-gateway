@@ -24,6 +24,8 @@
 | 配置驱动 Adapter Registry                       | 完成并自动化验证          | `codex` / `kimi` / 任意 ACP v1 可执行程序；Core 无厂商类型                         |
 | 外部 Adapter SDK 与模板                         | 完成并自动化验证          | 可信模块动态装载、v1/shape/tool 校验；新增 Kernel 无需修改 Registry                |
 | 外部 Adapter 模板 Doctor                        | 本机真实验证              | 通过部署入口动态加载模板；普通 10/10、live health 11/11                            |
+| Adapter Conformance Kit                         | M3.2 首切片完成           | 独立模块装载、schema v1 JSON、稳定错误码；passed/failed/skipped 不混淆             |
+| SDK-only clean-room Adapter                     | 完成并自动化验证          | 只依赖公共 SDK；文本/流式/恢复/引用/图片/回复动作幂等/取消 8 项通过                |
 | 通用 ACP v1 Adapter                             | 完成并真实验证            | stdio、协商、流式/load/cancel/图片真实通过；permission 自动化通过                  |
 | Codex/ACP 共享 Runtime Contract                 | 完成并自动化验证          | 两个 Adapter 共用文本、流式、首轮 session 与恢复 testkit                           |
 | Kimi Code ACP Adapter                           | 完成并真实验证            | 本机真实两轮及企业微信文本、同会话图片均通过                                       |

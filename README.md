@@ -79,7 +79,7 @@ pnpm install --frozen-lockfile
 pnpm run ci
 ```
 
-215 项 deterministic tests 会经过 Runtime Contract、Gateway Core、官方 SDK 映射、会话、流式、媒体、
+220 项 deterministic tests 会经过 Runtime Contract、Gateway Core、官方 SDK 映射、会话、流式、媒体、
 Outbox、交互 Broker 和全部参考 Adapter，不消耗模型额度，也不会连接真实 Bot。
 
 ### 接入真实企业微信与一个 Agent
@@ -143,7 +143,10 @@ Gateway 在 allowlist 为空时拒绝启动；`.env`、SQLite、日志和媒体�
 每个 Gateway 进程只选择一个确定的 Kernel，不根据自然语言动态切换。第三方 Kernel 可以按照
 [`docs/adapter-authoring.md`](docs/adapter-authoring.md) 使用 `@fyaic/wecom-adapter-sdk` 实现小型
 Adapter，并通过 `GATEWAY_ADAPTER=external` 加载，无需修改 Gateway Registry。仓库内的
-[`examples/adapter-template`](examples/adapter-template) 是可运行模板。
+[`examples/adapter-template`](examples/adapter-template) 是可运行模板；
+[`clean-room-adapter`](examples/clean-room-adapter) 的运行时代码只依赖公共 SDK，并有可重复的
+[`机器认证报告`](docs/evidence/adapter-conformance-clean-room.json)。运行
+`pnpm conformance:adapter --module <adapter>` 可在不连接企业微信的情况下检查第三方 Adapter。
 
 真实企业微信端到端案例、代表性延迟和复现入口见
 [`docs/verified-kernel-cases.md`](docs/verified-kernel-cases.md)。
@@ -245,7 +248,7 @@ allowlist 内。媒体路径还必须位于 `WECOM_MEDIA_OUTPUT_ROOTS` 允许目
 
 ## 成熟度
 
-项目处于 **Public Preview**，尚未承诺稳定的 v1 API。当前有 215 项 deterministic tests，并完成
+项目处于 **Public Preview**，尚未承诺稳定的 v1 API。当前有 220 项 deterministic tests，并完成
 真实企业微信私聊、群聊、流式回复、会话恢复、图片/文件/MP4、主动媒体、受管重启及四类 Kernel
 接入验证。真实 OS 子进程 `SIGKILL` 后的 SQLite Outbox 租约恢复、macOS 受管 Gateway 强杀拉起和
 重新鉴权也已通过；隔离 Linux 网络断开/恢复、持久卷只读和受限 tmpfs 容量耗尽均完成真实故障验收。
