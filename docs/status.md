@@ -26,6 +26,7 @@
 | 外部 Adapter 模板 Doctor                        | 本机真实验证              | 通过部署入口动态加载模板；普通 10/10、live health 11/11                            |
 | Adapter Conformance Kit                         | M3.2 首切片完成           | 独立模块装载、schema v1 JSON、稳定错误码；passed/failed/skipped 不混淆             |
 | SDK-only clean-room Adapter                     | 完成并自动化验证          | 只依赖公共 SDK；文本/流式/恢复/引用/图片/回复动作幂等/取消 8 项通过                |
+| Claude Code 官方 SDK Adapter                    | M3.2 C0 自动化通过        | SDK 0.3.258；init/delta/result/error/resume/abort；默认无工具；未真实认证          |
 | 通用 ACP v1 Adapter                             | 完成并真实验证            | stdio、协商、流式/load/cancel/图片真实通过；permission 自动化通过                  |
 | Codex/ACP 共享 Runtime Contract                 | 完成并自动化验证          | 两个 Adapter 共用文本、流式、首轮 session 与恢复 testkit                           |
 | Kimi Code ACP Adapter                           | 完成并真实验证            | 本机真实两轮及企业微信文本、同会话图片均通过                                       |
@@ -350,6 +351,21 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
   凭据，不收集/中介 Claude.ai token 或共享订阅额度；加入依赖前重跑许可和公开发布审计。
 - 详细协议映射、安全边界及 C0–C3 验收见
   [`claude-code-adapter-evaluation.md`](claude-code-adapter-evaluation.md)。
+
+### 2026-09-02 Claude Code C0 协议闭环
+
+- 新增隔离的 `@fyaic/claude-code-runtime-adapter`，固定官方 Agent SDK `0.3.258`；没有注册到默认 Gateway，
+  因此不会改变当前 Pi 生产/测试服务或把 Claude 变成隐式运行时。
+- deterministic fake 已覆盖官方 init、顶层 `text_delta`、authoritative result、错误脱敏、同 session resume、
+  重复 cancel、引用文本、子 Agent 文本隔离和不支持媒体的 Kernel 前拒绝。
+- subprocess 默认 `settingSources: []`、`tools: []`、`permissionMode: dontAsk`；环境必须由 Adapter 调用方
+  显式给出完整集合，绝不默认展开整个 Gateway `process.env`；WeCom/Gateway secret 与 Claude
+  session/bearer token 会在构造期拒绝，也没有 bypass 权限路径。
+- npm/lockfile 已核对 Node `>=18`、platform optional package 和非 SPDX license 标记。公开检查只对精确
+  package 名和 `0.3.258` 放行，升级会自动 fail closed 并要求重新审计；默认 Docker `--no-optional`
+  不携带该 SDK 或 binary，独立 production deploy 检查已确认 SDK absent 而 Runtime Contract present。
+- 本机没有可用 Claude 凭据，因此 C1 真实 Kernel、企业微信私聊/群聊、图片、审批和 `AskUserQuestion` 仍为
+  明确未通过项；README 不把它计入已支持或真实 Kernel 数量。
 
 ### 2026-09-01 M3.0-B 上游兼容矩阵
 

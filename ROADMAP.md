@@ -93,10 +93,13 @@ in [`docs/ecosystem-watch-and-mainline-plan.md`](docs/ecosystem-watch-and-mainli
 
 - [x] Extract the Adapter checks into an independently runnable conformance kit
       with a deterministic JSON report, and certify one SDK-only clean-room Adapter.
-- Add Claude Code as the next reference Kernel through the official Claude
-  Agent SDK, with streaming, resume, cancellation, image, approval, and native
-  ask-user semantics. Keep it planned until deterministic and real WeCom
-  acceptance pass; users must bring and manage their own Anthropic credential.
+- [x] Add an isolated Claude Code C0 Adapter package through official Claude
+      Agent SDK `0.3.258`, with deterministic init/delta/result/error/resume/abort
+      fixtures, safe default permissions, and exact non-SPDX license review.
+- Complete Claude Code C1 real local text/session/cancel/auth smoke with a
+  user-owned credential, then C2 image/approval/AskUserQuestion before it enters
+  the supported or real-WeCom matrix. Keep the package optional and its
+  commercial terms separate from the repository's MIT code.
 - Track ACP capability negotiation and document an AG-UI event mapping without
   making either protocol a Core dependency.
 - Specify a channel-neutral Transport SPI and validate it with a loopback

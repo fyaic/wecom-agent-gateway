@@ -116,9 +116,10 @@ Kernel 自己拥有工具不等于 `tools`；模型支持图片也不等于 Adap
 | Pi Agent              | 官方 JSONL RPC      | Pi `0.84.2`；GLM-5.2 文本、GLM-4.6V 图片通过   | 流式/恢复/回复动作/取消/状态；动态图片输入；原生选择/确认/文本交互；默认 2-worker 有界并发 |
 | Clean-room 外部示例   | 公共 Adapter SDK    | Contract v1 / report schema v1                 | 文本、流式、恢复、引用、图片、回复动作幂等、取消；不导入 Core/Transport                    |
 
-Claude Code 已于 2026-09-01 纳入下一参考 Kernel 的范围，但尚未加入“已验证”矩阵。计划使用官方 Claude
-Agent SDK，不解析 PTY/TUI；在 streaming、resume、cancel、image、approval、`AskUserQuestion` 和真实
-企业微信矩阵全部通过前，不声明支持。协议与认证/条款边界见
+Claude Code 已于 2026-09-01 纳入下一参考 Kernel 的范围。2026-09-02 已加入隔离的实验性
+`packages/adapter-claude-code` C0 package：固定官方 Agent SDK `0.3.258`，并以 deterministic fake
+验证文本流、session 恢复、取消、错误收口和引用文本。它没有注册到默认 Gateway，也不在真实验证矩阵中；
+图片、审批、`AskUserQuestion` 和真实企业微信证据尚未完成。协议与认证/条款边界见
 [`claude-code-adapter-evaluation.md`](claude-code-adapter-evaluation.md)。
 
 OpenClaw 当前客户端与 Gateway 跨 release train，已通过 `agent.wait + chat.history` 终态对账覆盖事件间隙；

@@ -113,17 +113,24 @@ const licenseInventory = JSON.parse(
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   }),
-) as Record<string, unknown>;
+) as Record<string, DependencyLicenseEntry[]>;
 const reviewedLicenses = new Set([
   "Apache-2.0",
+  "BSD-2-Clause",
   "BSD-3-Clause",
   "ISC",
   "MIT",
   "MPL-2.0",
+  "Unlicense",
 ]);
-for (const license of Object.keys(licenseInventory)) {
-  if (!reviewedLicenses.has(license)) {
-    failures.push(`unreviewed-dependency-license:${license}`);
+for (const [license, entries] of Object.entries(licenseInventory)) {
+  if (reviewedLicenses.has(license)) continue;
+  for (const entry of entries) {
+    if (!isReviewedNonSpdxDependency(entry)) {
+      failures.push(
+        `unreviewed-dependency-license:${license}:${entry.name}@${entry.versions.join(",")}`,
+      );
+    }
   }
 }
 
@@ -177,4 +184,28 @@ function globPackageManifests(parent: string): string[] {
   )
     .split("\n")
     .filter(Boolean);
+}
+
+interface DependencyLicenseEntry {
+  name: string;
+  versions: string[];
+}
+
+function isReviewedNonSpdxDependency(entry: DependencyLicenseEntry): boolean {
+  const reviewedClaudePackages = new Set([
+    "@anthropic-ai/claude-agent-sdk",
+    "@anthropic-ai/claude-agent-sdk-darwin-arm64",
+    "@anthropic-ai/claude-agent-sdk-darwin-x64",
+    "@anthropic-ai/claude-agent-sdk-linux-arm64",
+    "@anthropic-ai/claude-agent-sdk-linux-arm64-musl",
+    "@anthropic-ai/claude-agent-sdk-linux-x64",
+    "@anthropic-ai/claude-agent-sdk-linux-x64-musl",
+    "@anthropic-ai/claude-agent-sdk-win32-arm64",
+    "@anthropic-ai/claude-agent-sdk-win32-x64",
+  ]);
+  return (
+    entry.versions.length === 1 &&
+    entry.versions[0] === "0.3.258" &&
+    reviewedClaudePackages.has(entry.name)
+  );
 }

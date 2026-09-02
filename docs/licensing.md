@@ -1,6 +1,6 @@
 # Licensing and upstream provenance
 
-Updated 2026-09-01.
+Updated 2026-09-02.
 
 ## Project license
 
@@ -21,13 +21,15 @@ permit use from this MIT-licensed project and continue to govern those
 dependencies. The dependency tree also contains permissive licenses and
 MPL-2.0 packages; no dependency is relicensed by this repository.
 
-Claude Code is planned as an optional reference Kernel but is not currently a
-dependency or advertised supported Adapter. The official Claude Agent SDK and
-Claude Code binary are governed by Anthropic's Commercial Terms rather than
-this repository's MIT license. A future Adapter must keep the published binary
-unmodified, require each user to bring and manage their own permitted
-credential, avoid collecting or intermediating Claude.ai login/session tokens,
-and update the dependency inventory and notices before release. See
+Claude Code has an isolated, optional C0 protocol Adapter package but is not
+registered by the default Gateway or advertised as a production-supported
+Kernel. Its exact official Agent SDK dependency is `0.3.258`; the npm manifest
+uses the non-SPDX value `SEE LICENSE IN README.md`, and the package README points
+to Anthropic's Commercial Terms. The published platform binary remains
+unmodified. The SDK is an optional dependency and the default production image's
+`--no-optional` install does not include it. Every user must bring and directly manage a permitted credential;
+the Gateway does not collect or intermediate Claude.ai login/session tokens.
+The dependency and its terms are recorded in `THIRD_PARTY_NOTICES.md`. See
 [`claude-code-adapter-evaluation.md`](claude-code-adapter-evaluation.md).
 
 ## Source provenance rule
@@ -43,8 +45,10 @@ substantially adapted in the future, the change must:
    [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md);
 4. pass maintainer review before merge.
 
-Run `pnpm licenses list` for the complete lockfile-derived inventory. CI also
-rejects an unreviewed dependency license category.
+Run `pnpm licenses list` for the complete lockfile-derived inventory. CI rejects
+unreviewed SPDX categories and permits a non-SPDX package only by exact reviewed
+package name and version; a future Agent SDK upgrade therefore fails closed
+until its terms are reviewed again.
 
 ## Names and trademarks
 

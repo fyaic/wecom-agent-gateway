@@ -1,6 +1,6 @@
 # Claude Code Kernel Adapter 评估
 
-决策日期：2026-09-01。状态：**纳入参考 Kernel 范围，尚未实现或对外声明支持**。
+决策日期：2026-09-01，C0 更新：2026-09-02。状态：**实验性协议 Adapter 已实现，尚未对外声明生产支持**。
 
 ## 决策
 
@@ -8,12 +8,14 @@ Claude Code 应成为 Codex、ACP/Kimi、OpenClaw、Pi 之后的第五个参考 
 也能检验 Runtime Contract 是否真正与 Codex/OpenClaw 的协议假设解耦。
 
 实现仍按主线顺序进入 M3.2：先完成 M3.0 的企业微信真实客户端和上游兼容收口，再开发独立
-`@fyaic/claude-code-runtime-adapter`。不会为了增加 Kernel 数量打断 IM 保真、投递可靠性和生产认证。
+`@fyaic/claude-code-runtime-adapter`。C0 已以隔离 workspace package 落地，但没有注册进默认 Gateway；
+不会为了增加 Kernel 数量打断 IM 保真、投递可靠性和生产认证。
 
 首选上游接口是官方
 [`@anthropic-ai/claude-agent-sdk`](https://github.com/anthropics/claude-agent-sdk-typescript)，
 不是终端 PTY 抓取，也不是直接调用 Messages API 后自行重写 Agent loop。2026-09-01 的 npm 快照为
-Agent SDK `0.3.252`、Claude Code `2.1.252`；实现时仍须固定精确版本并重新审计 changelog。
+Agent SDK `0.3.252`、Claude Code `2.1.252`；实际 C0 锁定并审计了 Agent SDK `0.3.258`。其
+platform package 携带未修改 binary，后续升级必须再次通过依赖条款与 conformance 审计。
 
 ## 为什么值得纳入
 
@@ -100,9 +102,15 @@ Claude Agent SDK 与 Claude Code 并非按本项目 MIT 许可证重新授权。
 
 ### C0：协议 spike
 
-- 固定 SDK/Claude Code 版本，使用 deterministic fake 验证 init、delta、result、error、resume 和 abort。
-- 验证 SDK 包/二进制的安装、条款、可选依赖和最小运行环境；不加入默认 Gateway 启动路径。
-- 记录 `startup()` 对 subprocess-ready 和首文本延迟的分层改善，不发送模型预热 Prompt。
+- [x] 固定 Agent SDK `0.3.258`，使用 deterministic fake 验证 init、delta、result、error、resume 和 abort。
+- [x] 验证 SDK 包/平台 binary 的安装、条款、可选依赖和 Node `>=18`；没有加入默认 Gateway 启动路径。
+- [x] SDK 使用精确版本 `optionalDependencies`；默认生产镜像的 `--no-optional` 不携带 SDK 或 platform binary。
+- [x] 默认 `settingSources: []`、`tools: []`、`permissionMode: dontAsk`，只接收显式完整 subprocess
+      environment；不继承 Gateway 全部环境，拒绝 WeCom/Gateway secret 和 Claude session/bearer token，
+      也不允许 permission bypass。
+- [x] 只声明文本/引用文本、streaming、resume、cancel；media、工具和交互在实现并验证前 fail closed。
+- [ ] 在有用户自有凭据的 C1 环境测量普通 `query()` 与 `startup()` 的 subprocess-ready、首文本和总耗时；
+      不发送模型预热 Prompt，也不把本机未认证状态伪装成通过。
 
 ### C1：安全文本闭环
 
