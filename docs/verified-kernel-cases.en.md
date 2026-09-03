@@ -17,7 +17,7 @@ flowchart LR
 
 ## Real-client snapshot
 
-The complete 26-second client path—immediate status, final reply, confirmation,
+The recorded 26-second client path—immediate status, final reply, confirmation,
 same-task resume, and proactive text/image—is available as a
 [`GIF`](assets/demo/wecom-agent-gateway-demo.gif) or
 [`high-resolution MP4`](assets/demo/wecom-agent-gateway-demo.mp4). Raw desktop
@@ -39,6 +39,12 @@ Ordinary replies do not attach a default card.
 | OpenClaw         | Gateway WebSocket v4         | Direct/group, resume, image/file/MP4                                      | Resumed direct turn: ack 446ms, first text 8.46s, complete 9.98s                |
 | Pi Agent         | Official strict-LF JSONL RPC | Direct/group, resume, image, worker pool, ask-user, approval, cancel      | Two direct turns: ack 400/385ms, first text 3.919/2.638s, complete 4.610/3.382s |
 | Generic ACP      | ACP v1 stdio                 | Real stdio initialize, capability negotiation, load/cancel/image contract | Kimi is the current real WeCom end-to-end implementation of this path           |
+
+“MP4” in the OpenClaw row means that a real message reached the Adapter and
+received a capability-aware response. It does not prove model video
+understanding and cannot replace acceptance of a native `msgtype=video`
+callback. Every media claim is scoped to the explicitly listed Kernel,
+direction, and dated observation.
 
 These measurements describe one dated local environment, not an SLA. Channel
 acknowledgement and Kernel first-text latency are recorded separately so that

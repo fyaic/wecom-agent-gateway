@@ -17,7 +17,7 @@ flowchart LR
 
 ## 真实客户端快照
 
-完整 26 秒真实客户端链路（即时状态、最终回复、确认卡片、原任务恢复、主动文本/图片）见
+26 秒真实客户端演示记录（即时状态、最终回复、确认卡片、原任务恢复、主动文本/图片）见
 [`GIF 演示`](assets/demo/wecom-agent-gateway-demo.gif) 或
 [`高清 MP4`](assets/demo/wecom-agent-gateway-demo.mp4)。原始桌面截图不进入仓库。
 
@@ -36,6 +36,9 @@ Adapter 返回指定文本；上方卡片来自单独的显式交互请求。默
 | OpenClaw         | Gateway WebSocket v4   | 私聊、群聊、多轮恢复、图片/文件/MP4                      | 私聊续接：回执 446ms，首文本 8.46s，完成 9.98s                   |
 | Pi Agent         | 官方 LF JSONL RPC      | 私聊/群聊、恢复、图片、worker pool、ask-user、审批与取消 | 私聊两轮：回执 400/385ms，首文本 3.919/2.638s，完成 4.610/3.382s |
 | 通用 ACP         | ACP v1 stdio           | 真实 stdio 初始化、能力协商、load/cancel/image contract  | Kimi 是当前通用 ACP 路径的真实企业微信端到端实现                 |
+
+表中的 OpenClaw “MP4”只表示真实消息到达 Adapter 并得到能力相关回复，不表示模型已理解视频，也不能替代原生
+`msgtype=video` callback 验收。所有媒体项都只对表中明确写出的 Kernel、方向和日期成立。
 
 ## 外部 Adapter 一致性证据
 

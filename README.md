@@ -13,7 +13,7 @@
   <a href="#26-秒看懂"><strong>26 秒演示</strong></a> ·
   <a href="#快速开始"><strong>快速开始</strong></a> ·
   <a href="docs/verified-kernel-cases.md">真实案例</a> ·
-  <a href="#已支持的-agent"><strong>Agent 支持</strong></a> ·
+  <a href="#参考-agent-adapter"><strong>Agent Adapter</strong></a> ·
   <a href="docs/README.md">文档</a> ·
   <a href="README.en.md">English</a>
 </p>
@@ -24,14 +24,31 @@
 
 **企业微信负责触达，Agent 负责思考，Gateway 负责把中间链路做好。**
 
-用户在企业微信里像平常聊天一样发送文字、图片、文件或视频；Gateway 使用企业微信官方 SDK 接收消息，
-维护会话与流式回复，再通过一个稳定的 Runtime Contract 交给所选 Agent。Agent 也可以沿同一条受控链路
-主动发消息、返回媒体，或发起确认、选择和取消等原生交互。
+用户在企业微信里像平常聊天一样发送文字和媒体；Gateway 使用企业微信官方 SDK 接收实际产生的 callback，
+维护会话与流式回复，再通过一个稳定的 Runtime Contract 按 Adapter 已声明能力交给所选 Agent。Agent 也可以
+沿同一条受控链路主动发消息、返回媒体，或发起确认、选择和取消等原生交互。
 
 > [!IMPORTANT]
 > 本项目是独立社区项目，不是腾讯企业微信官方产品。只需要 OpenClaw 的用户应同时评估企业微信官方
 > [`wecom-openclaw-plugin`](https://github.com/WecomTeam/wecom-openclaw-plugin)；本项目的重点是
 > 多 Kernel、稳定 Runtime Contract 和独立可靠传输层。
+
+## 当前证据边界
+
+本仓库处于 **Public Preview**，不是“所有功能均已端到端完成”或“生产认证完成”。以下状态刻意区分代码实现、
+确定性自动化和真实企业微信客户端证据：
+
+| 能力                          | 当前证据                                                                                               |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------ |
+| 私聊/群聊文本与流式回复       | **真实通过**：授权客户端、真实 Bot 与多个 Kernel 均有记录                                              |
+| 图片、普通文件与主动媒体      | **部分真实通过**：具体输入/输出仍按 Adapter 能力分别验收                                               |
+| 视频                          | **部分通过**：协议 fixture 和媒体生命周期自动化通过；桌面 MP4 语义分类/明确拒绝真实通过                |
+| 原生 `msgtype=video` callback | **未完成**：尚未捕获真实客户端 callback；当前 Pi Adapter 也不能理解视频                                |
+| 引用/回复 callback            | **未完成真实验收**：Contract、媒体生命周期及 Adapter 映射已自动化通过，真实客户端入口仍待证明          |
+| 生产运行                      | **未完成生产认证**：单机部署/故障基线已覆盖；宿主机物理断网、24 小时 Linux soak 与跨主机多实例仍未完成 |
+
+权威明细见[当前状态](docs/status.md)、[路线图](ROADMAP.md)和[证据声明规范](docs/evidence-claims.md)。任何
+“已支持”都必须同时说明是实现能力、自动化证据还是真实端到端证据。
 
 ## 为什么需要它
 
@@ -125,20 +142,24 @@ Gateway 在 allowlist 为空时拒绝启动；`.env`、SQLite、日志和媒体�
 | ---------------- | --------------------------------------------------------------------------------------- |
 | 官方企业微信链路 | 复用官方 SDK 的鉴权、心跳、重连、媒体下载/解密、流式回复和主动推送                      |
 | Kernel 中立接入  | Core 不依赖模型厂商；Codex、ACP/Kimi、OpenClaw、Pi 与外部 Adapter 共用 Runtime Contract |
-| 对话与多模态保真 | 私聊、群聊、引用上下文、文字、图片、文件和视频二进制按能力精确协商，不伪造占位          |
+| 对话与多模态保真 | 对已收到的私聊、群聊、引用上下文、文字和媒体按能力精确协商；未验收项明确 fail closed    |
 | 丝滑 Bot UX      | 即时回执、同一消息流式更新、显式状态/emoji，以及可选确认、选择、审批和取消卡片          |
 | 可靠双向投递     | SQLite Outbox、重试、死信、崩溃恢复、受保护媒体 spool 和授权范围内的 Agent 主动消息     |
 | 安全与运维       | 分域 ACL、最小子进程环境、写工具审批、隐私日志、健康检查、Prometheus、systemd/容器基线  |
 
-## 已支持的 Agent
+## 参考 Agent Adapter
 
-| Adapter   | 上游接口               | 已验证能力                                                                      |
+| Adapter   | 上游接口               | 已实现或已协商能力                                                              |
 | --------- | ---------------------- | ------------------------------------------------------------------------------- |
 | Codex     | SDK / App Server JSONL | 流式、恢复、回复动作、原生提问、取消、状态、审批、动态工具、图片/音频           |
 | Kimi Code | ACP v1 stdio           | 流式、恢复、回复动作、取消、权限、状态、图片                                    |
 | 通用 ACP  | ACP v1 stdio           | 按 `initialize` 动态协商恢复、回复动作和输入模态                                |
 | OpenClaw  | Gateway WebSocket v4   | 流式、恢复、回复动作、取消、状态、图片/音频/视频/文件                           |
 | Pi Agent  | 官方严格 LF JSONL RPC  | 流式、恢复、回复动作、取消、状态、动态图片输入、有界 worker pool、原生 ask-user |
+
+该表描述 Adapter 的实现/协议范围，**不代表每项能力都已完成真实企业微信端到端验收**。真实场景、证据等级和
+未完成项以 [`docs/verified-kernel-cases.md`](docs/verified-kernel-cases.md) 与
+[`docs/status.md`](docs/status.md) 为准；尤其原生视频 callback 和当前 Pi 视频理解尚未完成。
 
 每个 Gateway 进程只选择一个确定的 Kernel，不根据自然语言动态切换。第三方 Kernel 可以按照
 [`docs/adapter-authoring.md`](docs/adapter-authoring.md) 使用 `@fyaic/wecom-adapter-sdk` 实现小型

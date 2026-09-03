@@ -9,6 +9,7 @@
 - [`interaction-cards.md`](interaction-cards.md)：Agent 交互卡片、Interaction Broker、状态机、UX 与里程碑。
 - [`real-wecom-runbook.md`](real-wecom-runbook.md)：真实 Bot 凭据、白名单与收发联调手册。
 - [`status.md`](status.md)：实际完成项、验证结果、未验证项和下一步。
+- [`evidence-claims.md`](evidence-claims.md)：实现、自动化、真实链路与完整认证的声明规范。
 - [`adapter-authoring.md`](adapter-authoring.md)：第三方 Kernel Adapter 的 v1 契约、能力语义与兼容矩阵。
 - [`adapter-conformance.md`](adapter-conformance.md)：独立 Adapter 一致性工具、机器可读报告、检查边界与 clean-room 证据。
 - [`transport-authoring.md`](transport-authoring.md)：版本化 Channel Transport SPI、能力约束、送达层级和 loopback conformance。

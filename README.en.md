@@ -13,7 +13,7 @@
   <a href="#26-second-demo"><strong>26-second demo</strong></a> ·
   <a href="#quick-start"><strong>Quick start</strong></a> ·
   <a href="docs/verified-kernel-cases.en.md">Real cases</a> ·
-  <a href="#supported-agents"><strong>Agent support</strong></a> ·
+  <a href="#reference-agent-adapters"><strong>Agent Adapters</strong></a> ·
   <a href="docs/README.md">Documentation</a> ·
   <a href="README.md">简体中文</a>
 </p>
@@ -26,11 +26,12 @@ OpenClaw, Pi Agent, and other Agent kernels.
 **WeCom provides reach. The Agent provides intelligence. The Gateway makes the
 path between them reliable.**
 
-People send text, images, files, or video through an ordinary WeCom
-conversation. The Gateway receives them through the official SDK, owns session
-and streaming behavior, and hands a stable Runtime Contract to the selected
-Agent. The Agent can use the same controlled path to push messages and media or
-ask for native confirmation, selection, and cancellation.
+People send text and media through an ordinary WeCom conversation. The Gateway
+receives the callbacks the client actually produces through the official SDK,
+owns session and streaming behavior, and hands a stable Runtime Contract to the
+selected Agent according to declared Adapter capabilities. The Agent can use
+the same controlled path to push messages and media or ask for native
+confirmation, selection, and cancellation.
 
 > [!IMPORTANT]
 > This is an independent community project, not an official Tencent WeCom
@@ -38,6 +39,27 @@ ask for native confirmation, selection, and cancellation.
 > [`wecom-openclaw-plugin`](https://github.com/WecomTeam/wecom-openclaw-plugin).
 > This project is for multiple kernels, a stable Runtime Contract, and an
 > independently reliable IM layer.
+
+## Current evidence boundary
+
+This repository is a **Public Preview**, not a claim that every feature is
+end-to-end complete or production-certified. Status deliberately separates
+implementation, deterministic automation, and evidence from a real WeCom
+client:
+
+| Capability                        | Current evidence                                                                                                    |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Direct/group text and streaming   | **Real path passed** with authorized clients, a real Bot, and multiple Kernels                                      |
+| Images, generic files, media push | **Partly real-path tested**; each input/output direction still depends on the selected Adapter                      |
+| Video                             | **Partial**: protocol fixtures and lifecycle automation pass; desktop MP4 semantic classification/rejection is real |
+| Native `msgtype=video` callback   | **Pending**: no real client callback captured; the current Pi Adapter cannot understand video                       |
+| Quoted/replied callback           | **Real-path acceptance pending**; Contract, media lifecycle, and Adapter mapping are deterministic                  |
+| Production operation              | **Not production-certified**; host NIC loss, 24-hour Linux soak, and cross-host multi-instance remain pending       |
+
+See the authoritative [status](docs/status.md), [roadmap](ROADMAP.md), and
+[evidence-claim policy](docs/evidence-claims.md). Every support claim must say
+whether it means implementation, deterministic evidence, or real end-to-end
+evidence.
 
 ## Why it exists
 
@@ -144,20 +166,27 @@ complete acceptance, and smoke commands; the
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | Official WeCom path             | Official SDK authentication, heartbeat, reconnect, media download/decryption, streaming replies, and proactive push                     |
 | Kernel-neutral integration      | Codex, ACP/Kimi, OpenClaw, Pi, and external Adapters share one Runtime Contract; Core has no model-vendor types                         |
-| Conversation and media fidelity | Direct/group messages, quoted context, text, images, files, and video binary use exact capability negotiation                           |
+| Conversation and media fidelity | Received direct/group messages, quoted context, text, and media use capability negotiation; unaccepted paths fail closed                |
 | Native Bot UX                   | Immediate acknowledgement, in-place streaming, explicit status/emoji, and optional confirmation, selection, approval, and cancel cards  |
 | Reliable bidirectional delivery | SQLite outbox, retry, dead letters, crash recovery, protected media spool, and authorized proactive Agent messages                      |
 | Security and operation          | Scoped ACLs, least-environment child processes, write approvals, privacy-safe logs, health, Prometheus, and systemd/container baselines |
 
-## Supported Agents
+## Reference Agent Adapters
 
-| Adapter     | Upstream interface           | Validated capabilities                                                                                   |
+| Adapter     | Upstream interface           | Implemented or negotiated capabilities                                                                   |
 | ----------- | ---------------------------- | -------------------------------------------------------------------------------------------------------- |
 | Codex       | SDK / App Server JSONL       | Streaming, resume, reply actions, native ask-user, cancel, status, approvals, dynamic tools, image/audio |
 | Kimi Code   | ACP v1 stdio                 | Streaming, resume, reply actions, cancel, permissions, status, image                                     |
 | Generic ACP | ACP v1 stdio                 | Resume, reply actions, and input modalities negotiated through `initialize`                              |
 | OpenClaw    | Gateway WebSocket v4         | Streaming, resume, reply actions, cancel, status, image/audio/video/file                                 |
 | Pi Agent    | Official strict-LF JSONL RPC | Streaming, resume, reply actions, cancel, status, dynamic image input, bounded workers, native ask-user  |
+
+This table describes Adapter implementation/protocol scope; it **does not mean
+that every capability has passed a real WeCom end-to-end test**. Use the
+[real-case matrix](docs/verified-kernel-cases.en.md) and
+[status](docs/status.md) for evidence levels and open items. In particular,
+native video callbacks and video understanding by the current Pi Adapter remain
+unfinished.
 
 One Gateway process hosts one explicitly selected Kernel. Add another Kernel
 with the [Adapter authoring guide](docs/adapter-authoring.md),

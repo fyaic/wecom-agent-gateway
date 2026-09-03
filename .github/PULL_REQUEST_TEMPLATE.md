@@ -13,6 +13,9 @@ Describe the problem and the smallest coherent solution.
 - [ ] Added or updated deterministic fake-backed tests.
 - [ ] Ran `pnpm run ci` locally.
 - [ ] Updated public docs, compatibility tables, or ADRs as needed.
+- [ ] Capability claims follow `docs/evidence-claims.md`: implementation,
+      deterministic automation, real-client evidence, and end-to-end
+      certification are not conflated; untested paths are listed above.
 - [ ] No credentials, internal IDs, real employee/conversation names, message
       contents, media URLs, private paths, or model output were committed.
 - [ ] New or adapted third-party source is documented in

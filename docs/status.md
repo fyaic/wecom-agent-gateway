@@ -19,7 +19,7 @@
 | Channel/Kernel 分层延迟事件                     | 完成并自动化验证          | 队列、首回执、Kernel 首事件/首文本、完成/失败分别记录                              |
 | Transport/Kernel capability 声明                | 完成并真实验证            | ACP initialize 与 Transport capability 共同约束流式、恢复和多模态                  |
 | Channel Transport Contract v1                   | M3.3 首切片完成           | 启动期版本/能力检查；vendor-free loopback 固定 22 项 conformance                   |
-| 精确输入/输出模态契约                           | 完成并自动化/真实验证     | Core 按 Transport/Adapter 类型集合 fail closed；图片、文件、MP4 链路通过           |
+| 精确输入/输出模态契约                           | 部分真实验证              | 类型集合 fail closed；图片/文件真实通过；MP4 仅语义分类和视频能力拒绝真实通过      |
 | 原生视频 callback 生命周期                      | M3.0-C 自动化通过         | 官方无 filename frame、SDK 解密、MIME/权限/清理、Kernel 零调用与后续文本恢复       |
 | Adapter Host 生命周期                           | 完成并自动化验证          | Adapter ready 后开放入口；停入口、排空任务后释放 Adapter                           |
 | 配置驱动 Adapter Registry                       | 完成并自动化验证          | `codex` / `kimi` / 任意 ACP v1 可执行程序；Core 无厂商类型                         |
@@ -206,9 +206,10 @@ ChatGPT-auth-compatible HTTP-only provider，保留现有 ChatGPT 登录身份�
   受限死信 CLI、Pi 强制受管重启、SDK 网络恢复、真实只读卷和受限容量耗尽恢复已完成；宿主机级
   网络中断、多实例全局顺序和共享背压未完成。
 
-Beta 传输闭环已经成立：文本、图片、文件、MP4 二进制、流式可变消息、会话恢复、并发与持久化
-投递均有自动化或真实证据；Codex、Kimi、OpenClaw、Pi 四种真实接入已证明 Adapter 契约中立。
-MP4 验收中 Agent 明确报告缺少视频解析工具，属于 Kernel 工具能力，不是 Gateway 链路失败。
+Public Preview 已分别积累文本、图片、文件、桌面 MP4 语义分类、流式可变消息、会话恢复、并发与持久化
+投递的自动化或真实证据；这不是整个传输能力已完成认证。Codex、Kimi、OpenClaw、Pi 的真实接入证明了
+Adapter 契约可替换，但不代表每个 Adapter 的每种模态都真实通过。MP4 验收只到达视频 capability 门；当前
+Pi 不支持视频输入，且真实原生 `msgtype=video` callback 仍未捕获，因此不得称为视频端到端闭环。
 可部署检查基线、OpenClaw 本机 GLM 两轮、企业微信私聊文本/恢复/图片、授权群聊和受管服务均已完成。
 OpenClaw 第三 Kernel 阶段闭环；Adapter 公共契约 v1、启动期拒绝和版本兼容矩阵也已固化。Pi 官方
 JSONL RPC Adapter 的代码、Registry、Doctor、两轮 smoke 与 fake contract 已完成；Pi `0.84.2`、

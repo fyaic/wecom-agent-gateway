@@ -8,6 +8,9 @@ tagged.
 
 ### Added
 
+- A public evidence-claim policy, prominent bilingual capability boundaries,
+  PR review checklist, and CI guard that prevents critical pending real-client
+  work from disappearing from release-facing documentation.
 - An opt-in, credential-safe Claude Code C1 smoke command for real two-turn
   session continuity and cancellation through the official Agent SDK.
 - A versioned Channel Transport Contract, startup compatibility guard,

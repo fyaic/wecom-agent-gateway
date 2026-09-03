@@ -72,6 +72,9 @@ The repository must remain private until every blocking item below is complete.
 - [x] Attach only reproducible, checksummed artifacts; never attach local config,
       databases, logs, transcripts, or media.
 - [x] Announce Public Preview limitations and unsupported production guarantees.
+- [x] Keep the bilingual README evidence boundary and critical pending callback
+      disclosures enforced by `public:check`; follow `evidence-claims.md` for
+      every capability and release claim.
 - [x] Verify badges, documentation links, issue forms, and Security Advisory flow
       as an unauthenticated visitor.
 
