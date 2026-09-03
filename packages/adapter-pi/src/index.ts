@@ -519,24 +519,46 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
  * those sentinels must not cross the vendor-neutral Runtime Contract.
  */
 function normalizePiVisibleText(raw: string): string {
-  if (!/<\/?think(?:ing)?(?:\s[^>]*)?>/i.test(raw)) return raw;
-
-  const closing = /<\/think(?:ing)?>/gi;
-  let lastCloseEnd = -1;
-  for (const match of raw.matchAll(closing)) {
-    lastCloseEnd = (match.index ?? 0) + match[0].length;
+  const lower = raw.toLowerCase();
+  const closingTags = ["</think>", "</thinking>"];
+  let lastClose = -1;
+  let lastCloseLength = 0;
+  for (const tag of closingTags) {
+    const index = lower.lastIndexOf(tag);
+    if (index > lastClose) {
+      lastClose = index;
+      lastCloseLength = tag.length;
+    }
   }
-  if (lastCloseEnd >= 0) {
-    return raw
-      .slice(lastCloseEnd)
-      .replace(/<\/?think(?:ing)?(?:\s[^>]*)?>/gi, "")
-      .trim();
+  if (lastClose >= 0) {
+    return stripPiThinkingTags(raw.slice(lastClose + lastCloseLength)).trim();
   }
 
-  const opening = raw.search(/<think(?:ing)?(?:\s[^>]*)?>/i);
-  return (opening >= 0 ? raw.slice(0, opening) : raw)
-    .replace(/<\/?think(?:ing)?(?:\s[^>]*)?>/gi, "")
-    .trimEnd();
+  const openingTags = ["<think>", "<thinking>"];
+  let firstOpen = -1;
+  for (const tag of openingTags) {
+    const index = lower.indexOf(tag);
+    if (index >= 0 && (firstOpen < 0 || index < firstOpen)) firstOpen = index;
+  }
+  if (firstOpen < 0) return raw;
+  return stripPiThinkingTags(raw.slice(0, firstOpen)).trimEnd();
+}
+
+function stripPiThinkingTags(value: string): string {
+  const tags = ["<think>", "</think>", "<thinking>", "</thinking>"];
+  const lower = value.toLowerCase();
+  const result: string[] = [];
+  let cursor = 0;
+  while (cursor < value.length) {
+    const tag = tags.find((candidate) => lower.startsWith(candidate, cursor));
+    if (tag) {
+      cursor += tag.length;
+    } else {
+      result.push(value[cursor]!);
+      cursor += 1;
+    }
+  }
+  return result.join("");
 }
 
 function appendOnlySuffix(existing: string, next: string): string {
