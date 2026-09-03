@@ -25,3 +25,15 @@ Image input, tools, approvals, native user questions, real WeCom evidence, and
 durable interaction recovery remain C1/C2 work. Each deployment must provide
 and manage its own Anthropic credential under Anthropic's applicable terms.
 The Adapter does not accept or persist Claude.ai session tokens.
+
+An operator with a user-owned, already configured credential can run the C1
+text/session/cancel probe explicitly:
+
+```bash
+pnpm smoke:claude-code-adapter -- --confirm-real-claude
+```
+
+The command uses an empty temporary workspace, disables tools and settings,
+passes only a small non-secret process environment, prints timings rather than
+model text or session IDs, and removes its workspace afterward. A signed-out
+SDK returns the stable `Claude Code authentication is unavailable` diagnostic.

@@ -27,7 +27,7 @@
 | 外部 Adapter 模板 Doctor                        | 本机真实验证              | 通过部署入口动态加载模板；普通 10/10、live health 11/11                            |
 | Adapter Conformance Kit                         | M3.2 首切片完成           | 独立模块装载、schema v1 JSON、稳定错误码；passed/failed/skipped 不混淆             |
 | SDK-only clean-room Adapter                     | 完成并自动化验证          | 只依赖公共 SDK；文本/流式/恢复/引用/图片/回复动作幂等/取消 8 项通过                |
-| Claude Code 官方 SDK Adapter                    | M3.2 C0 自动化通过        | SDK 0.3.258；init/delta/result/error/resume/abort；默认无工具；未真实认证          |
+| Claude Code 官方 SDK Adapter                    | M3.2 C0 + C1 工具完成     | SDK 0.3.258；真实 smoke 入口与 signed-out 诊断通过；成功 text/session 待自有凭据   |
 | 通用 ACP v1 Adapter                             | 完成并真实验证            | stdio、协商、流式/load/cancel/图片真实通过；permission 自动化通过                  |
 | Codex/ACP 共享 Runtime Contract                 | 完成并自动化验证          | 两个 Adapter 共用文本、流式、首轮 session 与恢复 testkit                           |
 | Kimi Code ACP Adapter                           | 完成并真实验证            | 本机真实两轮及企业微信文本、同会话图片均通过                                       |
@@ -129,6 +129,7 @@
 | 2026-09-01 | 私聊与授权群普通消息基线      | 通过   | 私聊严格回复约 5.5s；群聊真实 @Bot 回执 492ms、首文本 3.827s、总计 5.573s，均无默认动作卡                        |
 | 2026-09-01 | M3.0-B SDK 兼容回归           | 通过   | Pi 私聊严格回复约 11.6s；群聊真实 @Bot 回执 500ms、首文本 2.893s、总计 3.855s；Outbox 零积压/死信                |
 | 2026-09-03 | 桌面 MP4 与 Pi 输出边界       | 通过   | file wire → video 语义拒绝 1.196s；后续文本 15.208s 单条干净完成；临时目录、Outbox 积压和死信均为 0              |
+| 2026-09-03 | Claude Code C1 认证失效       | 通过   | 官方 SDK 真实返回 signed-out；Adapter 仅输出固定认证不可用诊断，未泄漏登录正文；C1 成功路径仍待自有凭据          |
 | 2026-09-02 | 桌面 MP4 能力拒绝与后续文本   | 通过   | 桌面端仍回调为 file；物化 2.414s、3.177s 明确拒绝且 Pi 零调用；紧随文本 7.405s 完成，临时目录归零                |
 | 2026-09-02 | Codex SDK 0.151.0 升级        | 通过   | 完整 CI 后真实 App Server 两轮完成；首文本 8.468s/2.528s、总计 9.077s/2.919s，同 session 恢复                    |
 | 2026-09-02 | OpenClaw Client beta.3 升级   | 通过   | 本机既有 Gateway/钥匙串凭据；两轮严格回复，首文本 11.464s/6.512s、完成 11.633s/6.587s，同 session 恢复           |

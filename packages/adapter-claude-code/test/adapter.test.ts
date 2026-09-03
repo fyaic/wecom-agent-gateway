@@ -204,6 +204,29 @@ describe("ClaudeCodeRuntimeAdapter", () => {
     expect(JSON.stringify(actual)).not.toContain("secret-bearing");
   });
 
+  it("classifies signed-out SDK results without forwarding login text", async () => {
+    const adapter = new ClaudeCodeRuntimeAdapter({
+      queryFactory: () =>
+        messages([
+          init("session-signed-out"),
+          {
+            type: "result",
+            subtype: "success",
+            is_error: true,
+            result: "Not logged in · Please run /login",
+            session_id: "session-signed-out",
+          },
+        ]),
+    });
+
+    const actual = await collect(adapter.run({ message: inbound }));
+    expect(actual.at(-1)).toEqual({
+      type: "failed",
+      message: "Claude Code authentication is unavailable",
+    });
+    expect(JSON.stringify(actual)).not.toContain("/login");
+  });
+
   it("aborts the active SDK query and makes repeated cancel safe", async () => {
     let parameters: ClaudeCodeQueryParameters | undefined;
     const adapter = new ClaudeCodeRuntimeAdapter({

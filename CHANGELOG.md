@@ -8,6 +8,8 @@ tagged.
 
 ### Added
 
+- An opt-in, credential-safe Claude Code C1 smoke command for real two-turn
+  session continuity and cancellation through the official Agent SDK.
 - A versioned Channel Transport Contract, startup compatibility guard,
   vendor-free loopback reference, and privacy-safe 22-check Transport
   conformance report with explicit acceptance-versus-visibility semantics.
@@ -49,6 +51,8 @@ tagged.
 
 ### Fixed
 
+- Classify Claude Code signed-out results as a stable authentication diagnostic
+  without forwarding the SDK's login text or accepting session credentials.
 - Classify protected generic-file uploads by detected MIME at the Transport
   boundary, so desktop MP4 uploads reach Kernel capability checks as semantic
   video while retaining the original WeCom `msgtype` in metadata.
