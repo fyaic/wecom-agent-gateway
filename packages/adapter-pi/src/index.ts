@@ -63,6 +63,7 @@ interface PiSessionState {
 interface ActiveRun {
   sessionId: string;
   queue: AsyncEventQueue;
+  rawText: string;
   text: string;
   settling: boolean;
   interaction?: PendingPiInteraction;
@@ -205,6 +206,7 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
       const active: ActiveRun = {
         sessionId: opaqueSessionId,
         queue,
+        rawText: "",
         text: "",
         settling: false,
       };
@@ -447,10 +449,15 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
       const delta = recordValue(event.assistantMessageEvent);
       const deltaType = stringValue(delta?.type);
       if (deltaType === "text_delta") {
-        const text = stringValue(delta?.delta);
-        if (text) {
-          active.text += text;
-          active.queue.push({ type: "text-delta", text });
+        const raw = stringValue(delta?.delta);
+        if (raw) {
+          active.rawText += raw;
+          const visible = normalizePiVisibleText(active.rawText);
+          const text = appendOnlySuffix(active.text, visible);
+          if (text) {
+            active.text += text;
+            active.queue.push({ type: "text-delta", text });
+          }
         }
       } else if (deltaType === "thinking_start") {
         active.queue.push({ type: "status", phase: "thinking" });
@@ -470,8 +477,9 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
       const response = await this.command<{ text?: string | null }>({
         type: "get_last_assistant_text",
       });
-      const authoritative =
-        typeof response.data?.text === "string" ? response.data.text : "";
+      const authoritative = normalizePiVisibleText(
+        typeof response.data?.text === "string" ? response.data.text : "",
+      );
       if (!active.text && authoritative) {
         active.text = authoritative;
         active.queue.push({ type: "text-delta", text: authoritative });
@@ -503,6 +511,59 @@ export class PiRuntimeAdapter implements AgentRuntimeAdapter {
       throw new Error("Pi session is outside configured storage roots");
     }
   }
+}
+
+/**
+ * Some OpenAI-compatible providers occasionally place their private reasoning
+ * sentinels in Pi's assistant text. Pi owns provider protocol adaptation, so
+ * those sentinels must not cross the vendor-neutral Runtime Contract.
+ */
+function normalizePiVisibleText(raw: string): string {
+  const lower = raw.toLowerCase();
+  const closingTags = ["</think>", "</thinking>"];
+  let lastClose = -1;
+  let lastCloseLength = 0;
+  for (const tag of closingTags) {
+    const index = lower.lastIndexOf(tag);
+    if (index > lastClose) {
+      lastClose = index;
+      lastCloseLength = tag.length;
+    }
+  }
+  if (lastClose >= 0) {
+    return stripPiThinkingTags(raw.slice(lastClose + lastCloseLength)).trim();
+  }
+
+  const openingTags = ["<think>", "<thinking>"];
+  let firstOpen = -1;
+  for (const tag of openingTags) {
+    const index = lower.indexOf(tag);
+    if (index >= 0 && (firstOpen < 0 || index < firstOpen)) firstOpen = index;
+  }
+  if (firstOpen < 0) return raw;
+  return stripPiThinkingTags(raw.slice(0, firstOpen)).trimEnd();
+}
+
+function stripPiThinkingTags(value: string): string {
+  const tags = ["<think>", "</think>", "<thinking>", "</thinking>"];
+  const lower = value.toLowerCase();
+  const result: string[] = [];
+  let cursor = 0;
+  while (cursor < value.length) {
+    const tag = tags.find((candidate) => lower.startsWith(candidate, cursor));
+    if (tag) {
+      cursor += tag.length;
+    } else {
+      result.push(value[cursor]!);
+      cursor += 1;
+    }
+  }
+  return result.join("");
+}
+
+function appendOnlySuffix(existing: string, next: string): string {
+  if (!next || next === existing || existing.endsWith(next)) return "";
+  return next.startsWith(existing) ? next.slice(existing.length) : "";
 }
 
 function piInteractionRequest(event: JsonRecord):

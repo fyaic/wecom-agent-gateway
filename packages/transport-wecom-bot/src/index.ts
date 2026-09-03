@@ -477,13 +477,15 @@ export class WeComBotTransport implements ChannelTransport {
             part.type,
             index,
           );
+          const mimeType = detectMime(downloaded.buffer, name);
+          const type = semanticMediaType(part.type, mimeType);
           const path = join(directory, name);
           await writeFile(path, downloaded.buffer, { mode: 0o600, flag: "wx" });
           parts.push({
-            type: part.type,
+            type,
             path,
             name,
-            mimeType: detectMime(downloaded.buffer, name),
+            mimeType,
             sizeBytes: downloaded.buffer.length,
           });
         }
@@ -976,6 +978,22 @@ function detectMime(buffer: Buffer, filename: string): string | undefined {
     ".m4a": "audio/mp4",
     ".mp4": "video/mp4",
   }[extension];
+}
+
+/**
+ * WeCom desktop clients can upload media such as MP4 through the generic file
+ * frame. The Runtime Contract describes the protected content's semantic
+ * modality; the original wire msgtype remains available in message metadata.
+ */
+function semanticMediaType(
+  type: Exclude<MessagePart["type"], "text">,
+  mimeType: string | undefined,
+): Exclude<MessagePart["type"], "text"> {
+  if (type !== "file" || !mimeType) return type;
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType.startsWith("audio/")) return "audio";
+  if (mimeType.startsWith("video/")) return "video";
+  return type;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

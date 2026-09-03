@@ -149,6 +149,37 @@ describe("PiRuntimeAdapter", () => {
     await adapter.stop();
   });
 
+  it("keeps provider-private thinking sentinels out of streamed output", async () => {
+    const fake = new FakePiClient({ settlePrompts: false });
+    const adapter = createAdapter(fake);
+    await adapter.start();
+    const run = collect(
+      adapter.run({ message: message([{ type: "text", text: "hello" }]) }),
+    );
+    await fake.waitForPrompt();
+
+    fake.lastText = "视频后续链路正常</think>\n视频后续链路正常";
+    fake.emit({
+      type: "message_update",
+      assistantMessageEvent: {
+        type: "text_delta",
+        delta: fake.lastText,
+      },
+    });
+    fake.emit({ type: "agent_settled" });
+
+    const events = await run;
+    expect(events.filter((event) => event.type === "text-delta")).toEqual([
+      { type: "text-delta", text: "视频后续链路正常" },
+    ]);
+    expect(events.at(-1)).toEqual({
+      type: "message-completed",
+      text: "视频后续链路正常",
+    });
+    expect(JSON.stringify(events)).not.toContain("</think>");
+    await adapter.stop();
+  });
+
   it("maps protected local images to Pi base64 image content", async () => {
     const directory = await mkdtemp(join(tmpdir(), "pi-adapter-test-"));
     const path = join(directory, "pixel.png");

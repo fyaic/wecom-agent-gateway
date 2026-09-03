@@ -50,8 +50,9 @@ SDK。真实客户端证据与 deterministic fixture 必须同时保留，二者
 “思考中”渲染；切换会话再返回后，同一气泡正确显示 final。这被记录为客户端重绘观察项，不归类为 Gateway
 丢终态，也不把一次重绘结果外推为所有企业微信客户端都不存在类似现象。
 
-2026-09-02 再次通过桌面文件选择器发送 MP4，客户端仍归类为 `msgtype=file`，因此只证明 MP4 二进制的
-下载、解密、能力拒绝、清理与 following-text 恢复；不能把它记为原生 `video` callback 通过。
+2026-09-03 再次通过桌面媒体选择器发送 MP4，客户端仍归类为 `msgtype=file`。该结果暴露出 wire type
+直接穿透会令 Kernel 收到错误的 `file` 能力拒绝；Transport 现于受保护物化后按明确 MIME 将其归一为
+语义 `video`，同时保留原始 `metadata.msgtype=file`。这仍不能记为原生 `video` callback 通过。
 
 ## 未知 frame 的处理规则
 
@@ -77,8 +78,8 @@ SDK。真实客户端证据与 deterministic fixture 必须同时保留，二者
 
 - 真实 HTTP/HTTPS 代理下的下载、解密与自签 TLS 组合尚未完成，不声称代理矩阵通过。
 - 宿主机物理网络中断与 24 小时 Linux/systemd soak 属于 M3.1。
-- 原生 `msgtype=video` 的协议、物化、能力拒绝与清理已自动化通过；真实客户端 callback 仍待捕获，MP4 以普通
-  file callback 通过不能替代它。
+- 原生 `msgtype=video` 的协议、物化、能力拒绝与清理已自动化通过；真实客户端 callback 仍待捕获。MP4 普通
+  file callback 只会在解密后提升为 Runtime 语义 video，不能替代原生 callback 证据。
 - 企业微信 macOS 客户端未暴露用户消息引用入口，引用 callback 的真实客户端证明仍待上游入口。
 - macOS 企业微信对同一条流式消息的气泡重绘可能短暂落后于会话列表；目前没有协议级送达回执可证明终端已
   完成视觉重绘，验收需同时核对 SDK 结果、Outbox、会话列表和重新进入会话后的气泡终态。

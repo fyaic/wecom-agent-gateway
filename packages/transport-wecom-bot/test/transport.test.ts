@@ -1105,6 +1105,61 @@ describe("WeComBotTransport", () => {
     expect(existsSync(video.path)).toBe(false);
   });
 
+  it("promotes an MP4 generic file frame to semantic video after protected inspection", async () => {
+    const root = mkdtempSync(join(tmpdir(), "wecom-generic-video-test-"));
+    directories.push(root);
+    const client = new FakeClient();
+    client.downloadResult = {
+      buffer: Buffer.concat([
+        Buffer.alloc(4),
+        Buffer.from("ftyp"),
+        Buffer.from("isom"),
+      ]),
+      filename: "clip.mp4",
+    };
+    const transport = new WeComBotTransport({
+      accountId: "bot-a",
+      botId: "id",
+      secret: "secret",
+      clientFactory: () => client,
+      mediaTempRoot: root,
+    });
+    const inbound: InboundMessage = {
+      id: "generic-video",
+      accountId: "bot-a",
+      conversationId: "chat-1",
+      conversationType: "direct",
+      senderId: "user-1",
+      receivedAt: "2026-09-03T00:00:00.000Z",
+      metadata: { msgtype: "file" },
+      parts: [
+        {
+          type: "file",
+          url: "https://example.invalid/desktop-upload",
+          aesKey: "one-time-key",
+          name: "clip.mp4",
+        },
+      ],
+    };
+
+    const materialized = await transport.materializeInbound(inbound);
+    const media = materialized.message.parts[0];
+    expect(media).toMatchObject({
+      type: "video",
+      name: "00-clip.mp4",
+      mimeType: "video/mp4",
+      sizeBytes: 12,
+    });
+    expect(materialized.message.metadata).toEqual({ msgtype: "file" });
+    expect(media).not.toHaveProperty("url");
+    expect(media).not.toHaveProperty("aesKey");
+    if (!media || media.type !== "video" || !media.path) {
+      throw new Error("expected a semantically promoted video path");
+    }
+    await materialized.release();
+    expect(existsSync(media.path)).toBe(false);
+  });
+
   it("downloads and decrypts inbound media into protected ephemeral files", async () => {
     const root = mkdtempSync(join(tmpdir(), "wecom-media-test-"));
     directories.push(root);
