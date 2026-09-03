@@ -60,6 +60,11 @@ DeliveryReceipt（仅 accepted，不代表 visible/read）
 进入 Kernel 前拒绝，避免静默丢失被引用前文。各 Adapter 最后通过 `agentInputParts()` 在 Kernel 边界
 加入明确分隔，企业微信私有 quote 结构不会扩散到上游协议。
 
+媒体的 Runtime 类型表达解密后内容的语义模态，不等同于厂商 wire frame 名称。企业微信桌面端可能把
+MP4 作为 `msgtype=file` 上传；Transport 只在受保护下载后以 magic bytes/扩展名检测到明确 MIME 时将
+中性 part 提升为 `video`、`audio` 或 `image`，同时保留 `metadata.msgtype=file` 供诊断。未知二进制仍为
+`file`，原始 URL、AES key 和本地路径不会持久化。
+
 普通流式回复使用官方 `replyStreamNonBlocking`：有同 `req_id` ack 未完成时只跳过旧 partial，最终帧
 永不跳过，且仍由 durable outbox 重试。组合卡流只能在第一帧选定；流已按 plain 开始后才出现的卡片
 改走独立主动消息。回复 feedback 是独立 `ChannelFeedbackEvent`，只供观测/产品策略订阅，默认不创建
@@ -256,6 +261,9 @@ root 内。Pi 自有 extension UI dialog 不是 Gateway 写工具审批。原生
 
 Pi 的 provider 凭据、模型、工具和 transcript 仍由 Pi 管理。子进程仅接收进程基础环境及
 `PI_AGENT_ENV_ALLOWLIST` 明确列名的变量，绝不继承企业微信 Bot secret 或 Gateway 数据库路径。
+部分 OpenAI-compatible provider 会把私有 `<think>` 协议哨兵混入 Pi assistant text；清洗只发生在
+Pi Adapter，且只在检测到该哨兵时生效。Core/Transport 不解析 Agent 文本，也不把 provider 规则扩散到
+公共 Runtime Contract。
 
 ## 可变消息生命周期
 
@@ -279,7 +287,9 @@ Transport 与 Kernel 分别声明 capability；后续能力启用必须取二者
 Transport 前检查输出交集。当前 WeCom 输入集合为 image/video/file，输出集合为
 image/audio/video/file；语音回调只有官方转写文本，因此不虚报原始 audio 输入。Codex App Server
 输入为 image/audio，OpenClaw 为 image/audio/video/file，Pi 按当前模型动态声明 image 或空集合。
-不支持的类型明确失败并清理临时媒体，不改写成 Prompt 或占位文本。
+不支持的类型明确失败并清理临时媒体，不改写成 Prompt 或占位文本。这里的类型是受保护物化后的语义
+类型；原始厂商 frame 类型仍可在脱敏 metadata 中区分，因此桌面 MP4 的语义提升不等于宣称已捕获原生
+`msgtype=video` callback。
 
 ## 当前 M0 数据流
 

@@ -49,6 +49,11 @@ tagged.
 
 ### Fixed
 
+- Classify protected generic-file uploads by detected MIME at the Transport
+  boundary, so desktop MP4 uploads reach Kernel capability checks as semantic
+  video while retaining the original WeCom `msgtype` in metadata.
+- Strip provider-private `<think>` sentinels and the duplicated visible prefix
+  from Pi output before it crosses the Runtime Contract.
 - Reframe the bilingual README around the user problem, observable message
   flow, shortest setup path, real-client proof, Agent support, and clear
   comparison with the official OpenClaw plugin and `wecom-cli` tool layer.
