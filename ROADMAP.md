@@ -97,9 +97,11 @@ in [`docs/ecosystem-watch-and-mainline-plan.md`](docs/ecosystem-watch-and-mainli
       Agent SDK `0.3.258`, with deterministic init/delta/result/error/resume/abort
       fixtures, safe default permissions, and exact non-SPDX license review.
 - Complete Claude Code C1 real local text/session/cancel/auth smoke with a
-  user-owned credential, then C2 image/approval/AskUserQuestion before it enters
-  the supported or real-WeCom matrix. Keep the package optional and its
-  commercial terms separate from the repository's MIT code.
+  user-owned credential. The opt-in smoke command and real signed-out diagnostic
+  are complete; successful text/session/cancel evidence still requires a usable
+  user-owned credential. Then complete C2 image/approval/AskUserQuestion before
+  it enters the supported or real-WeCom matrix. Keep the package optional and
+  its commercial terms separate from the repository's MIT code.
 - Track ACP capability negotiation and document an AG-UI event mapping without
   making either protocol a Core dependency.
 - [x] Specify Channel Transport Contract v1, enforce startup capability

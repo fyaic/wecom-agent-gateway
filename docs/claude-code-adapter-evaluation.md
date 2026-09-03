@@ -1,6 +1,6 @@
 # Claude Code Kernel Adapter 评估
 
-决策日期：2026-09-01，C0 更新：2026-09-02。状态：**实验性协议 Adapter 已实现，尚未对外声明生产支持**。
+决策日期：2026-09-01，C0/C1 工具更新：2026-09-03。状态：**实验性协议 Adapter 已实现，尚未对外声明生产支持**。
 
 ## 决策
 
@@ -112,9 +112,17 @@ Claude Agent SDK 与 Claude Code 并非按本项目 MIT 许可证重新授权。
 - [ ] 在有用户自有凭据的 C1 环境测量普通 `query()` 与 `startup()` 的 subprocess-ready、首文本和总耗时；
       不发送模型预热 Prompt，也不把本机未认证状态伪装成通过。
 
+2026-09-03 已增加显式 `pnpm smoke:claude-code-adapter -- --confirm-real-claude`：使用临时空 workspace、
+`settingSources: []`、`tools: []`、`permissionMode: dontAsk` 和最小非敏感环境，验证两轮 session continuity
+与原生 abort；报告只含 capability 和分层耗时，不含模型文本或 session ID。首次本机调用得到官方 SDK
+signed-out 结果，因此 C1 未标记通过。Adapter 已将该结果固定为
+`Claude Code authentication is unavailable`，不转发 `/login` 文本或任何上游诊断。
+
 ### C1：安全文本闭环
 
-- 本机两轮文本、同 session resume、取消、重启恢复和认证失效诊断。
+- [x] 可重复的本机两轮文本、同 session resume 和取消 smoke 入口；真实成功仍待用户自有可用凭据。
+- [x] 认证失效固定为无敏感信息的 signed-out 诊断；本机真实 signed-out 路径已验证。
+- [ ] 在真实认证成功后完成两轮文本、resume、取消与重启恢复并记录分层耗时。
 - 企业微信授权私聊和群聊各一轮；首事件、首文本、完成和 durable delivery 分层计时。
 - 默认权限不能 bypass；审批拒绝时工具零执行，最终态唯一。
 

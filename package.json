@@ -39,6 +39,7 @@
     "smoke:codex-tool": "tsx --env-file-if-exists=.env scripts/smoke-codex-tool.ts",
     "smoke:kimi-adapter": "tsx --env-file-if-exists=.env scripts/smoke-kimi-adapter.ts",
     "smoke:openclaw-adapter": "tsx --env-file-if-exists=.env scripts/smoke-openclaw-adapter.ts",
+    "smoke:claude-code-adapter": "tsx scripts/smoke-claude-code-adapter.ts",
     "smoke:pi-adapter": "tsx --env-file-if-exists=.env scripts/smoke-pi-adapter.ts",
     "smoke:pi-image-adapter": "tsx --env-file-if-exists=.env scripts/smoke-pi-image-adapter.ts",
     "smoke:pi-pool": "tsx --env-file-if-exists=.env scripts/smoke-pi-pool.ts",

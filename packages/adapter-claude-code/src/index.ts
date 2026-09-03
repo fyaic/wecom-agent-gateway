@@ -263,6 +263,13 @@ function stringField(
 
 function classifyResultFailure(message: Record<string, unknown>): string {
   const subtype = stringField(message, "subtype");
+  const result = stringField(message, "result")?.toLowerCase();
+  if (
+    result?.includes("not logged in") ||
+    result?.includes("please run /login")
+  ) {
+    return "Claude Code authentication is unavailable";
+  }
   if (subtype === "error_max_turns")
     return "Claude Code reached its turn limit";
   if (subtype === "error_max_budget_usd") {
