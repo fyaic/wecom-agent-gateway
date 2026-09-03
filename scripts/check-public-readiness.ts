@@ -16,6 +16,7 @@ const requiredFiles = [
   "CODE_OF_CONDUCT.md",
   "CHANGELOG.md",
   "ROADMAP.md",
+  "docs/evidence-claims.md",
   ".github/PULL_REQUEST_TEMPLATE.md",
   ".github/ISSUE_TEMPLATE/bug_report.yml",
   ".github/ISSUE_TEMPLATE/feature_request.yml",
@@ -23,6 +24,28 @@ const requiredFiles = [
 
 for (const file of requiredFiles) {
   if (!existsSync(resolve(root, file))) failures.push(`missing:${file}`);
+}
+
+const requiredEvidenceDisclosures: Array<[string, string]> = [
+  ["README.md", "## 当前证据边界"],
+  ["README.md", "原生 `msgtype=video` callback"],
+  ["README.en.md", "## Current evidence boundary"],
+  ["README.en.md", "Native `msgtype=video` callback"],
+  ["ROADMAP.md", "- [ ] Certify native WeCom video callbacks"],
+  ["docs/status.md", "## 未声称已通过的真实联调"],
+  [
+    "docs/evidence-claims.md",
+    "媒体传输、媒体语义分类和 Agent 理解是三项不同能力",
+  ],
+];
+for (const [file, disclosure] of requiredEvidenceDisclosures) {
+  const absolute = resolve(root, file);
+  if (
+    !existsSync(absolute) ||
+    !readFileSync(absolute, "utf8").includes(disclosure)
+  ) {
+    failures.push(`missing-evidence-disclosure:${file}`);
+  }
 }
 
 const packageJson = JSON.parse(
