@@ -128,7 +128,7 @@
 | 2026-09-01 | 审批中进程强杀与重启          | 通过   | 审批卡送达后强杀 Gateway；新进程启动后旧卡批准只命中失效回调，不恢复 Agent、不执行工具，待办查询为 0 条          |
 | 2026-09-01 | 私聊与授权群普通消息基线      | 通过   | 私聊严格回复约 5.5s；群聊真实 @Bot 回执 492ms、首文本 3.827s、总计 5.573s，均无默认动作卡                        |
 | 2026-09-01 | M3.0-B SDK 兼容回归           | 通过   | Pi 私聊严格回复约 11.6s；群聊真实 @Bot 回执 500ms、首文本 2.893s、总计 3.855s；Outbox 零积压/死信                |
-| 2026-09-03 | 桌面 MP4 与 Pi 输出边界       | 修复中 | 实测仍回调为 file，暴露语义类型误判；Pi 后续文本暴露 `</think>`/重复答案；确定性修复已通过，待真实回归           |
+| 2026-09-03 | 桌面 MP4 与 Pi 输出边界       | 通过   | file wire → video 语义拒绝 1.196s；后续文本 15.208s 单条干净完成；临时目录、Outbox 积压和死信均为 0              |
 | 2026-09-02 | 桌面 MP4 能力拒绝与后续文本   | 通过   | 桌面端仍回调为 file；物化 2.414s、3.177s 明确拒绝且 Pi 零调用；紧随文本 7.405s 完成，临时目录归零                |
 | 2026-09-02 | Codex SDK 0.151.0 升级        | 通过   | 完整 CI 后真实 App Server 两轮完成；首文本 8.468s/2.528s、总计 9.077s/2.919s，同 session 恢复                    |
 | 2026-09-02 | OpenClaw Client beta.3 升级   | 通过   | 本机既有 Gateway/钥匙串凭据；两轮严格回复，首文本 11.464s/6.512s、完成 11.633s/6.587s，同 session 恢复           |
@@ -416,7 +416,11 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
 - 2026-09-03 复测确认该客户端行为未变。Transport 已增加受保护内容的语义归一：只有检测到明确
   image/audio/video MIME 的 generic file 才提升 part 类型，wire `msgtype=file` 继续保留在 metadata；
   同时 Pi Adapter 只在检测到 provider 私有 `<think>` 哨兵时清除协议文本和重复可见前缀。两项均有
-  deterministic fake 覆盖；真实部署回归完成前不改变原生 video 的未声明状态。
+  deterministic fake 覆盖。
+- 合并 `0f934d3` 并重启正式受管服务后，真实 MP4 在 373ms 完成物化、1.196s 以“当前 Agent 不支持视频
+  输入”结束，证明 generic file 已按语义 video 进入能力门且 Pi 零调用；紧随文本在 15.208s 完成，客户端
+  只显示一次“视频后续链路正常”，没有 `</think>` 或重复答案。Gateway/control ready，临时目录为 0，
+  Outbox `pending/leased/dead` 均为 0。该结果仍不改变原生 video callback 的未声明状态。
 
 ### M5：生产运行与韧性
 

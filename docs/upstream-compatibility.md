@@ -38,13 +38,15 @@ pnpm test:m3-upstream-compatibility
 测试中的 fake 只模拟上游时序和错误合同，不伪造 WebSocket 鉴权、心跳或 AES 实现；这些继续完全交给官方
 SDK。真实客户端证据与 deterministic fixture 必须同时保留，二者不能互相替代。
 
-## 真实沙箱结果（2026-09-01）
+## 真实沙箱结果（2026-09-01 至 2026-09-03）
 
 | 会话     | Adapter / 场景               | Channel ACK | Kernel 首文本 | 完成    | 投递状态                   |
 | -------- | ---------------------------- | ----------- | ------------- | ------- | -------------------------- |
 | 授权私聊 | Pi / GLM-4.6V，严格短文本    | 463ms       | 10.706s       | 11.574s | pending/leased/dead 均为 0 |
 | 授权群聊 | Pi / GLM-4.6V，真实富文本 @  | 500ms       | 2.893s        | 3.855s  | pending/leased/dead 均为 0 |
 | 授权私聊 | 桌面 MP4(file) → Pi 能力拒绝 | 463ms       | Kernel 未启动 | 3.177s  | 清理归零；后续文本正常     |
+| 授权私聊 | MP4 file → semantic video    | 未单独采样  | Kernel 未启动 | 1.196s  | 物化 373ms；清理归零       |
+| 授权私聊 | 视频拒绝后的 Pi 严格短文本   | 未单独采样  | 未单独采样    | 15.208s | 单条干净回复；无协议泄漏   |
 
 群聊 final 已被官方 SDK 接受且会话列表立即显示最终文本，但 macOS 企业微信当前打开的消息气泡曾停留在旧的
 “思考中”渲染；切换会话再返回后，同一气泡正确显示 final。这被记录为客户端重绘观察项，不归类为 Gateway
@@ -52,7 +54,9 @@ SDK。真实客户端证据与 deterministic fixture 必须同时保留，二者
 
 2026-09-03 再次通过桌面媒体选择器发送 MP4，客户端仍归类为 `msgtype=file`。该结果暴露出 wire type
 直接穿透会令 Kernel 收到错误的 `file` 能力拒绝；Transport 现于受保护物化后按明确 MIME 将其归一为
-语义 `video`，同时保留原始 `metadata.msgtype=file`。这仍不能记为原生 `video` callback 通过。
+语义 `video`，同时保留原始 `metadata.msgtype=file`。正式受管服务回归显示 373ms 完成物化、1.196s
+明确回复“当前 Agent 不支持视频输入”；紧随文本 15.208s 完成且只有一次干净答案。临时目录与 Outbox
+积压/死信均归零。这仍不能记为原生 `video` callback 通过。
 
 ## 未知 frame 的处理规则
 
