@@ -635,6 +635,14 @@ pnpm smoke:media-outbox --confirm-send-to-authorized-direct
 
 脚本创建隔离的临时 SQLite/spool，提交 artifact 后删除原文件并重建 Gateway，再发送一个小型文本
 附件；结束后删除临时目录。它不触发 Agent turn，不复用正式 Gateway 数据库，也不打印内部 ID。
+同一个 Bot 同时只能有一个所有者：脚本现在复用正式 Gateway 的 owner lock，检测到受管服务仍在运行时
+会 fail closed，不能再建立第二条 WebSocket 抢占正式连接。应先通过当前部署的 supervisor 停止受管
+Gateway，运行 smoke，再恢复受管服务并检查 `readyz`、零 Outbox 积压和一条普通入站最终回复。
+
+2026-09-04 的授权私聊回归确认：删除源文件并模拟重启后，108B 文本附件真实可见；首次使用旧脚本时
+同时暴露了第二连接会使正式 Gateway 断开的隔离缺陷。受管服务重启后，唯一 marker 从即时思考态到指定
+最终短答，机器验收九项全通过，Outbox `pending/leased/dead` 均为 0。本页不把这次“重启恢复”扩大解释
+为宿主机断网或真实上传失败重试已经通过。
 
 ## 故障分界
 

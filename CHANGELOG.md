@@ -63,6 +63,9 @@ tagged.
 
 ### Fixed
 
+- Make the real media-outbox smoke acquire the same per-Bot owner lock as the
+  managed Gateway, so it fails closed instead of opening a competing WebSocket
+  that can disconnect the production transport.
 - Classify Claude Code signed-out results as a stable authentication diagnostic
   without forwarding the SDK's login text or accepting session credentials.
 - Classify protected generic-file uploads by detected MIME at the Transport
