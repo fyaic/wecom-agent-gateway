@@ -28,6 +28,13 @@ export interface WeComCliToolOptions {
   baseEnvironment?: NodeJS.ProcessEnv;
 }
 
+export class WeComCliAuthorizationExpiredError extends Error {
+  constructor() {
+    super("wecom-cli capability authorization expired");
+    this.name = "WeComCliAuthorizationExpiredError";
+  }
+}
+
 export class WeComCliTool {
   constructor(private readonly options: WeComCliToolOptions) {}
 
@@ -39,14 +46,32 @@ export class WeComCliTool {
     if (args.some((arg) => arg.includes("\0")))
       throw new Error("wecom-cli arguments must not contain NUL bytes");
     const runner = this.options.processRunner ?? runProcess;
-    return runner(this.options.executable ?? "wecom-cli", args, {
-      env: safeCliEnvironment(
-        this.options.baseEnvironment ?? process.env,
-        this.options.configDirectory,
-      ),
-      timeoutMs: this.options.timeoutMs ?? 60_000,
-      maxOutputBytes: this.options.maxOutputBytes ?? 2 * 1024 * 1024,
-    });
+    try {
+      const result = await runner(
+        this.options.executable ?? "wecom-cli",
+        args,
+        {
+          env: safeCliEnvironment(
+            this.options.baseEnvironment ?? process.env,
+            this.options.configDirectory,
+          ),
+          timeoutMs: this.options.timeoutMs ?? 60_000,
+          maxOutputBytes: this.options.maxOutputBytes ?? 2 * 1024 * 1024,
+        },
+      );
+      if (isAuthorizationExpired(`${result.stdout}\n${result.stderr}`)) {
+        throw new WeComCliAuthorizationExpiredError();
+      }
+      return result;
+    } catch (error) {
+      if (
+        error instanceof WeComCliAuthorizationExpiredError ||
+        (error instanceof Error && isAuthorizationExpired(error.message))
+      ) {
+        throw new WeComCliAuthorizationExpiredError();
+      }
+      throw error;
+    }
   }
 }
 
@@ -83,17 +108,24 @@ export function createWeComContactSearchTool(cli: WeComCliTool): RuntimeTool {
     approval: "never",
     async execute(input) {
       const payload = contactSearchPayload(input);
-      const result = await cli.execute([
-        "contact",
-        "users",
-        "search",
-        "--json",
-        JSON.stringify(payload),
-      ]);
-      return {
-        success: true,
-        content: [{ type: "text", text: result.stdout }],
-      };
+      try {
+        const result = await cli.execute([
+          "contact",
+          "users",
+          "search",
+          "--json",
+          JSON.stringify(payload),
+        ]);
+        return {
+          success: true,
+          content: [{ type: "text", text: result.stdout }],
+        };
+      } catch (error) {
+        if (error instanceof WeComCliAuthorizationExpiredError) {
+          return authorizationExpiredResult();
+        }
+        throw error;
+      }
     },
   };
 }
@@ -148,14 +180,40 @@ export function createWeComTodoCreateTool(cli: WeComCliTool): RuntimeTool {
     },
     async execute(input) {
       const payload = todoCreatePayload(input);
-      const result = await cli.execute([
-        "todo",
-        "create",
-        "--json",
-        JSON.stringify(payload),
-      ]);
-      return todoCreateResult(result.stdout, payload);
+      try {
+        const result = await cli.execute([
+          "todo",
+          "create",
+          "--json",
+          JSON.stringify(payload),
+        ]);
+        return todoCreateResult(result.stdout, payload);
+      } catch (error) {
+        if (error instanceof WeComCliAuthorizationExpiredError) {
+          return authorizationExpiredResult();
+        }
+        throw error;
+      }
     },
+  };
+}
+
+function authorizationExpiredResult(): {
+  success: false;
+  content: Array<{ type: "text"; text: string }>;
+} {
+  return {
+    success: false,
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({
+          success: false,
+          error: "wecom_capability_authorization_expired",
+          message: "企业微信能力授权已过期，需要重新授权后再试。",
+        }),
+      },
+    ],
   };
 }
 
@@ -409,6 +467,10 @@ function runProcess(
       },
       (error, stdout, stderr) => {
         if (error) {
+          if (isAuthorizationExpired(`${stdout}\n${stderr}`)) {
+            reject(new WeComCliAuthorizationExpiredError());
+            return;
+          }
           const code = "code" in error ? String(error.code) : "unknown";
           reject(new Error(`wecom-cli failed (code=${code})`));
           return;
@@ -417,4 +479,10 @@ function runProcess(
       },
     );
   });
+}
+
+function isAuthorizationExpired(value: string): boolean {
+  return /(?:\b(?:errcode|code)\b["'\s:=]+850003\b|\b850003\b[^\r\n]{0,80}(?:authorization expired|使用权限已过期)|authorization expired|使用权限已过期)/i.test(
+    value,
+  );
 }
