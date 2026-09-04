@@ -14,6 +14,14 @@
 版本以 npm `latest` 与仓库 `pnpm-lock.yaml` 为准。GitHub 仓库没有对应 release/tag 时，不用网页显示的
 提交日期替代 npm 包版本；依赖完整性继续由锁文件策略和公开仓库检查验证。
 
+2026-09-04 复核：三个官方仓库的记录 commit 与本页基线一致，SDK npm 仍为
+`1.0.7`。新增社区信号主要是 OpenClaw 升级后的插件 runtime 初始化失败
+（官方插件 [#183](https://github.com/WecomTeam/wecom-openclaw-plugin/issues/183)、
+[#184](https://github.com/WecomTeam/wecom-openclaw-plugin/issues/184)），以及
+`wecom-cli` 群历史能力在部分企业仍不可用（CLI
+[#132](https://github.com/WecomTeam/wecom-cli/issues/132)）；前者再次说明 Kernel/工具运行时必须
+隔离在 Adapter/Tool 边界，后者不改变本项目 Bot-only、实时 callback、不拉历史消息的范围。
+
 ## 固定回归矩阵
 
 运行：
