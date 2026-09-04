@@ -436,6 +436,11 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
   Outbox `pending/leased/dead` 均为 0。验收器随后增加 `text` kind，使后续 GUI 观察可由数据库、Session、
   delivery journal 和 spool 状态共同佐证，而不是只凭截图。机器复核使用精确 session compatibility ID
   `pi:rpc-v1`，避免同会话历史 Kernel session 造成假阳性。
+- 2026-09-04 继续以同一持续授权完成无人值守群聊基线：自动化通过企业微信原生候选列表插入真实富文本
+  Bot @，唯一 marker 只产生一个入站；Channel 回执 412ms、Kernel 首事件 234ms、
+  首文本 3.960s、端到端 4.908s，所有 delivery 首次投递成功，Outbox 与 spool 均归零。`text/group`
+  机器验收的九项检查全部通过。macOS 客户端当前打开的气泡一度保留“Agent 正在思考”，切换会话返回后
+  同一气泡正确重绘为最终短答；服务端 final 已先被接受，因此继续作为客户端重绘观察项记录。
 
 ### M5：生产运行与韧性
 

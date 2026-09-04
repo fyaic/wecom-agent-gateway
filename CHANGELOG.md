@@ -14,8 +14,9 @@ tagged.
   spool cleanup without printing message or identity data, and deliberately
   rejects MIME-promoted `file` uploads as native-video evidence.
 - Marker-scoped plain-text evidence in the real-WeCom ingress verifier, enabling
-  authorized desktop smokes to close autonomously across client visibility,
-  Adapter session, durable delivery, and spool state.
+  authorized direct and real rich-mention group desktop smokes to close
+  autonomously across client visibility, Adapter session, durable delivery, and
+  spool state.
 - A public evidence-claim policy, prominent bilingual capability boundaries,
   PR review checklist, and CI guard that prevents critical pending real-client
   work from disappearing from release-facing documentation.
