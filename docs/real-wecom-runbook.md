@@ -295,6 +295,10 @@ Channel 回执 463ms，下载/解密与物化 2.414 秒，Pi 因只声明 image 
 目录为 0，Outbox 638 条 delivered、无 pending/leased/dead，Gateway ready。该轮关闭了桌面端
 file-classified MP4 的失败隔离矩阵，但原生 `msgtype=video` 仍需能产生该 callback 的客户端完成。
 
+2026-09-04 使用 macOS 企业微信 `5.0.10 (99949)` 复查独立“图片”工具：系统面板按钮明确为
+“选取图片”，演示 MP4 灰置且不能提交；可选择 MP4 的仍是文件入口。该结果进一步确认当前桌面端没有
+可由自动化触发的原生视频入口，不改变 `msgtype=video` 真实 callback 的未通过状态。
+
 同日已完成一次真实图片主动发送：测试图片位于一次性显式允许根目录，正式 Bot 通过官方 SDK
 完成 `uploadMedia` 和 `sendMediaMessage`，只发送到授权私聊；测试输出不包含目标内部 ID、
 media_id 或凭据。生产环境必须把 `WECOM_MEDIA_OUTPUT_ROOTS` 收窄到专用产物目录，不能配置
@@ -568,6 +572,10 @@ SDK 在前一帧回执尚未完成时可跳过陈旧 partial，但最终帧必�
 合同通过，不把该项标为真实客户端验收。群聊 Bot 回复中可见的原消息引用只证明出站 reply
 association，不能替代入站引用 callback 证据。
 
+2026-09-04 在 macOS 企业微信 `5.0.10 (99949)` 的授权 Bot 私聊中，对用户文本与 Bot 文本分别打开
+右键操作，客户端均未展示“引用/回复”入口。自动化没有改发普通文本或直接注入协议 frame，因此当前仍
+只能声明 deterministic contract 覆盖，不能声明真实 quote callback 通过。
+
 普通文本可以先作为无人值守基线：通过已授权客户端发送唯一、非敏感 marker，观察同一条 Bot 回复从
 即时状态更新为最终文本，再用只读机器证据关联 inbound、Adapter session、final delivery 和 spool：
 
@@ -643,6 +651,18 @@ Gateway，运行 smoke，再恢复受管服务并检查 `readyz`、零 Outbox �
 同时暴露了第二连接会使正式 Gateway 断开的隔离缺陷。受管服务重启后，唯一 marker 从即时思考态到指定
 最终短答，机器验收九项全通过，Outbox `pending/leased/dead` 均为 0。本页不把这次“重启恢复”扩大解释
 为宿主机断网或真实上传失败重试已经通过。
+
+## Linux/systemd 长时间运行门
+
+真实 Linux 主机使用 `pnpm soak:linux -- --duration-hours=24 --interval-seconds=30`。该命令不足 24 小时
+时 fail closed；短时自检必须显式加 `--non-certifying`。报告验证 systemd 服务、live/ready、Transport
+恢复的 ready 信号、Outbox、媒体 spool、磁盘水位与 journal invocation 元数据，并排除消息、会话 ID、
+Secret、路径和 journal 正文。
+
+宿主机网络故障窗口增加 `--expect-network-outage`。建议先确认报告开始采样，再由主机控制台关闭实际
+NIC、删除默认路由或切断 DNS/上联网，至少保持到两个采样周期，随后恢复。验收器要求进程全程 live、
+ready 下降后恢复且最终 durable 状态干净；操作人员仍须在私有运维记录中注明故障方式和时间。报告固定
+保留 `externallyAttested:false`，防止把应用层现象误写成物理网络证据。
 
 ## 故障分界
 

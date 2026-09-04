@@ -50,6 +50,7 @@
     "proactive:send": "tsx scripts/proactive-control.ts send",
     "demo:build": "node scripts/build-demo-assets.mjs",
     "healthcheck": "tsx scripts/healthcheck.ts",
+    "soak:linux": "tsx --env-file-if-exists=.env scripts/linux-soak.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:m3-quote-approval": "vitest run packages/runtime-contract/src/index.test.ts packages/transport-wecom-bot/test/transport.test.ts packages/channel-core/test/gateway.test.ts packages/adapter-codex/test/app-server-adapter.test.ts packages/storage-sqlite/test/store.test.ts",

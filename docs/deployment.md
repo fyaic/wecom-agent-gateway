@@ -55,6 +55,27 @@ curl --fail --silent http://127.0.0.1:9464/metrics
 unit 使用专用用户、`UMask=0077`、systemd `StateDirectory`、有限写目录、自动失败重启和 120 秒优雅
 停机。不要为了让某个 Kernel 工作而取消全部文件系统保护；增加最小需要目录。
 
+### 24 小时 soak 验收
+
+在真实 Linux/systemd 主机、正式服务已 `active` 且观测端点只监听 loopback 后运行：
+
+```bash
+sudo -u wecom-gateway pnpm soak:linux -- \
+  --duration-hours=24 \
+  --interval-seconds=30 \
+  --service=wecom-agent-gateway.service
+```
+
+验收器持续采集 systemd active/PID/restart 计数、`livez`、`readyz`、无标识符 Prometheus Outbox
+聚合、媒体 spool 文件数和状态盘剩余空间；结束时只读取 journal 的时间戳与 invocation 元数据，不读取或
+写入消息内容。默认报告写入私有 `data/evidence/`，模式 `0600`，只包含计数、时长和布尔判定。
+
+认证运行少于 24 小时会直接拒绝。开发机可用 `--non-certifying --duration-hours=0.01` 验证脚本，但该结果
+不得写入公开能力矩阵。若同一窗口安排宿主机 NIC/路由/DNS 中断，增加 `--expect-network-outage`；通过要求
+是 systemd 与 `livez` 保持、`readyz` 至少一次下降后恢复、最终 Outbox/spool 归零且没有 dead letter。
+报告中的 `externallyAttested` 固定为 `false`：脚本只能证明 Gateway 观察到的断线/恢复，维护者必须另行记录
+实际执行的物理网络操作，不能用容器 namespace detach 或人为停止服务冒充宿主网络故障。
+
 ## 容器
 
 仓库根目录提供 [`Dockerfile`](../Dockerfile)、[`.dockerignore`](../.dockerignore) 和
@@ -101,5 +122,6 @@ Gateway 观测端口直接暴露公网。
 耗尽发生在 42 条已提交记录之后；释放预留恢复空间后数据库可重新打开，42 条均可读且无 dead。
 该测试同时发现并修复了“回滚失败覆盖原始 SQLite 磁盘已满错误”的诊断缺陷。
 
-这些容器/本机证据不冒充 systemd 或整机故障。当前仍需在真实 Linux 主机完成 systemd 长时间运行和
-宿主机级物理网卡/路由中断；容器网络 namespace detach 不能证明宿主网络栈、DNS 或 systemd 行为。
+这些容器/本机证据不冒充 systemd 或整机故障。仓库现已提供 fail-closed 的 `pnpm soak:linux` 验收器，
+但当前仍需在独立真实 Linux 主机实际运行满 24 小时，并为宿主机级物理网卡/路由/DNS 中断补外部操作
+记录；脚本存在不等于验收已经通过，容器 network namespace detach 也不能证明宿主网络栈或 systemd。
