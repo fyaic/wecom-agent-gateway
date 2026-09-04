@@ -278,6 +278,17 @@ AES 解密成功；无 filename 时生成受控 `.mp4` 名称；MIME、大小、
 pending/leased/dead。桌面端通过“文件”或拖放发送而产生的 `msgtype=file` 只能作为 MP4 二进制链路证据，
 不能冒充原生视频 callback；Agent 是否理解视频内容或拥有抽帧工具不属于本验收。
 
+完成客户端操作后运行：
+
+```bash
+pnpm verify:real-wecom-ingress --kind=native-video --conversation=direct \
+  --after=2026-01-01T00:00:00.000Z --adapter=pi
+```
+
+该命令只匹配持久化 metadata 中的原生 `msgtype=video` 和 Runtime `video` part，并要求能力拒绝终态、
+Transport 接受、无 delivery 错误/积压、媒体敏感字段未落库及 spool 归零。普通 `file` callback 即使
+检测为 `video/mp4` 也会得到 `matchedMessages: 0` 和失败退出码，这是刻意设置的证据防混淆门。
+
 2026-09-02 使用 macOS 企业微信文件选择器发送仓库公开脱敏演示 MP4，客户端再次产生 `file` callback。
 Channel 回执 463ms，下载/解密与物化 2.414 秒，Pi 因只声明 image input 而保持零调用；Gateway 在
 3.177 秒明确回复不支持文件输入。紧随文本未被前一失败污染，首文本 6.696 秒、总计 7.405 秒；临时
@@ -556,6 +567,25 @@ SDK 在前一帧回执尚未完成时可跳过陈旧 partial，但最终帧必�
 上下文。当前 macOS Bot 私聊及测试群界面未暴露用户消息的引用操作，因此只声称自动化 frame/Adapter
 合同通过，不把该项标为真实客户端验收。群聊 Bot 回复中可见的原消息引用只证明出站 reply
 association，不能替代入站引用 callback 证据。
+
+真实客户端一旦提供引用入口，使用唯一、非敏感 marker 发送当前消息，等待最终回复后运行机器验收。
+`--after` 必须是本轮开始前的 ISO 时间，避免旧消息或重复 marker 被误认；命令只输出布尔检查和数量，
+不输出消息、会话、发送者、request、delivery 或 session ID：
+
+```bash
+pnpm verify:real-wecom-ingress --kind=quote-text --conversation=direct \
+  --after=2026-01-01T00:00:00.000Z --adapter=pi \
+  --marker=UNIQUE_CURRENT_MARKER --expected-quote-text=KNOWN_QUOTED_EXCERPT
+
+pnpm verify:real-wecom-ingress --kind=quote-media --conversation=group \
+  --after=2026-01-01T00:00:00.000Z --adapter=pi \
+  --marker=UNIQUE_CURRENT_MARKER --expected-quote-media=image
+```
+
+通过要求是：时间窗和会话类型内恰好一个匹配 inbound、`quote.parts` 类型/已知摘录正确、持久化记录没有
+媒体 URL/AES key/本地路径、对应 Adapter session 存在、该 inbound 的 final 已由 Transport 接受、没有
+消息级 delivery 错误/积压且媒体 spool 没有文件。命令通过仍只到 Transport accepted；维护者必须另行
+确认客户端最终回复可见，二者共同满足后才能把真实引用项勾选完成。
 
 `WECOM_WELCOME_TEXT` 是可选静态欢迎语，只在官方 `event.enter_chat` 上调用 `replyWelcome`，不得启动
 Kernel。该事件通常只在用户当天首次进入会话时触发；不要通过删除/重加 Bot 人为制造验收条件。

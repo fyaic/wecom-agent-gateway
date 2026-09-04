@@ -8,6 +8,11 @@ tagged.
 
 ### Added
 
+- A privacy-safe real-WeCom ingress verifier for quoted text/media and native
+  video callbacks. It correlates normalized inbound records, Adapter session,
+  durable final delivery, message-level errors, persisted media redaction, and
+  spool cleanup without printing message or identity data, and deliberately
+  rejects MIME-promoted `file` uploads as native-video evidence.
 - A public evidence-claim policy, prominent bilingual capability boundaries,
   PR review checklist, and CI guard that prevents critical pending real-client
   work from disappearing from release-facing documentation.

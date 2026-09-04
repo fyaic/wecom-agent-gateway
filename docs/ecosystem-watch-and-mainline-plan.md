@@ -181,16 +181,16 @@ fail closed；真实 WeCom smoke 有可公开的脱敏证据。
 
 ## 执行顺序与工作看板
 
-| 顺序 | 工作包                                     | 依赖 | 预计变更面                                | 当前状态                               |
-| ---- | ------------------------------------------ | ---- | ----------------------------------------- | -------------------------------------- |
-| 1    | M3.0-A 引用 + 审批异常真实矩阵             | 无   | 文档/验收脚本；必要时 Transport/Core 修复 | 部分完成：审批闭环；引用待客户端入口   |
-| 2    | M3.0-B 上游兼容 fixture 与版本台账         | 无   | Transport tests、compatibility 文档       | 自动化与单聊/群聊回归完成；代理待验收  |
-| 3    | M3.0-C 原生视频与连续组合消息矩阵          | A/B  | Media/Transport tests                     | 自动化闭环；真实原生 callback 待验收   |
-| 4    | M3.1-A Linux/systemd soak + 宿主网络故障   | M3.0 | deployment、observability、验收报告       | 待执行                                 |
-| 5    | M3.1-B 多实例 ADR 与双 owner fail-fast     | M3.0 | ADR、启动/租约边界                        | single-active 闭环；active-active 暂缓 |
-| 6    | M3.2 conformance kit + Claude Code Adapter | M3.0 | SDK、Adapter、tests、真实案例             | C1 smoke/失效诊断完成；成功路径待凭据  |
-| 7    | M3.3 Transport SPI ADR + loopback contract | M3.1 | Contract/Core/新 Transport 测试包         | v1 SPI + 22 项 loopback 已完成         |
-| 8    | M3.4 事件和可选交互扩展                    | 前项 | 按独立 ADR                                | 暂缓                                   |
+| 顺序 | 工作包                                     | 依赖 | 预计变更面                                | 当前状态                                           |
+| ---- | ------------------------------------------ | ---- | ----------------------------------------- | -------------------------------------------------- |
+| 1    | M3.0-A 引用 + 审批异常真实矩阵             | 无   | 文档/验收脚本；必要时 Transport/Core 修复 | 部分完成：审批与机器验收器闭环；引用待客户端入口   |
+| 2    | M3.0-B 上游兼容 fixture 与版本台账         | 无   | Transport tests、compatibility 文档       | 自动化与单聊/群聊回归完成；代理待验收              |
+| 3    | M3.0-C 原生视频与连续组合消息矩阵          | A/B  | Media/Transport tests                     | 自动化与防误报验收器闭环；真实原生 callback 待验收 |
+| 4    | M3.1-A Linux/systemd soak + 宿主网络故障   | M3.0 | deployment、observability、验收报告       | 待执行                                             |
+| 5    | M3.1-B 多实例 ADR 与双 owner fail-fast     | M3.0 | ADR、启动/租约边界                        | single-active 闭环；active-active 暂缓             |
+| 6    | M3.2 conformance kit + Claude Code Adapter | M3.0 | SDK、Adapter、tests、真实案例             | C1 smoke/失效诊断完成；成功路径待凭据              |
+| 7    | M3.3 Transport SPI ADR + loopback contract | M3.1 | Contract/Core/新 Transport 测试包         | v1 SPI + 22 项 loopback 已完成                     |
+| 8    | M3.4 事件和可选交互扩展                    | 前项 | 按独立 ADR                                | 暂缓                                               |
 
 每个工作包应保持“小步提交 + 自动化证据 + 必要的真实客户端证据”。遇到上游限制时，先记录明确 capability 和
 降级，不以临时 prompt、sleep、无限重试或人工观察掩盖协议缺口。

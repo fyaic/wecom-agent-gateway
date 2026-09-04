@@ -195,9 +195,12 @@ ChatGPT-auth-compatible HTTP-only provider，保留现有 ChatGPT 登录身份�
 - 宿主机级物理网卡/路由/DNS 中断；隔离 Linux network namespace detach 后的官方 SDK 断线、退避、重鉴权
   和 ready 降级/恢复已通过，不能冒充整机网络栈验收。
 - 引用/回复消息的真实客户端回调；官方 frame 归一化、引用媒体生命周期和全部参考 Adapter 映射已有自动化覆盖。
+  新增 `pnpm verify:real-wecom-ingress` 后，可用隐私安全的机器报告关联 inbound quote、Adapter session、
+  final 投递、消息级错误和媒体清理；在客户端确实产生 callback 以前仍保持未通过。
 - `enter_chat` 静态欢迎的真实当日首次入会话回调；官方回复方法与“不启动 Kernel”已有自动化覆盖。
 - 原生企业微信 `msgtype=video` 的真实客户端回调；官方 frame 的 video/file 归一化已有自动化覆盖，
-  文件与 MP4 二进制已在真实私聊通过，但该桌面端把 MP4 作为普通 `file` 回调。
+  文件与 MP4 二进制已在真实私聊通过，但该桌面端把 MP4 作为普通 `file` 回调。真实 ingress 验收器
+  会拒绝这种 `file` 记录，即便其 MIME 已被提升为语义 video。
 - 语音在官方回调中当前只有转写文本；不存在可供下载的原始音频 URL。
 - 具体 Kernel adapter 产生真实 `media-output`（通用 contract、Gateway 与企业微信发送链路已通过）。
 - 主动消息的完整会话范围、频控和真实失败重试。
@@ -423,6 +426,10 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
   输入”结束，证明 generic file 已按语义 video 进入能力门且 Pi 零调用；紧随文本在 15.208s 完成，客户端
   只显示一次“视频后续链路正常”，没有 `</think>` 或重复答案。Gateway/control ready，临时目录为 0，
   Outbox `pending/leased/dead` 均为 0。该结果仍不改变原生 video callback 的未声明状态。
+- 2026-09-04 增加隐私安全的真实 ingress 验收器，覆盖 `quote-text`、`quote-media` 与 `native-video`。
+  它要求时间窗内唯一匹配、正确 wire/quote shape、敏感媒体字段未落库、Adapter 边界、final accepted、
+  无消息级投递错误/积压和 spool 归零。对 2026-09-03 的桌面 MP4 记录运行 native-video 验收得到
+  `matchedMessages=0`、失败退出，证明该门不会把普通 file callback 误报为原生视频。
 
 ### M5：生产运行与韧性
 
