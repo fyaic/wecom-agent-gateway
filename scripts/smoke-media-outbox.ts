@@ -1,6 +1,7 @@
 import { mkdtemp, mkdir, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { acquireBotOwnerLock } from "../apps/gateway/src/bot-owner-lock.js";
 import type { DeliveryLifecycleEvent } from "../packages/channel-core/src/index.js";
 import {
   StaticRuntimeRouter,
@@ -18,6 +19,10 @@ if (!process.argv.includes(confirmation)) {
 
 const botId = required("WECOM_BOT_ID");
 const secret = required("WECOM_BOT_SECRET");
+const botOwner = await acquireBotOwnerLock({
+  accountId: botId,
+  root: process.env.GATEWAY_OWNER_LOCK_ROOT || undefined,
+});
 const targets = list("WECOM_ALLOWED_DIRECT_SENDERS");
 if (targets.length !== 1) {
   throw new Error(
@@ -125,6 +130,7 @@ try {
   firstStore?.close();
   secondStore?.close();
   await rm(directory, { recursive: true, force: true });
+  await botOwner.release();
 }
 
 function required(name: string): string {

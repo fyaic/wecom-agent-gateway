@@ -55,6 +55,12 @@ describe("production deployment artifacts", () => {
     expect(release).toContain("docs/releases/${GITHUB_REF_NAME}.md");
     expect(release).not.toContain("--notes-file docs/releases/v0.1.0.md");
   });
+
+  it("prevents the real media smoke from competing with a running Bot owner", async () => {
+    const smoke = await read("scripts/smoke-media-outbox.ts");
+    expect(smoke).toContain("acquireBotOwnerLock");
+    expect(smoke).toContain("await botOwner.release()");
+  });
 });
 
 function read(path: string): Promise<string> {
