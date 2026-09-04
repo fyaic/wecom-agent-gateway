@@ -1,6 +1,6 @@
 # 企业微信上游兼容矩阵
 
-快照日期：2026-09-02。本文只记录会影响 IM Gateway 传输、顺序、去重、媒体和可观测性的上游行为；
+快照日期：2026-09-04。本文只记录会影响 IM Gateway 传输、顺序、去重、媒体和可观测性的上游行为；
 模型效果、OpenClaw 路由与 `wecom-cli` 办公工具不属于本矩阵。
 
 ## 版本基线
@@ -19,8 +19,11 @@
 （官方插件 [#183](https://github.com/WecomTeam/wecom-openclaw-plugin/issues/183)、
 [#184](https://github.com/WecomTeam/wecom-openclaw-plugin/issues/184)），以及
 `wecom-cli` 群历史能力在部分企业仍不可用（CLI
-[#132](https://github.com/WecomTeam/wecom-cli/issues/132)）；前者再次说明 Kernel/工具运行时必须
-隔离在 Adapter/Tool 边界，后者不改变本项目 Bot-only、实时 callback、不拉历史消息的范围。
+[#132](https://github.com/WecomTeam/wecom-cli/issues/132)），以及写能力可能独立返回
+`850003 authorization expired` 而读取仍正常（CLI
+[#134](https://github.com/WecomTeam/wecom-cli/issues/134)）。前者再次说明 Kernel/工具运行时必须隔离在
+Adapter/Tool 边界；群历史问题不改变本项目 Bot-only、实时 callback、不拉历史消息的范围。授权失效则已
+转化为 Tool 层的稳定、不可误重试结果：不向 Agent 透出 CLI 原始输出、凭据或路径，写工具继续默认关闭。
 
 ## 固定回归矩阵
 
@@ -42,6 +45,7 @@ pnpm test:m3-upstream-compatibility
 | final 状态残留/重复       | 官方插件 [#155](https://github.com/WecomTeam/wecom-openclaw-plugin/issues/155)                                                                                                                                               | 每个 run 显式 final；旧 partial 被同 stream supersede；失败只重试最新 final                                      | stream final、supersede、retry tests                                  | 通过       |
 | 图片/文件重复发送         | 官方插件 [#146](https://github.com/WecomTeam/wecom-openclaw-plugin/issues/146)、[#150](https://github.com/WecomTeam/wecom-openclaw-plugin/issues/150)                                                                        | 媒体输出先进入耐久 artifact/Outbox；已完成 delivery 不重新 claim，失败复用同 artifact                            | media spool retry/restart/integrity tests                             | 通过       |
 | 宿主 Axios/代理污染       | 官方插件 [#169](https://github.com/WecomTeam/wecom-openclaw-plugin/issues/169)                                                                                                                                               | Kernel Adapter 在子进程，不能修改 Transport 的 JS 全局；Gateway 不修改 Axios defaults。部署代理/TLS 仍需真实矩阵 | 包边界与受限 Adapter 环境已验证；真实 HTTP 代理下载待验收             | 部分通过   |
+| CLI 能力授权独立失效      | CLI [#134](https://github.com/WecomTeam/wecom-cli/issues/134)                                                                                                                                                                | 识别 `850003` / 明确过期诊断；单次失败、不自动重放写操作；只返回稳定重授权提示；写工具默认关闭                   | Tool 单次调用、脱敏结果与无重试测试                                   | 自动化通过 |
 
 测试中的 fake 只模拟上游时序和错误合同，不伪造 WebSocket 鉴权、心跳或 AES 实现；这些继续完全交给官方
 SDK。真实客户端证据与 deterministic fixture 必须同时保留，二者不能互相替代。

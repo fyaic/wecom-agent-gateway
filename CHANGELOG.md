@@ -63,6 +63,9 @@ tagged.
 
 ### Fixed
 
+- Normalize the official CLI's `850003` capability-authorization expiry into a
+  stable, non-retried tool result without forwarding raw CLI output, paths, or
+  credential details to the Agent.
 - Make the real media-outbox smoke acquire the same per-Bot owner lock as the
   managed Gateway, so it fails closed instead of opening a competing WebSocket
   that can disconnect the production transport.

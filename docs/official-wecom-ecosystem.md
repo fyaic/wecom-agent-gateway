@@ -1,6 +1,6 @@
 # 企业微信官方与周边生态调研
 
-调研快照：2026-09-01；Kernel 协议补充于 2026-09-01；卡片复核于 2026-08-25。版本和 commit 是为了让结论可复核，
+调研快照：2026-09-04；Kernel 协议补充于 2026-09-01；卡片复核于 2026-08-25。版本和 commit 是为了让结论可复核，
 不表示项目永久固定在这些版本。
 
 近期同类项目、官方/社区 issue 聚类以及下一阶段带退出条件的优先级，统一维护在
@@ -9,13 +9,14 @@
 
 ## 官方能力地图
 
-| 项目                                                                            | 快照                             | 已确认能力                                                                                                                      | 在本项目中的定位                                  |
-| ------------------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| [`@wecom/aibot-node-sdk`](https://github.com/WecomTeam/aibot-node-sdk)          | npm `1.0.7`；仓库 main `80615b9` | WebSocket 认证、心跳、指数退避重连；文本/图片/混合/语音/文件/视频消息；流式与卡片回复；主动 `sendMessage`；媒体上传、下载和解密 | 首选且唯一的 Bot WebSocket 协议实现               |
-| [`wecom-openclaw-plugin`](https://github.com/WecomTeam/wecom-openclaw-plugin)   | `2026.8.17`；main `3b1cbe3`      | Bot WebSocket/Webhook、单聊/群聊、流式回复、主动推送、富媒体、ACL、多账号、动态 Agent 路由、会话、`wecom-cli` 工具              | 产品级语义与异常处理参考，不作为运行时依赖        |
-| [`wecom-cli`](https://github.com/WecomTeam/wecom-cli)                           | npm `1.2.0`；main `78c514b`      | 消息、邮件、文档/表格/智能表格/智能文档、日程、会议、待办、微盘、通讯录、媒体和身份等办公工具                                   | Agent 工具层；不负责 IM 入站                      |
-| [`wecom-unified`](https://github.com/WecomTeam/wecom-unified)                   | main `7865dca`                   | 面向 WorkBuddy、CodeBuddy、MiniMax Code、Kimi Work、Codex、Cursor 的统一 Skill 分发                                             | 工具说明/Skill 生态参考，不是常驻 Channel runtime |
-| [`wecom-aibot-python-sdk`](https://github.com/WecomTeam/wecom-aibot-python-sdk) | main `6bcb59a`                   | Node SDK 的 Python 语义对应实现                                                                                                 | 跨语言行为参考；首版仍选 Node                     |
+| 项目                                                                             | 快照                             | 已确认能力                                                                                                                      | 在本项目中的定位                                  |
+| -------------------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| [`@wecom/aibot-node-sdk`](https://github.com/WecomTeam/aibot-node-sdk)           | npm `1.0.7`；仓库 main `80615b9` | WebSocket 认证、心跳、指数退避重连；文本/图片/混合/语音/文件/视频消息；流式与卡片回复；主动 `sendMessage`；媒体上传、下载和解密 | 首选且唯一的 Bot WebSocket 协议实现               |
+| [`wecom-openclaw-plugin`](https://github.com/WecomTeam/wecom-openclaw-plugin)    | `2026.8.17`；main `3b1cbe3`      | Bot WebSocket/Webhook、单聊/群聊、流式回复、主动推送、富媒体、ACL、多账号、动态 Agent 路由、会话、`wecom-cli` 工具              | 产品级语义与异常处理参考，不作为运行时依赖        |
+| [`wecom-cli`](https://github.com/WecomTeam/wecom-cli)                            | npm `1.2.0`；main `78c514b`      | 消息、邮件、文档/表格/智能表格/智能文档、日程、会议、待办、微盘、通讯录、媒体和身份等办公工具                                   | Agent 工具层；不负责 IM 入站                      |
+| [`wecom-unified`](https://github.com/WecomTeam/wecom-unified)                    | main `7865dca`                   | 面向 WorkBuddy、CodeBuddy、MiniMax Code、Kimi Work、Codex、Cursor 的统一 Skill 分发                                             | 工具说明/Skill 生态参考，不是常驻 Channel runtime |
+| [`wecom-aibot-python-sdk`](https://github.com/WecomTeam/wecom-aibot-python-sdk)  | main `6bcb59a`                   | Node SDK 的 Python 语义对应实现                                                                                                 | 跨语言行为参考；首版仍选 Node                     |
+| [`@wecom/wecom-aibot-sdk`](https://www.npmjs.com/package/@wecom/wecom-aibot-sdk) | npm `0.1.0`                      | 网页弹窗扫码创建 AI Bot，包含 origin 校验与 state 防 CSRF                                                                       | 未来 Web onboarding 参考，不进入 Gateway runtime  |
 
 ## 对官方 OpenClaw 插件的代码核验
 
@@ -112,6 +113,17 @@ Broker 幂等消费。补齐该按钮后真实 `updateTemplateCard` 已被服务
 2026-08-31 的 issue 复核进一步确认，应优先跟踪晚 ACK/重试、回复队列溢出、未知 `msg_item`、模板卡片事件
 形状、连续 text+file、重复媒体、群聊 session、消息编辑/撤回、宿主代理污染和 CLI 授权生命周期。这些信号
 已经转换为 M3.0–M3.2 的兼容矩阵与生产计划，不扩大 Core 的 Agent 或办公工具职责。
+
+2026-09-04 再次核对 npm 与官方仓库：Node SDK 仍为 `1.0.7` / `80615b9`，OpenClaw 插件仍为
+`2026.8.17` / `3b1cbe3`，wecom-cli 仍为 `1.2.0` / `78c514b`，因此无需升级依赖。官方插件当前
+`message-parser.ts` 已解析普通及引用场景的 `video.url/aeskey`，并把视频沿文件下载路径交给 OpenClaw；
+这证明 wire shape 的工程处理方向，但不能证明任一桌面客户端一定会产生原生 `msgtype=video` callback。
+同理，插件已解析 text/image/voice/file/video 引用，但真实入口仍取决于企业微信客户端和服务端是否下发
+`quote`。CLI 新 issue [#134](https://github.com/WecomTeam/wecom-cli/issues/134) 暴露读能力仍可用、写能力
+独立报 `850003` 的授权分叉；本项目现将其归一为稳定重授权结果，禁止自动重试审批后的写操作。
+同时补录此前能力地图遗漏的官方网页授权包 `@wecom/wecom-aibot-sdk 0.1.0`。它适合未来为托管控制台提供
+“扫码创建 Bot”的 onboarding，但当前包未给出源码仓库元数据，本项目也没有 Web 管理面，因此只记录能力，
+不新增运行时依赖、不复制其授权流程。
 
 每次升级官方 SDK 都必须跑 transport contract tests，并在真实沙箱补做单聊、群聊、断线重连、流式回复、主动推送与媒体矩阵。
 
