@@ -14,6 +14,14 @@
 版本以 npm `latest` 与仓库 `pnpm-lock.yaml` 为准。GitHub 仓库没有对应 release/tag 时，不用网页显示的
 提交日期替代 npm 包版本；依赖完整性继续由锁文件策略和公开仓库检查验证。
 
+2026-09-04 复核：三个官方仓库的记录 commit 与本页基线一致，SDK npm 仍为
+`1.0.7`。新增社区信号主要是 OpenClaw 升级后的插件 runtime 初始化失败
+（官方插件 [#183](https://github.com/WecomTeam/wecom-openclaw-plugin/issues/183)、
+[#184](https://github.com/WecomTeam/wecom-openclaw-plugin/issues/184)），以及
+`wecom-cli` 群历史能力在部分企业仍不可用（CLI
+[#132](https://github.com/WecomTeam/wecom-cli/issues/132)）；前者再次说明 Kernel/工具运行时必须
+隔离在 Adapter/Tool 边界，后者不改变本项目 Bot-only、实时 callback、不拉历史消息的范围。
+
 ## 固定回归矩阵
 
 运行：
@@ -38,7 +46,7 @@ pnpm test:m3-upstream-compatibility
 测试中的 fake 只模拟上游时序和错误合同，不伪造 WebSocket 鉴权、心跳或 AES 实现；这些继续完全交给官方
 SDK。真实客户端证据与 deterministic fixture 必须同时保留，二者不能互相替代。
 
-## 真实沙箱结果（2026-09-01 至 2026-09-03）
+## 真实沙箱结果（2026-09-01 至 2026-09-04）
 
 | 会话     | Adapter / 场景               | Channel ACK | Kernel 首文本 | 完成    | 投递状态                   |
 | -------- | ---------------------------- | ----------- | ------------- | ------- | -------------------------- |
@@ -47,10 +55,13 @@ SDK。真实客户端证据与 deterministic fixture 必须同时保留，二者
 | 授权私聊 | 桌面 MP4(file) → Pi 能力拒绝 | 463ms       | Kernel 未启动 | 3.177s  | 清理归零；后续文本正常     |
 | 授权私聊 | MP4 file → semantic video    | 未单独采样  | Kernel 未启动 | 1.196s  | 物化 373ms；清理归零       |
 | 授权私聊 | 视频拒绝后的 Pi 严格短文本   | 未单独采样  | 未单独采样    | 15.208s | 单条干净回复；无协议泄漏   |
+| 授权私聊 | Pi / 无人值守唯一 marker     | 479ms       | 14.269s       | 15.084s | 首次投递；验收九项全通过   |
+| 授权群聊 | Pi / 无人值守真实富文本 @    | 412ms       | 3.960s        | 4.908s  | 首次投递；验收九项全通过   |
 
-群聊 final 已被官方 SDK 接受且会话列表立即显示最终文本，但 macOS 企业微信当前打开的消息气泡曾停留在旧的
-“思考中”渲染；切换会话再返回后，同一气泡正确显示 final。这被记录为客户端重绘观察项，不归类为 Gateway
-丢终态，也不把一次重绘结果外推为所有企业微信客户端都不存在类似现象。
+群聊 final 已被官方 SDK 接受且会话列表立即显示最终文本。2026-09-04 的无人值守真实富文本 @ 回归中，
+macOS 企业微信当前打开的消息气泡曾停留在旧的“思考中”渲染；自动切换会话再返回后，同一气泡正确显示
+final。这被记录为客户端重绘观察项，不归类为 Gateway 丢终态，也不把一次重绘结果外推为所有企业微信
+客户端都不存在类似现象。
 
 2026-09-03 再次通过桌面媒体选择器发送 MP4，客户端仍归类为 `msgtype=file`。该结果暴露出 wire type
 直接穿透会令 Kernel 收到错误的 `file` 能力拒绝；Transport 现于受保护物化后按明确 MIME 将其归一为

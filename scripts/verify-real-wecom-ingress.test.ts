@@ -32,6 +32,30 @@ function candidate(message: InboundMessage): RealIngressCandidate {
 }
 
 describe("real WeCom ingress evidence", () => {
+  it("certifies one marker-scoped plain-text turn", () => {
+    const evidence = evaluateRealIngress({
+      kind: "text",
+      conversationType: "direct",
+      mediaSpoolEmpty: true,
+      candidates: [
+        candidate({
+          id: "message",
+          accountId: "account",
+          conversationId: "conversation",
+          conversationType: "direct",
+          senderId: "sender",
+          receivedAt: new Date().toISOString(),
+          parts: [{ type: "text", text: "current turn" }],
+          replyReference: { requestId: "opaque" },
+          metadata: { msgtype: "text" },
+        }),
+      ],
+    });
+
+    expect(evidence.passed).toBe(true);
+    expect(evidence.checks.expectedQuoteShape).toBe(true);
+  });
+
   it("certifies a privacy-safe real quoted-text record", () => {
     const evidence = evaluateRealIngress({
       kind: "quote-text",

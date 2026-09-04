@@ -6,7 +6,8 @@ import type {
   OutboundCommand,
 } from "@fyaic/wecom-runtime-contract";
 
-export type RealIngressKind = "quote-text" | "quote-media" | "native-video";
+export type RealIngressKind =
+  "text" | "quote-text" | "quote-media" | "native-video";
 
 export interface RealIngressCandidate {
   message: InboundMessage;
@@ -56,7 +57,7 @@ export function evaluateRealIngress(options: {
       (message.metadata?.msgtype === "video" &&
         message.parts.some((part) => part.type === "video")));
   const expectedQuoteShape =
-    options.kind === "native-video"
+    options.kind === "text" || options.kind === "native-video"
       ? message?.quote === undefined
       : options.kind === "quote-text"
         ? quoteParts.some(
@@ -140,7 +141,9 @@ function run(): void {
     );
   }
   const adapter = args.adapter ?? process.env.GATEWAY_ADAPTER;
-  if (!adapter) throw new Error("--adapter=<id> is required");
+  if (!adapter) {
+    throw new Error("--adapter=<session compatibility id> is required");
+  }
 
   const database = new DatabaseSync(databasePath, { readOnly: true });
   try {
@@ -278,9 +281,13 @@ function parseArgs(argv: string[]): {
     }),
   );
   if (
-    !["quote-text", "quote-media", "native-video"].includes(values.kind ?? "")
+    !["text", "quote-text", "quote-media", "native-video"].includes(
+      values.kind ?? "",
+    )
   ) {
-    throw new Error("--kind=quote-text|quote-media|native-video is required");
+    throw new Error(
+      "--kind=text|quote-text|quote-media|native-video is required",
+    );
   }
   if (!["direct", "group"].includes(values.conversation ?? "")) {
     throw new Error("--conversation=direct|group is required");

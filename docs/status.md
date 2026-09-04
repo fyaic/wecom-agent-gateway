@@ -1,6 +1,6 @@
 # 工作状态
 
-更新于 2026-09-02。
+更新于 2026-09-04。
 
 ## 已完成并有自动化验证
 
@@ -10,6 +10,7 @@
 | Runtime Contract v1 与启动期兼容检查            | 完成并自动化验证          | 真实 Adapter 必须声明 v1；错误版本和重复 ID 在启动前拒绝                           |
 | Agent 状态/emoji 中立事件                       | 完成并自动化验证          | Channel 只呈现 Agent 显式状态；不注入提示、不推断情绪                              |
 | 可变 Bot 消息与流式合并                         | 完成并自动化验证          | 中性即时回执、250ms 增量合并、同一消息最终化                                       |
+| 无人值守真实文本验收                            | 私聊真实通过              | GUI 发送/可见最终化 + SQLite/Session/Outbox 只读关联；唯一 marker 防串单           |
 | 引用/回复消息保真                               | 完成并自动化验证          | 中立 quote parts、引用媒体物化、全参考 Adapter 映射；未声明 capability fail closed |
 | 官方非阻塞流式背压                              | 完成并自动化/真实验证     | ack 未完成时跳过旧 partial；最终帧必发并保留 durable outbox                        |
 | 官方上游兼容矩阵                                | M3.0-B 自动化通过         | 精确版本台账、晚 ACK/队列、未知 frame、快速 file+text、final/media 恢复            |
@@ -430,6 +431,16 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
   它要求时间窗内唯一匹配、正确 wire/quote shape、敏感媒体字段未落库、Adapter 边界、final accepted、
   无消息级投递错误/积压和 spool 归零。对 2026-09-03 的桌面 MP4 记录运行 native-video 验收得到
   `matchedMessages=0`、失败退出，证明该门不会把普通 file callback 误报为原生视频。
+- 2026-09-04 用已授权企业微信桌面端完成第一轮无人值守私聊基线：唯一 marker 入站后，客户端先出现
+  “Agent 正在思考”，约 15 秒后原位最终化为指定短答；Channel 回执约 0.48 秒，final delivery 被接受，
+  Outbox `pending/leased/dead` 均为 0。验收器随后增加 `text` kind，使后续 GUI 观察可由数据库、Session、
+  delivery journal 和 spool 状态共同佐证，而不是只凭截图。机器复核使用精确 session compatibility ID
+  `pi:rpc-v1`，避免同会话历史 Kernel session 造成假阳性。
+- 2026-09-04 继续以同一持续授权完成无人值守群聊基线：自动化通过企业微信原生候选列表插入真实富文本
+  Bot @，唯一 marker 只产生一个入站；Channel 回执 412ms、Kernel 首事件 234ms、
+  首文本 3.960s、端到端 4.908s，所有 delivery 首次投递成功，Outbox 与 spool 均归零。`text/group`
+  机器验收的九项检查全部通过。macOS 客户端当前打开的气泡一度保留“Agent 正在思考”，切换会话返回后
+  同一气泡正确重绘为最终短答；服务端 final 已先被接受，因此继续作为客户端重绘观察项记录。
 
 ### M5：生产运行与韧性
 

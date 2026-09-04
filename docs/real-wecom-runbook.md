@@ -1,6 +1,6 @@
 # 真实企业微信联调手册
 
-更新于 2026-09-02。本文只覆盖独立测试 Bot，不使用真人账号模拟 Bot，也不从
+更新于 2026-09-04。本文只覆盖独立测试 Bot，不使用真人账号模拟 Bot，也不从
 `wecom-cli` 的加密凭据存储中导出 Secret。
 
 > [!NOTE]
@@ -282,7 +282,7 @@ pending/leased/dead。桌面端通过“文件”或拖放发送而产生的 `ms
 
 ```bash
 pnpm verify:real-wecom-ingress --kind=native-video --conversation=direct \
-  --after=2026-01-01T00:00:00.000Z --adapter=pi
+  --after=2026-01-01T00:00:00.000Z --adapter=pi:rpc-v1
 ```
 
 该命令只匹配持久化 metadata 中的原生 `msgtype=video` 和 Runtime `video` part，并要求能力拒绝终态、
@@ -568,21 +568,44 @@ SDK 在前一帧回执尚未完成时可跳过陈旧 partial，但最终帧必�
 合同通过，不把该项标为真实客户端验收。群聊 Bot 回复中可见的原消息引用只证明出站 reply
 association，不能替代入站引用 callback 证据。
 
+普通文本可以先作为无人值守基线：通过已授权客户端发送唯一、非敏感 marker，观察同一条 Bot 回复从
+即时状态更新为最终文本，再用只读机器证据关联 inbound、Adapter session、final delivery 和 spool：
+
+```bash
+pnpm verify:real-wecom-ingress --kind=text --conversation=direct \
+  --after=2026-01-01T00:00:00.000Z --adapter=pi:rpc-v1 \
+  --marker=UNIQUE_CURRENT_MARKER
+
+pnpm verify:real-wecom-ingress --kind=text --conversation=group \
+  --after=2026-01-01T00:00:00.000Z --adapter=pi:rpc-v1 \
+  --marker=UNIQUE_CURRENT_MARKER
+```
+
+群聊自动化必须经企业微信原生候选列表插入语义化 @，不能只把 `@机器人名` 当作普通字符串粘贴。
+2026-09-04 的授权无人值守回归已覆盖这一过程：唯一 marker 产生一个 group inbound，Channel 回执
+412ms、Kernel 首事件 234ms、首文本 3.960s、完成 4.908s，所有 delivery 首次成功；验收器九项检查
+全部通过，Outbox 与 spool 归零。客户端当前气泡曾保留旧思考态，切换会话返回后同一气泡正确重绘；
+这项 UI 观察必须与 Transport accepted 的机器证据分别记录。
+
 真实客户端一旦提供引用入口，使用唯一、非敏感 marker 发送当前消息，等待最终回复后运行机器验收。
 `--after` 必须是本轮开始前的 ISO 时间，避免旧消息或重复 marker 被误认；命令只输出布尔检查和数量，
 不输出消息、会话、发送者、request、delivery 或 session ID：
 
 ```bash
 pnpm verify:real-wecom-ingress --kind=quote-text --conversation=direct \
-  --after=2026-01-01T00:00:00.000Z --adapter=pi \
+  --after=2026-01-01T00:00:00.000Z --adapter=pi:rpc-v1 \
   --marker=UNIQUE_CURRENT_MARKER --expected-quote-text=KNOWN_QUOTED_EXCERPT
 
 pnpm verify:real-wecom-ingress --kind=quote-media --conversation=group \
-  --after=2026-01-01T00:00:00.000Z --adapter=pi \
+  --after=2026-01-01T00:00:00.000Z --adapter=pi:rpc-v1 \
   --marker=UNIQUE_CURRENT_MARKER --expected-quote-media=image
 ```
 
-通过要求是：时间窗和会话类型内恰好一个匹配 inbound、`quote.parts` 类型/已知摘录正确、持久化记录没有
+`--adapter` 使用 Runtime Contract 的 session compatibility ID，不是部署选择别名；内置 Pi 的值是
+`pi:rpc-v1`。这样验收器不会把同一会话中由其他 Kernel 留下的历史 session 误认为本轮证据。
+
+通过要求是：时间窗和会话类型内恰好一个匹配 inbound；引用模式下 `quote.parts` 类型/已知摘录正确；
+持久化记录没有
 媒体 URL/AES key/本地路径、对应 Adapter session 存在、该 inbound 的 final 已由 Transport 接受、没有
 消息级 delivery 错误/积压且媒体 spool 没有文件。命令通过仍只到 Transport accepted；维护者必须另行
 确认客户端最终回复可见，二者共同满足后才能把真实引用项勾选完成。
