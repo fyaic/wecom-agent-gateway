@@ -17,6 +17,7 @@ const requiredFiles = [
   "CHANGELOG.md",
   "ROADMAP.md",
   "docs/evidence-claims.md",
+  "scripts/verify-real-wecom-ingress.ts",
   ".github/PULL_REQUEST_TEMPLATE.md",
   ".github/ISSUE_TEMPLATE/bug_report.yml",
   ".github/ISSUE_TEMPLATE/feature_request.yml",
@@ -32,6 +33,7 @@ const requiredEvidenceDisclosures: Array<[string, string]> = [
   ["README.en.md", "## Current evidence boundary"],
   ["README.en.md", "Native `msgtype=video` callback"],
   ["ROADMAP.md", "- [ ] Certify native WeCom video callbacks"],
+  ["ROADMAP.md", "pnpm verify:real-wecom-ingress"],
   ["docs/status.md", "## 未声称已通过的真实联调"],
   [
     "docs/evidence-claims.md",

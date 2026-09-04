@@ -35,6 +35,9 @@ in [`docs/ecosystem-watch-and-mainline-plan.md`](docs/ecosystem-watch-and-mainli
 - [ ] Certify quoted/replied-message callbacks in real direct and group
       conversations; deterministic direct/group Transport, Core and Adapter
       coverage is complete and available through `pnpm test:m3-quote-approval`.
+      A privacy-safe database/outbox verifier is available through
+      `pnpm verify:real-wecom-ingress`; it deliberately cannot replace the
+      missing client callback or the final client-visible observation.
 - [x] Adopt the official non-blocking stream path with bounded coalescing and
       backpressure, while keeping the final answer on the durable outbox path.
 - [x] Normalize reply-feedback events as channel feedback without creating a
@@ -69,8 +72,10 @@ in [`docs/ecosystem-watch-and-mainline-plan.md`](docs/ecosystem-watch-and-mainli
 - [ ] Certify native WeCom video callbacks as a transport/media lifecycle; model
       understanding is explicitly outside this acceptance. The exact official
       frame, protected materialization, Adapter capability rejection, cleanup,
-      and following-message recovery are deterministic gates; a real native
-      `msgtype=video` callback is still required to close this item.
+      and following-message recovery are deterministic gates. The real-ingress
+      verifier rejects a desktop `file` callback even when MIME normalization
+      promotes it to semantic video; a real native `msgtype=video` callback is
+      still required to close this item.
 
 ### M3.1: production ownership
 
