@@ -27,7 +27,9 @@
 - 原生企业微信 `msgtype=video` 真实客户端 callback 尚未捕获。
 - 当前 Pi Adapter 不支持视频理解；桌面 MP4 的语义分类和能力拒绝通过不等于视频问答通过。
 - 引用/回复 callback 尚缺真实客户端验收。
-- 宿主机物理断网、24 小时 Linux soak 和跨主机 active-active 尚未认证。
+- 宿主机物理断网、24 小时 Linux soak 和跨主机 active-active 尚未认证。仓库已提供 fail-closed 的
+  `pnpm soak:linux` 与脱敏报告 schema，但脚本/短时测试不替代独立 Linux 主机的真实 24 小时运行和
+  物理网络操作记录。
 - Claude Code 仍是实验性 Adapter；真实 signed-out 诊断通过不等于认证成功路径通过。
 
 具体证据和时间线以 [`status.md`](status.md)、[`upstream-compatibility.md`](upstream-compatibility.md) 与

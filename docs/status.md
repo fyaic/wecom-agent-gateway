@@ -41,6 +41,7 @@
 | 部署前 Doctor 与 checked start                  | 完成并自动化验证          | Node、凭据、ACL、权限、存储、可执行文件/Gateway 连接与 live health                 |
 | 聚合 Operational Snapshot                       | 完成并自动化验证          | 运行/组件/工作/Outbox 健康；无正文、用户/会话/内部 ID                              |
 | loopback 健康与 Prometheus 指标                 | 完成并自动化验证          | livez/readyz/metrics、超时、枚举 label、拒绝非 loopback bind                       |
+| Linux/systemd 24h soak 验收器                   | 完成并自动化验证          | 最短时长门、服务/健康/Outbox/spool/磁盘/journal 聚合、脱敏报告、断网恢复观测       |
 | Linux/systemd 与容器基线                        | 完成并自动化验证          | 专用用户、私有 env、非 root/read-only/cap-drop、内部 healthcheck                   |
 | 单 Bot 进程所有权                               | M3.1-B 完成并本机验证     | 启动前原子 owner lock；双进程快速失败；正常释放与崩溃回收；不冒充 active-active    |
 | macOS OpenClaw 受管单实例                       | 完成并本机真实验证        | LaunchAgent、钥匙串进程注入、RunAtLoad/KeepAlive、受管重启与重新鉴权               |
@@ -194,7 +195,8 @@ ChatGPT-auth-compatible HTTP-only provider，保留现有 ChatGPT 登录身份�
 ## 未声称已通过的真实联调
 
 - 宿主机级物理网卡/路由/DNS 中断；隔离 Linux network namespace detach 后的官方 SDK 断线、退避、重鉴权
-  和 ready 降级/恢复已通过，不能冒充整机网络栈验收。
+  和 ready 降级/恢复已通过，不能冒充整机网络栈验收。`pnpm soak:linux` 已可在独立主机执行并强制
+  24 小时最短门与外部操作佐证，但当前尚无该真实主机报告。
 - 引用/回复消息的真实客户端回调；官方 frame 归一化、引用媒体生命周期和全部参考 Adapter 映射已有自动化覆盖。
   新增 `pnpm verify:real-wecom-ingress` 后，可用隐私安全的机器报告关联 inbound quote、Adapter session、
   final 投递、消息级错误和媒体清理；在客户端确实产生 callback 以前仍保持未通过。
@@ -444,12 +446,20 @@ conversation allowlist，真实名称只存在于本机忽略配置；旧的全�
 - 2026-09-04 上游再检查确认 SDK、官方 OpenClaw 插件和 wecom-cli 的 npm 版本与 main commit 均未变化，
   无需升级依赖。CLI 新增的 `850003` 读写授权分叉信号已进入 Tool 边界：联系人/待办精确工具识别能力
   授权过期，只执行一次，不重放写操作，并向 Agent 返回不含 CLI 原文、路径或凭据的稳定重授权结果。
+- 2026-09-04 在 macOS 企业微信 `5.0.10 (99949)` 再次执行授权桌面端检查：Bot 私聊中的用户文本和
+  Bot 文本均未出现引用/回复操作入口；“图片”工具打开的系统面板明确为“选取图片”，公开脱敏 MP4
+  灰置不可选。只有文件入口能选择 MP4，且既有真实回调为 `msgtype=file`。因此两项真实证据仍保持
+  未通过，未用普通 file 或合成 frame 冒充原生 video/quote callback。
 
 ### M5：生产运行与韧性
 
 - 已提供 Linux/systemd、Dockerfile/Compose、专用用户和只读/最小权限参考配置；容器不打包任何凭据或
   Agent Kernel，进程型 Kernel 必须使用固定版本的派生镜像。本机 Compose 配置解析、镜像构建和断网
   runtime import smoke 已通过。
+- 新增 `pnpm soak:linux` 的 fail-closed 24 小时门：采集 systemd active/PID/restart、live/ready、
+  Outbox、媒体 spool、磁盘水位和不含 MESSAGE 的 journal 元数据，输出 `0600` 脱敏报告。断网模式要求
+  进程 live、ready 下降后恢复，但物理 NIC/route/DNS 操作仍必须外部佐证；当前没有独立 Linux 主机
+  报告，所以只声明“验收器完成”，不声明 24 小时 soak 已通过。
 - 已实现 loopback-only `livez/readyz/metrics`、聚合 Core snapshot 和无用户数据指标；远程采集必须由
   同主机 collector 或受限代理承担，Gateway 不开放公网观测面。
 - 已补齐真实 OS 子进程持租约时 `SIGKILL` → 新进程 SQLite Outbox 恢复，以及 macOS Pi LaunchAgent

@@ -97,8 +97,10 @@ final。这被记录为客户端重绘观察项，不归类为 Gateway 丢终态
 
 - 真实 HTTP/HTTPS 代理下的下载、解密与自签 TLS 组合尚未完成，不声称代理矩阵通过。
 - 宿主机物理网络中断与 24 小时 Linux/systemd soak 属于 M3.1。
-- 原生 `msgtype=video` 的协议、物化、能力拒绝与清理已自动化通过；真实客户端 callback 仍待捕获。MP4 普通
-  file callback 只会在解密后提升为 Runtime 语义 video，不能替代原生 callback 证据。
-- 企业微信 macOS 客户端未暴露用户消息引用入口，引用 callback 的真实客户端证明仍待上游入口。
+- 原生 `msgtype=video` 的协议、物化、能力拒绝与清理已自动化通过；真实客户端 callback 仍待捕获。macOS
+  企业微信 `5.0.10 (99949)` 的图片面板明确拒绝 MP4；MP4 普通 file callback 只会在解密后提升为
+  Runtime 语义 video，不能替代原生 callback 证据。
+- 同一 macOS 客户端在授权 Bot 私聊里对用户/Bot 文本均未暴露引用入口，引用 callback 的真实客户端
+  证明仍待上游入口或其他官方客户端。
 - macOS 企业微信对同一条流式消息的气泡重绘可能短暂落后于会话列表；目前没有协议级送达回执可证明终端已
   完成视觉重绘，验收需同时核对 SDK 结果、Outbox、会话列表和重新进入会话后的气泡终态。

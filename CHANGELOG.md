@@ -8,6 +8,10 @@ tagged.
 
 ### Added
 
+- A fail-closed Linux/systemd 24-hour soak verifier with privacy-safe service,
+  health, durable outbox, media spool, disk-watermark, journal-invocation, and
+  observed network-recovery evidence. Short runs are explicitly non-certifying,
+  and host-level outage claims still require external operator attestation.
 - A privacy-safe real-WeCom ingress verifier for quoted text/media and native
   video callbacks. It correlates normalized inbound records, Adapter session,
   durable final delivery, message-level errors, persisted media redaction, and

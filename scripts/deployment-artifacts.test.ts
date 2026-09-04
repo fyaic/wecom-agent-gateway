@@ -61,6 +61,15 @@ describe("production deployment artifacts", () => {
     expect(smoke).toContain("acquireBotOwnerLock");
     expect(smoke).toContain("await botOwner.release()");
   });
+
+  it("ships a fail-closed Linux/systemd 24-hour soak gate", async () => {
+    const soak = await read("scripts/linux-soak.ts");
+    expect(soak).toContain("CERTIFYING_MINIMUM_MS = 24 * 60 * 60 * 1_000");
+    expect(soak).toContain("systemctl");
+    expect(soak).toContain("journalctl");
+    expect(soak).toContain("externallyAttested: false");
+    expect(soak).not.toContain("--output-fields=MESSAGE");
+  });
 });
 
 function read(path: string): Promise<string> {
