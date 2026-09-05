@@ -28,3 +28,28 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run ci
+
+  first-run:
+    name: Fresh install (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 11.8.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+      # Deliberately no dependency cache. Do not inject Bot or model credentials.
+      - name: Install from locked dependencies into a fresh store
+        run: pnpm install --frozen-lockfile --store-dir "${{ runner.temp }}/wecom-first-run-store"
+      - name: Run standalone credential-free demo
+        run: pnpm demo
+      - name: Exercise public CLI entrypoints without credentials
+        run: pnpm test:first-run

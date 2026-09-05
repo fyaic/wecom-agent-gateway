@@ -2,6 +2,8 @@
 
 ## 先用起来 / Start here
 
+维护者先看[产品目标与防偏航基线](product-intent.md)：判断任务是否仍服务于中间层主线。
+
 1. **第一次使用：** [中文接入指南](getting-started.md) / [English setup](getting-started.en.md)。
 2. **解决什么问题：** [日常使用配方](use-cases.md) / [Everyday recipes](use-cases.en.md)。
 3. **先看可信效果：** [真实 Agent 案例](verified-kernel-cases.md) / [English cases](verified-kernel-cases.en.md)。
