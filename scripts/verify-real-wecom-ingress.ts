@@ -118,7 +118,7 @@ export function evaluateRealIngress(options: {
 }
 
 function run(): void {
-  const args = parseArgs(process.argv.slice(2));
+  const args = parseRealIngressArgs(process.argv.slice(2));
   const databasePath = resolve(
     args.database ?? process.env.GATEWAY_DATABASE_PATH ?? "data/gateway.db",
   );
@@ -140,10 +140,7 @@ function run(): void {
       "--expected-quote-media=image|audio|video|file is required",
     );
   }
-  const adapter = args.adapter ?? process.env.GATEWAY_ADAPTER;
-  if (!adapter) {
-    throw new Error("--adapter=<session compatibility id> is required");
-  }
+  const adapter = args.adapter;
 
   const database = new DatabaseSync(databasePath, { readOnly: true });
   try {
@@ -260,14 +257,14 @@ function matchesInbound(
   );
 }
 
-function parseArgs(argv: string[]): {
+export function parseRealIngressArgs(argv: string[]): {
   kind: RealIngressKind;
   conversationType: "direct" | "group";
   after?: string;
   marker?: string;
   expectedQuoteText?: string;
   expectedQuoteMedia?: "image" | "audio" | "video" | "file";
-  adapter?: string;
+  adapter: string;
   database?: string;
   mediaSpool?: string;
 } {
@@ -291,6 +288,13 @@ function parseArgs(argv: string[]): {
   }
   if (!["direct", "group"].includes(values.conversation ?? "")) {
     throw new Error("--conversation=direct|group is required");
+  }
+  // Deployment aliases are not persisted session compatibility IDs, and a
+  // managed service may use a different configuration than this CLI's .env.
+  if (!values.adapter?.trim()) {
+    throw new Error(
+      "--adapter=<session compatibility id> is required; do not use the deployment alias",
+    );
   }
   if (
     values["expected-quote-media"] &&
