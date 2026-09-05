@@ -8,6 +8,10 @@ tagged.
 
 ### Added
 
+- Read-only `gateway:status`: loopback metrics, bounded requests, aggregate-only
+  reports and separate readiness/work/dead-delivery findings; community issue
+  review and layered troubleshooting guide.
+
 - A credential-free six-check Core/SQLite/external-Echo demo, a non-overwriting
   private starter generator for Codex/Kimi/Pi/OpenClaw/Echo, and a bounded,
   privacy-safe two-turn real Agent continuity check without a Bot connection.
@@ -15,6 +19,9 @@ tagged.
   examples index and Adapter template guide, plus an onboarding feedback form.
 
 ### Fixed
+
+- Doctor live probes no longer print untrusted Adapter identity, health detail
+  or raw exceptions that could contain private configuration.
 
 - Direct enrollment now shares Bot process ownership, preserves/deduplicates
   existing authorized senders, and releases ownership on startup failure.

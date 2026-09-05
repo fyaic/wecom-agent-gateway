@@ -27,6 +27,10 @@ Adapter/Tool 边界；群历史问题不改变本项目 Bot-only、实时 callba
 
 ## 固定回归矩阵
 
+2026-09-05：再次查询 SDK npm `latest` 为 `1.0.7`，无升级变更。补充
+[中间层社区观察](middleware-community-review.md)，区分上游 Issue 报告、未合并 PR 与本项目已验证措施。
+本轮 `pnpm run ci` 通过 36 个测试文件 / 281 项测试，包含本页固定回归所引用的 Transport/Core/Storage 用例。
+
 运行：
 
 ```bash

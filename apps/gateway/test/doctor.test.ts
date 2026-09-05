@@ -1,7 +1,47 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import * as registry from "../src/adapter-registry.js";
 import { diagnoseGatewayEnvironment } from "../src/doctor.js";
 
 describe("gateway doctor", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each(["unhealthy", "throws"])(
+    "does not disclose Adapter identity, health detail or exceptions: %s",
+    async (mode) => {
+      const stop = vi.fn(async () => undefined);
+      const probe = vi.spyOn(registry, "createConfiguredAdapter");
+      if (mode === "throws")
+        probe.mockRejectedValue(new Error("private-token"));
+      else
+        probe.mockResolvedValue({
+          id: "private-identity",
+          health: async () => ({ ok: false, detail: "private-token" }),
+          stop,
+        } as unknown as Awaited<
+          ReturnType<typeof registry.createConfiguredAdapter>
+        >);
+      const checks = await diagnoseGatewayEnvironment(
+        {
+          PATH: process.env.PATH,
+          WECOM_BOT_ID: "set",
+          WECOM_BOT_SECRET: "set",
+          WECOM_ALLOWED_DIRECT_SENDERS: "set",
+          GATEWAY_ADAPTER: "pi",
+          PI_EXECUTABLE: process.execPath,
+        },
+        { live: true },
+      );
+      expect(probe).toHaveBeenCalledOnce();
+      expect(checks).toContainEqual(
+        expect.objectContaining({
+          name: "adapter-live-health",
+          status: "error",
+        }),
+      );
+      expect(JSON.stringify(checks)).not.toContain("private-");
+      if (mode === "unhealthy") expect(stop).toHaveBeenCalledOnce();
+    },
+  );
   it("reports a complete OpenClaw loopback configuration without exposing values", async () => {
     const checks = await diagnoseGatewayEnvironment({
       PATH: process.env.PATH,

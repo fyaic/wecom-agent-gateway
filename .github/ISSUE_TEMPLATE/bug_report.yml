@@ -72,4 +72,5 @@ body:
     id: logs
     attributes:
       label: Sanitized logs
+      description: Prefer pnpm gateway:status if local observability is enabled. Review aggregate counts before sharing. Never paste .env, raw Agent errors or chat logs.
       render: shell

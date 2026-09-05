@@ -1,9 +1,12 @@
 # WeCom Agent Gateway
 
-**在企业微信里用你已经在用的 Agent。离开电脑，也能继续问、发图、看结果。**
+**把你已有的 Agent 接入企业微信的独立中间层。专注便捷接入、可靠传输与清晰排障。**
 
 把 Codex、Kimi Code、OpenClaw 或 Pi 接到一个企业微信机器人：私聊继续任务，群里 @Bot 提问，
-长回复边生成边显示。更换 Agent 时复用同一条企微链路。
+长回复边生成边显示。更换 Agent 时复用同一条企微链路；模型、登录与思考仍由 Agent 管理。
+
+遇到“不回复”？[按层排障](docs/gateway-status.md)：`doctor` 查配置，`agent:check` 查 Agent，
+`gateway:status` 只读检查运行状态与投递积压（需显式启用本地观测）。
 
 [![CI](https://github.com/fyaic/wecom-agent-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/fyaic/wecom-agent-gateway/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)

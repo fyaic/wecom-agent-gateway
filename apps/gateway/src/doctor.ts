@@ -198,16 +198,16 @@ export async function diagnoseGatewayEnvironment(
           "adapter-live-health",
           health.ok ? "ok" : "error",
           health.ok
-            ? `${runtime.id} adapter is reachable`
-            : `${runtime.id} adapter is unhealthy: ${health.detail ?? "unknown"}`,
+            ? "Configured adapter is reachable"
+            : "Configured adapter is unhealthy; inspect its local configuration",
         ),
       );
-    } catch (error) {
+    } catch {
       checks.push(
         check(
           "adapter-live-health",
           "error",
-          `Adapter probe failed: ${asError(error).message}`,
+          "Adapter probe failed; inspect its local configuration and authentication",
         ),
       );
     } finally {
@@ -387,8 +387,4 @@ function check(
   detail: string,
 ): DoctorCheck {
   return { name, status, detail };
-}
-
-function asError(value: unknown): Error {
-  return value instanceof Error ? value : new Error(String(value));
 }
