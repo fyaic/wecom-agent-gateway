@@ -27,6 +27,11 @@ Adapter/Tool 边界；群历史问题不改变本项目 Bot-only、实时 callba
 
 ## 固定回归矩阵
 
+2026-09-05 专项主审：锁定 SDK 的 ACK 拒绝路径返回结构化 frame，因此流窗口降级只接受
+`errcode === 846608`，不再从错误文本或请求标识中匹配数字。新增未知/晚 ACK、上传失败、重试耗尽和
+远端接受后本地提交失败的确定性回归；未知 ACK 仍可能已远端接受，恢复语义为 at-least-once，不能承诺
+跨系统 exactly-once。详见[投递审查](reviews/delivery-closure.md)；本轮不改 SDK 版本。
+
 2026-09-05：再次查询 SDK npm `latest` 为 `1.0.7`，无升级变更。补充
 [中间层社区观察](middleware-community-review.md)，区分上游 Issue 报告、未合并 PR 与本项目已验证措施。
 本轮 `pnpm run ci` 通过 36 个测试文件 / 281 项测试，包含本页固定回归所引用的 Transport/Core/Storage 用例。

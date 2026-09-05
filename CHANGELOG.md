@@ -25,6 +25,15 @@ tagged.
 
 ### Fixed
 
+- Stream expiry fallback now requires the official structured ACK error code;
+  unknown acknowledgements are not treated as successful fallback delivery.
+- Claude Code session ownership, cancellation and terminal cleanup now reject
+  overlapping resumes and mismatched streamed/final session data.
+- Linux soak reports use schema v2 and reject missing metrics, sampling gaps,
+  false-healthy response bodies and service generation changes.
+- Real-ingress evidence requires an explicit runtime compatibility ID instead
+  of silently inheriting a potentially stale deployment alias from `.env`.
+
 - Doctor live probes no longer print untrusted Adapter identity, health detail
   or raw exceptions that could contain private configuration.
 

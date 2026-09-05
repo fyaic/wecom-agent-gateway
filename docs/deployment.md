@@ -70,6 +70,12 @@ sudo -u wecom-gateway pnpm soak:linux -- \
 聚合、媒体 spool 文件数和状态盘剩余空间；结束时只读取 journal 的时间戳与 invocation 元数据，不读取或
 写入消息内容。默认报告写入私有 `data/evidence/`，模式 `0600`，只包含计数、时长和布尔判定。
 
+报告 `schemaVersion: 2` 将未知 Outbox 数值保留为 `null`，不能按零积压读取；旧版报告消费者必须适配。
+五种 Outbox 状态必须齐全且各出现一次，健康检查同时校验 JSON 语义。窗口首尾、采样间隔和服务代际
+都参与判定：采样空洞、PID/invocation/restart 变化或任一采样发现 dead 均不能认证通过。
+这是严格的无重启稳定窗口；受控重启恢复单独验收，恢复后重新开始 24 小时窗口。轮询采样不等于连续
+监控，不能证明采样之间从未发生瞬态故障。确定性测试及限制见[soak 审查](reviews/soak-closure.md)。
+
 认证运行少于 24 小时会直接拒绝。开发机可用 `--non-certifying --duration-hours=0.01` 验证脚本，但该结果
 不得写入公开能力矩阵。若同一窗口安排宿主机 NIC/路由/DNS 中断，增加 `--expect-network-outage`；通过要求
 是 systemd 与 `livez` 保持、`readyz` 至少一次下降后恢复、最终 Outbox/spool 归零且没有 dead letter。
