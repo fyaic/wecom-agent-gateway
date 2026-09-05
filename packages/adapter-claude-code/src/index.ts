@@ -78,9 +78,17 @@ export class ClaudeCodeRuntimeAdapter implements AgentRuntimeAdapter {
 
     const abortController = new AbortController();
     let activeSessionId = request.sessionId;
+    if (activeSessionId && this.activeRuns.has(activeSessionId)) {
+      yield {
+        type: "failed",
+        message: "Claude Code session already has an active run",
+      };
+      return;
+    }
     if (activeSessionId) this.activeRuns.set(activeSessionId, abortController);
 
     let terminal = false;
+    let cancelled = false;
     let partialText = "";
     try {
       const stream = await this.queryFactory({
@@ -102,26 +110,35 @@ export class ClaudeCodeRuntimeAdapter implements AgentRuntimeAdapter {
       });
 
       for await (const raw of stream) {
-        if (terminal) continue;
+        // Abort can race with a buffered result from the SDK. Cancellation wins
+        // until a terminal event has actually been delivered to the consumer.
+        if (abortController.signal.aborted) {
+          terminal = true;
+          yield { type: "failed", message: "Claude Code request cancelled" };
+          return;
+        }
         const message = asRecord(raw);
         if (!message) continue;
 
         if (isInitMessage(message)) {
           const sessionId = stringField(message, "session_id");
           if (!sessionId) continue;
-          if (
-            request.sessionId !== undefined &&
-            sessionId !== request.sessionId
-          ) {
+          if (activeSessionId !== undefined && sessionId !== activeSessionId) {
             terminal = true;
             yield {
               type: "failed",
               message: "Claude Code resumed a different session",
             };
-            continue;
+            return;
           }
-          if (activeSessionId && activeSessionId !== sessionId) {
-            this.releaseRun(activeSessionId, abortController);
+          const owner = this.activeRuns.get(sessionId);
+          if (owner && owner !== abortController) {
+            terminal = true;
+            yield {
+              type: "failed",
+              message: "Claude Code session already has an active run",
+            };
+            return;
           }
           activeSessionId = sessionId;
           this.activeRuns.set(sessionId, abortController);
@@ -143,7 +160,12 @@ export class ClaudeCodeRuntimeAdapter implements AgentRuntimeAdapter {
             message.is_error === false &&
             typeof message.result === "string"
           ) {
-            if (partialText && partialText !== message.result) {
+            if (!activeSessionId || message.session_id !== activeSessionId) {
+              yield {
+                type: "failed",
+                message: "Claude Code result did not match its active session",
+              };
+            } else if (partialText && partialText !== message.result) {
               yield {
                 type: "failed",
                 message: "Claude Code stream did not match its final result",
@@ -154,6 +176,7 @@ export class ClaudeCodeRuntimeAdapter implements AgentRuntimeAdapter {
           } else {
             yield { type: "failed", message: classifyResultFailure(message) };
           }
+          return;
         }
       }
     } catch (error) {
@@ -167,13 +190,16 @@ export class ClaudeCodeRuntimeAdapter implements AgentRuntimeAdapter {
         };
       }
     } finally {
+      // Also covers an upstream fault and a consumer that stops iterating early.
+      cancelled = abortController.signal.aborted;
+      abortController.abort();
       if (activeSessionId) this.releaseRun(activeSessionId, abortController);
     }
 
     if (!terminal) {
       yield {
         type: "failed",
-        message: abortController.signal.aborted
+        message: cancelled
           ? "Claude Code request cancelled"
           : "Claude Code stream ended without a result",
       };

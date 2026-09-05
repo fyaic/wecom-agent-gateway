@@ -280,6 +280,160 @@ describe("ClaudeCodeRuntimeAdapter", () => {
       },
     ]);
   });
+
+  it("cancellation wins over buffered SDK text and success", async () => {
+    const adapter = new ClaudeCodeRuntimeAdapter({
+      queryFactory: () =>
+        messages([
+          init("buffered"),
+          delta("late"),
+          success("buffered", "late"),
+        ]),
+    });
+    const events = [];
+    for await (const event of adapter.run({ message: inbound })) {
+      events.push(event);
+      if (event.type === "session-started")
+        await adapter.cancel(event.sessionId);
+    }
+    expect(events).toEqual([
+      { type: "session-started", sessionId: "buffered" },
+      { type: "failed", message: "Claude Code request cancelled" },
+    ]);
+  });
+
+  it("stops consuming SDK events at the terminal result and releases the query", async () => {
+    let readAfterResult = false;
+    let closed = false;
+    let parameters: ClaudeCodeQueryParameters | undefined;
+    const adapter = new ClaudeCodeRuntimeAdapter({
+      queryFactory: (value) => {
+        parameters = value;
+        return (async function* () {
+          try {
+            yield init("terminal");
+            yield success("terminal", "ok");
+            readAfterResult = true;
+            yield delta("invalid late output");
+          } finally {
+            closed = true;
+          }
+        })();
+      },
+    });
+    const events = await collect(adapter.run({ message: inbound }));
+    expect(events.at(-1)).toEqual({ type: "message-completed", text: "ok" });
+    expect(readAfterResult).toBe(false);
+    expect(closed).toBe(true);
+    expect(parameters?.options.abortController.signal.aborted).toBe(true);
+  });
+
+  it("aborts the SDK query when its consumer exits early", async () => {
+    let parameters: ClaudeCodeQueryParameters | undefined;
+    const adapter = new ClaudeCodeRuntimeAdapter({
+      queryFactory: (value) => {
+        parameters = value;
+        return messages([init("early-exit"), success("early-exit", "unused")]);
+      },
+    });
+    const iterator = adapter.run({ message: inbound })[Symbol.asyncIterator]();
+    await iterator.next();
+    await iterator.return?.();
+    expect(parameters?.options.abortController.signal.aborted).toBe(true);
+  });
+
+  it("does not allow a concurrent resume to steal cancellation ownership", async () => {
+    let calls = 0;
+    const adapter = new ClaudeCodeRuntimeAdapter({
+      queryFactory: () => {
+        calls += 1;
+        return messages([init("shared"), success("shared", "ok")]);
+      },
+    });
+    const first = adapter
+      .run({ message: inbound, sessionId: "shared" })
+      [Symbol.asyncIterator]();
+    await first.next();
+    expect(
+      await collect(adapter.run({ message: inbound, sessionId: "shared" })),
+    ).toEqual([
+      {
+        type: "failed",
+        message: "Claude Code session already has an active run",
+      },
+    ]);
+    expect(calls).toBe(1);
+    await adapter.cancel("shared");
+    expect((await first.next()).value).toEqual({
+      type: "failed",
+      message: "Claude Code request cancelled",
+    });
+    await first.return?.();
+    expect(
+      (
+        await collect(adapter.run({ message: inbound, sessionId: "shared" }))
+      ).at(-1),
+    ).toEqual({ type: "message-completed", text: "ok" });
+  });
+
+  it("rejects a success result for another session", async () => {
+    const adapter = new ClaudeCodeRuntimeAdapter({
+      queryFactory: () =>
+        messages([init("current"), success("other", "wrong conversation")]),
+    });
+    expect((await collect(adapter.run({ message: inbound }))).at(-1)).toEqual({
+      type: "failed",
+      message: "Claude Code result did not match its active session",
+    });
+  });
+
+  it("rejects a fresh init collision without aborting the existing owner", async () => {
+    const calls: ClaudeCodeQueryParameters[] = [];
+    const adapter = new ClaudeCodeRuntimeAdapter({
+      queryFactory: (value) => {
+        calls.push(value);
+        return messages([init("collision"), success("collision", "ok")]);
+      },
+    });
+    const first = adapter.run({ message: inbound })[Symbol.asyncIterator]();
+    await first.next();
+    expect(await collect(adapter.run({ message: inbound }))).toEqual([
+      {
+        type: "failed",
+        message: "Claude Code session already has an active run",
+      },
+    ]);
+    expect(calls[0]?.options.abortController.signal.aborted).toBe(false);
+    expect(calls[1]?.options.abortController.signal.aborted).toBe(true);
+    await adapter.cancel("collision");
+    expect(calls[0]?.options.abortController.signal.aborted).toBe(true);
+    expect((await first.next()).value).toEqual({
+      type: "failed",
+      message: "Claude Code request cancelled",
+    });
+    await first.return?.();
+  });
+
+  it("rejects a second init that changes the session of a fresh run", async () => {
+    const adapter = new ClaudeCodeRuntimeAdapter({
+      queryFactory: () =>
+        messages([init("first"), init("second"), success("second", "wrong")]),
+    });
+    expect(await collect(adapter.run({ message: inbound }))).toEqual([
+      { type: "session-started", sessionId: "first" },
+      { type: "failed", message: "Claude Code resumed a different session" },
+    ]);
+  });
+
+  it("keeps an incomplete stream distinct from user cancellation", async () => {
+    const adapter = new ClaudeCodeRuntimeAdapter({
+      queryFactory: () => messages([init("incomplete")]),
+    });
+    expect((await collect(adapter.run({ message: inbound }))).at(-1)).toEqual({
+      type: "failed",
+      message: "Claude Code stream ended without a result",
+    });
+  });
 });
 
 function fakeTextFactory(
