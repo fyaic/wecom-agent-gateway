@@ -25,9 +25,12 @@
   "type": "module",
   "packageManager": "pnpm@11.8.0",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.13"
   },
   "scripts": {
+    "demo": "tsx scripts/demo.ts",
+    "onboard": "tsx scripts/setup.ts",
+    "agent:check": "tsx --env-file-if-exists=.env scripts/check-agent.ts",
     "doctor": "tsx --env-file-if-exists=.env scripts/doctor.ts",
     "doctor:live": "tsx --env-file-if-exists=.env scripts/doctor.ts --live",
     "start": "tsx --env-file-if-exists=.env apps/gateway/src/index.ts",

@@ -23,6 +23,16 @@ changes.
 
 ## Next
 
+### First useful reply and community onboarding
+
+- [x] Credential-free local demo using the real Core, SQLite and external Adapter.
+- [x] Private minimal starter profiles and a separate real Agent continuity check.
+- [x] User-centered bilingual README, practical recipes and onboarding feedback.
+- [ ] Validate the guide with new community users and publish scoped friction findings.
+- [ ] Design a versioned distribution/upgrade/uninstall path before promising an npm one-command install.
+
+Details and measured local results: [onboarding review](docs/onboarding-review.md).
+
 Mainline priorities take precedence over additional card themes or business UI:
 
 The evidence, ordering, and exit criteria for the following work are maintained

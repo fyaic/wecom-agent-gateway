@@ -1,0 +1,47 @@
+name: Getting started / 上手卡点
+description: Tell us where the first useful reply got stuck — no protocol knowledge required.
+title: "[Onboarding]: "
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        帮我们缩短从 clone 到第一条有用回复的距离。Please never paste .env, API keys, Bot secrets, internal IDs, or raw private chats.
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Where did you get stuck? / 卡在哪一步？
+      options:
+        - Understanding what this project does
+        - Install / pnpm demo
+        - pnpm onboard / configuration
+        - pnpm agent:check / Agent login or model
+        - Bot creation / enrollment
+        - First reply / session continuity
+        - Images / cards / proactive notifications
+    validations:
+      required: true
+  - type: input
+    id: agent
+    attributes:
+      label: Agent or harness and version / Agent 与版本
+      placeholder: "Pi / Codex / Kimi / OpenClaw / ACP / Echo"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: OS, Node, pnpm and Gateway commit/tag
+    validations:
+      required: true
+  - type: textarea
+    id: experience
+    attributes:
+      label: Expected result and what happened / 预期与实际
+      description: Include the command stage and sanitized errors. A privacy-cropped screenshot is welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: What everyday job did you want it to help with? / 原本想解决什么日常问题？
