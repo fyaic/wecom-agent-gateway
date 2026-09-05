@@ -1501,6 +1501,112 @@ describe("WeComBotTransport", () => {
     ]);
   });
 
+  it.each(["upload-rejected", "send-ack-unknown"] as const)(
+    "keeps media delivery unaccepted on %s and permits a later retry",
+    async (fault) => {
+      const root = mkdtempSync(join(tmpdir(), "wecom-media-fault-"));
+      directories.push(root);
+      const path = join(root, "report.pdf");
+      writeFileSync(path, "%PDF-test", { mode: 0o600 });
+      const failure =
+        fault === "upload-rejected"
+          ? { errcode: 500, errmsg: "upload rejected" }
+          : new Error("Media reply ACK timeout; delivery outcome unknown");
+      class RecoveringClient extends FakeClient {
+        failing = true;
+        override async uploadMedia(...args: any[]) {
+          const result = await super.uploadMedia(...args);
+          if (this.failing && fault === "upload-rejected") throw failure;
+          return result;
+        }
+        override async sendMediaMessage(...args: any[]): Promise<void> {
+          await super.sendMediaMessage(...args);
+          if (this.failing) throw failure;
+        }
+      }
+      const client = new RecoveringClient();
+      const transport = new WeComBotTransport({
+        accountId: "bot-a",
+        botId: "id",
+        secret: "secret",
+        clientFactory: () => client,
+        mediaOutputRoots: [root],
+      });
+      const command = {
+        type: "proactive-media" as const,
+        accountId: "bot-a",
+        conversationId: "chat-1",
+        media: { type: "file" as const, path },
+      };
+      await expect(transport.deliver(command)).rejects.toBe(failure);
+      // Upload rejection guarantees no message-send call. A lost send ACK
+      // does not: a remote copy may exist, even though there is no receipt.
+      expect(client.mediaPushes).toHaveLength(
+        fault === "upload-rejected" ? 0 : 1,
+      );
+      expect(client.pushes).toEqual([]);
+      client.failing = false;
+      await expect(transport.deliver(command)).resolves.toMatchObject({
+        id: expect.any(String),
+        acceptedAt: expect.any(String),
+      });
+      expect(client.uploads).toHaveLength(2);
+      expect(client.mediaPushes).toHaveLength(
+        fault === "upload-rejected" ? 1 : 2,
+      );
+      expect(client.pushes).toEqual([]);
+    },
+  );
+
+  it("does not acknowledge media before the send ACK settles", async () => {
+    const root = mkdtempSync(join(tmpdir(), "wecom-media-late-ack-"));
+    directories.push(root);
+    const path = join(root, "report.pdf");
+    writeFileSync(path, "%PDF-test", { mode: 0o600 });
+    let releaseAck!: () => void;
+    const ack = new Promise<void>((resolve) => {
+      releaseAck = resolve;
+    });
+    let notifySend!: () => void;
+    const sent = new Promise<void>((resolve) => {
+      notifySend = resolve;
+    });
+    class LateMediaAckClient extends FakeClient {
+      override async sendMediaMessage(...args: any[]): Promise<void> {
+        await super.sendMediaMessage(...args);
+        notifySend();
+        await ack;
+      }
+    }
+    const client = new LateMediaAckClient();
+    const transport = new WeComBotTransport({
+      accountId: "bot-a",
+      botId: "id",
+      secret: "secret",
+      clientFactory: () => client,
+      mediaOutputRoots: [root],
+    });
+    let accepted = false;
+    const delivery = transport
+      .deliver({
+        type: "proactive-media",
+        accountId: "bot-a",
+        conversationId: "chat-1",
+        media: { type: "file", path },
+      })
+      .then((receipt) => {
+        accepted = true;
+        return receipt;
+      });
+    await sent;
+    expect(accepted).toBe(false);
+    expect(client.uploads).toHaveLength(1);
+    expect(client.mediaPushes).toHaveLength(1);
+    releaseAck();
+    await expect(delivery).resolves.toMatchObject({ id: expect.any(String) });
+    expect(accepted).toBe(true);
+  });
+
   it("fails closed when no outbound media root is configured", async () => {
     const root = mkdtempSync(join(tmpdir(), "wecom-media-disabled-test-"));
     directories.push(root);
@@ -1523,6 +1629,36 @@ describe("WeComBotTransport", () => {
       }),
     ).rejects.toThrow("no allowed output roots");
   });
+
+  it.each([
+    new Error("Reply ACK timeout for req_846608_unknown"),
+    { errcode: 500, errmsg: "upstream failure, reference 846608" },
+    new Error("stream expired (code: 846608)"),
+  ])(
+    "does not infer stream expiry from unstructured error text (%j)",
+    async (error) => {
+      const client = new FakeClient();
+      client.replyError = error;
+      const transport = new WeComBotTransport({
+        accountId: "bot-a",
+        botId: "id",
+        secret: "secret",
+        clientFactory: () => client,
+      });
+      await expect(
+        transport.deliver({
+          type: "reply",
+          accountId: "bot-a",
+          conversationId: "chat-1",
+          replyReference: { requestId: "req-unknown" },
+          streamId: "stream-unknown",
+          text: "final",
+          final: true,
+        }),
+      ).rejects.toBe(error);
+      expect(client.pushes).toEqual([]);
+    },
+  );
 
   it("falls back to an official proactive send when the stream window expires", async () => {
     const client = new FakeClient();
