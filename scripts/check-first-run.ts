@@ -6,6 +6,28 @@ import { pathToFileURL } from "node:url";
 
 const exec = promisify(execFile);
 
+export function firstRunEnvironment(
+  source: NodeJS.ProcessEnv,
+): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { NO_COLOR: "1" };
+  // Preserve tool locations unchanged. These are not replacement home directories.
+  for (const key of [
+    "PATH",
+    "HOME",
+    "USERPROFILE",
+    "PNPM_HOME",
+    "TMPDIR",
+    "TMP",
+    "TEMP",
+    "SystemRoot",
+    "LANG",
+    "LC_ALL",
+  ]) {
+    if (source[key]) env[key] = source[key];
+  }
+  return env;
+}
+
 // Developer acceptance only: requires a disposable checkout, never the running Bot directory.
 export async function checkFirstRun(
   root: string,
@@ -21,21 +43,10 @@ export async function checkFirstRun(
     }
   }
   // Do not let existing Bot/model settings or NODE_OPTIONS satisfy a first-run check.
-  const env: NodeJS.ProcessEnv = {};
-  for (const key of [
-    "PATH",
-    "TMPDIR",
-    "TMP",
-    "TEMP",
-    "SystemRoot",
-    "LANG",
-    "LC_ALL",
-  ]) {
-    if (process.env[key]) env[key] = process.env[key];
-  }
-  env.NO_COLOR = "1";
+  const env = firstRunEnvironment(process.env);
   let checks = 0;
   const run = async (args: string[], expectedCode: number) => {
+    log({ event: "first_run_command", command: args[0] });
     try {
       const result = await exec("pnpm", args, {
         cwd: root,
@@ -46,9 +57,19 @@ export async function checkFirstRun(
       if (expectedCode !== 0) throw new Error("unexpected-command-success");
       return result.stdout;
     } catch (error) {
-      const result = error as { code?: unknown; stdout?: string };
-      if (result.code !== expectedCode || typeof result.stdout !== "string")
+      const result = error as {
+        code?: unknown;
+        stdout?: string;
+        stderr?: string;
+      };
+      if (result.code !== expectedCode || typeof result.stdout !== "string") {
+        log({
+          event: "first_run_command_failed",
+          command: args[0],
+          exitCode: typeof result.code === "number" ? result.code : null,
+        });
         throw new Error("command-outcome-mismatch");
+      }
       return result.stdout;
     }
   };
