@@ -17,6 +17,7 @@ describe("first-run acceptance safety", () => {
       HOME: "/fixture/home",
       PNPM_HOME: "/fixture/pnpm",
       PATH: "/fixture/bin",
+      CI: "true",
       WECOM_BOT_SECRET: "private-token",
       ANTHROPIC_API_KEY: "private-key",
       NODE_OPTIONS: "--require private-module",
@@ -26,6 +27,7 @@ describe("first-run acceptance safety", () => {
       HOME: "/fixture/home",
       PNPM_HOME: "/fixture/pnpm",
       PATH: "/fixture/bin",
+      CI: "true",
       NO_COLOR: "1",
     });
     expect(JSON.stringify(env)).not.toContain("private-");

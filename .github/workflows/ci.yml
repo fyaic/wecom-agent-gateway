@@ -51,12 +51,5 @@ jobs:
         run: pnpm install --frozen-lockfile --store-dir "${{ runner.temp }}/wecom-first-run-store"
       - name: Run standalone credential-free demo
         run: pnpm demo
-      - name: Check isolated tool environment with the public offline demo
-        run: >-
-          node --import tsx --input-type=module -e
-          'import { firstRunEnvironment } from "./scripts/check-first-run.ts";
-          import { spawnSync } from "node:child_process";
-          const result = spawnSync("pnpm", ["demo"], { env: firstRunEnvironment(process.env), stdio: "inherit" });
-          process.exitCode = result.status ?? 1;'
       - name: Exercise public CLI entrypoints without credentials
         run: pnpm test:first-run

@@ -63,6 +63,10 @@ GitHub CI 新增 macOS/Linux 独立新 runner、Node 22、无依赖缓存、独�
 本机 macOS 的全新依赖 store 安装观察：178 个包、reused 0，安装 41.9s；上述五阶段通过。
 这是单次网络/宿主观察，不是时延承诺。两个远端平台的结果以对应 PR 中 `Fresh install` job 为准。
 
+本轮远端门曾失败：独立 `pnpm demo` 正常，但验收脚本清理环境时丢弃 `CI`，使 pnpm 在无 TTY 的
+子进程里触发依赖重装确认并中止。这是新增验收器的问题，不是 Gateway 链路缺陷。保留原值的工具位置与
+`CI`，继续排除 Bot/模型配置和 NODE_OPTIONS；不通过允许静默清空 modules 来绕过失败。
+
 边界：验证源码安装与无凭据安全失败，不含真实 Agent 认证、Bot 注册、客户端首聊或 24h soak。
 后者仍需分别记录；不能将 CI 的空凭据路径写成“新用户全流程已认证”。
 

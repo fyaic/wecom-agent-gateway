@@ -16,6 +16,7 @@ export function firstRunEnvironment(
     "HOME",
     "USERPROFILE",
     "PNPM_HOME",
+    "CI",
     "TMPDIR",
     "TMP",
     "TEMP",
