@@ -49,3 +49,14 @@
 - 仍未完成：自有凭据成功两轮、真实取消与重启恢复、WeCom 私聊/群聊、图片与工具交互。
 - 不改 SDK 锁定版本、不改许可证、不提升 README 能力声明；完整条件仍见
   [Claude 评估](../claude-code-adapter-evaluation.md) 与[证据规范](../evidence-claims.md)。
+
+## 主审追加：流式 session 校验
+
+主审指出：仅在 final 校验 session 还不够，错误会话的增量文本可能已经显示给用户。
+对照锁定 SDK `0.3.258` 的公开 `SDKPartialAssistantMessage` 类型，`stream_event.session_id`
+是必填字符串，`parent_tool_use_id` 是字符串或 null，因此现在对可投影的主 Agent 文本增量在输出前
+校验活动 session；不匹配或缺少 session 时返回固定失败，不输出该文本，也不接受后面的成功 result。
+子 Agent 文本仍先按 `parent_tool_use_id` 排除，即使它携带不同 session，也不会污染或错误终止主 Agent 回复。
+
+确定性测试新增两项：错误 session、缺少 session；原有子 Agent 隔离测试现在显式携带不同 child session。
+所有 fake 增量补齐上游必填字段，避免无效 fixture 掩盖协议缺口。本追加不涉及真实认证或支持等级变更。

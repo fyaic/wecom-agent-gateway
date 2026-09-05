@@ -65,8 +65,8 @@ describe("ClaudeCodeRuntimeAdapter", () => {
         prompt = parameters.prompt;
         return messages([
           init("session-quote"),
-          delta("not forwarded", "tool-use-1"),
-          delta("ok"),
+          delta("not forwarded", "tool-use-1", "child-session"),
+          delta("ok", null, "session-quote"),
           success("session-quote", "ok"),
         ]);
       },
@@ -126,7 +126,7 @@ describe("ClaudeCodeRuntimeAdapter", () => {
         subprocessEnvironment = parameters.options.env;
         return messages([
           init("session-isolated"),
-          delta("ok"),
+          delta("ok", null, "session-isolated"),
           success("session-isolated", "ok"),
         ]);
       },
@@ -166,7 +166,7 @@ describe("ClaudeCodeRuntimeAdapter", () => {
       queryFactory: () =>
         messages([
           init("session-mismatch"),
-          delta("partial"),
+          delta("partial", null, "session-mismatch"),
           success("session-mismatch", "different"),
         ]),
     });
@@ -267,7 +267,10 @@ describe("ClaudeCodeRuntimeAdapter", () => {
   it("rejects a different session returned by resume", async () => {
     const adapter = new ClaudeCodeRuntimeAdapter({
       queryFactory: () =>
-        messages([init("unexpected-session"), delta("ignored")]),
+        messages([
+          init("unexpected-session"),
+          delta("ignored", null, "unexpected-session"),
+        ]),
     });
 
     const actual = await collect(
@@ -286,7 +289,7 @@ describe("ClaudeCodeRuntimeAdapter", () => {
       queryFactory: () =>
         messages([
           init("buffered"),
-          delta("late"),
+          delta("late", null, "buffered"),
           success("buffered", "late"),
         ]),
     });
@@ -314,7 +317,7 @@ describe("ClaudeCodeRuntimeAdapter", () => {
             yield init("terminal");
             yield success("terminal", "ok");
             readAfterResult = true;
-            yield delta("invalid late output");
+            yield delta("invalid late output", null, "terminal");
           } finally {
             closed = true;
           }
@@ -386,6 +389,35 @@ describe("ClaudeCodeRuntimeAdapter", () => {
       message: "Claude Code result did not match its active session",
     });
   });
+
+  it.each(["other-session", undefined])(
+    "rejects main-agent text from an invalid session (%s) before projection",
+    async (sessionId) => {
+      const adapter = new ClaudeCodeRuntimeAdapter({
+        queryFactory: () =>
+          messages([
+            init("current"),
+            {
+              ...(delta("private unrelated content", null, "current") as Record<
+                string,
+                unknown
+              >),
+              session_id: sessionId,
+            },
+            success("current", "private unrelated content"),
+          ]),
+      });
+      const events = await collect(adapter.run({ message: inbound }));
+      expect(events).toEqual([
+        { type: "session-started", sessionId: "current" },
+        {
+          type: "failed",
+          message: "Claude Code stream did not match its active session",
+        },
+      ]);
+      expect(JSON.stringify(events)).not.toContain("private unrelated content");
+    },
+  );
 
   it("rejects a fresh init collision without aborting the existing owner", async () => {
     const calls: ClaudeCodeQueryParameters[] = [];
@@ -465,7 +497,7 @@ async function* cancellableMessages(
     error.name = "AbortError";
     throw error;
   }
-  yield delta("should not happen");
+  yield delta("should not happen", null, "session-cancel");
   yield success("session-cancel", "should not happen");
 }
 
@@ -473,10 +505,15 @@ function init(sessionId: string): unknown {
   return { type: "system", subtype: "init", session_id: sessionId };
 }
 
-function delta(text: string, parentToolUseId: string | null = null): unknown {
+function delta(
+  text: string,
+  parentToolUseId: string | null = null,
+  sessionId = "session-1",
+): unknown {
   return {
     type: "stream_event",
     parent_tool_use_id: parentToolUseId,
+    session_id: sessionId,
     event: {
       type: "content_block_delta",
       delta: { type: "text_delta", text },

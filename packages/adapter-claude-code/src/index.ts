@@ -148,6 +148,17 @@ export class ClaudeCodeRuntimeAdapter implements AgentRuntimeAdapter {
 
         const delta = textDelta(message);
         if (delta !== undefined) {
+          // SDKPartialAssistantMessage requires session_id. Validate before any
+          // user-visible projection; checking only the final result is too late.
+          // textDelta has already excluded child-agent output.
+          if (!activeSessionId || message.session_id !== activeSessionId) {
+            terminal = true;
+            yield {
+              type: "failed",
+              message: "Claude Code stream did not match its active session",
+            };
+            return;
+          }
           partialText += delta;
           if (delta) yield { type: "text-delta", text: delta };
           continue;
