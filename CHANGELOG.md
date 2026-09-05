@@ -8,6 +8,11 @@ tagged.
 
 ### Added
 
+- Disposable-checkout first-run acceptance through public pnpm commands, with
+  uncached macOS/Linux CI jobs and preflight refusal for existing private state.
+- A product-intent baseline mapping user requirements to evidence and explicit
+  non-goals; no runtime, model or automatic-card behavior changes in this slice.
+
 - Read-only `gateway:status`: loopback metrics, bounded requests, aggregate-only
   reports and separate readiness/work/dead-delivery findings; community issue
   review and layered troubleshooting guide.

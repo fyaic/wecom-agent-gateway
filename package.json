@@ -29,6 +29,7 @@
   },
   "scripts": {
     "demo": "tsx scripts/demo.ts",
+    "test:first-run": "tsx scripts/check-first-run.ts",
     "onboard": "tsx scripts/setup.ts",
     "agent:check": "tsx --env-file-if-exists=.env scripts/check-agent.ts",
     "gateway:status": "tsx --env-file-if-exists=.env scripts/gateway-status.ts",
