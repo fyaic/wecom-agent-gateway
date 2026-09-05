@@ -5,8 +5,24 @@ import type {
 } from "@fyaic/wecom-runtime-contract";
 import {
   evaluateRealIngress,
+  parseRealIngressArgs,
   type RealIngressCandidate,
 } from "./verify-real-wecom-ingress.js";
+
+describe("real ingress CLI evidence scope", () => {
+  it("requires an explicit session compatibility ID instead of inferring a deployment alias", () => {
+    const args = ["--kind=text", "--conversation=direct"];
+    expect(() => parseRealIngressArgs(args)).toThrow(
+      "session compatibility id",
+    );
+    expect(() => parseRealIngressArgs([...args, "--adapter= "])).toThrow(
+      "session compatibility id",
+    );
+    expect(
+      parseRealIngressArgs([...args, "--adapter=fixture:protocol-v1"]).adapter,
+    ).toBe("fixture:protocol-v1");
+  });
+});
 
 function candidate(message: InboundMessage): RealIngressCandidate {
   return {

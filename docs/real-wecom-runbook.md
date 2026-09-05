@@ -611,6 +611,8 @@ pnpm verify:real-wecom-ingress --kind=quote-media --conversation=group \
 
 `--adapter` 使用 Runtime Contract 的 session compatibility ID，不是部署选择别名；内置 Pi 的值是
 `pi:rpc-v1`。这样验收器不会把同一会话中由其他 Kernel 留下的历史 session 误认为本轮证据。
+此参数必须显式给出，不再回退到 `.env` 的 `GATEWAY_ADAPTER`：受管服务可能使用独立配置，
+部署别名也不等于持久化 session compatibility ID。遗漏时在读取数据库前拒绝验收。
 
 通过要求是：时间窗和会话类型内恰好一个匹配 inbound；引用模式下 `quote.parts` 类型/已知摘录正确；
 持久化记录没有

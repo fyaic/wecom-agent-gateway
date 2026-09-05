@@ -1012,11 +1012,10 @@ function timestamp(value: unknown): string {
 }
 
 function hasErrorCode(error: unknown, code: number): boolean {
-  const record = asRecord(error);
-  const message = `${stringValue(record.errmsg) ?? ""} ${
-    stringValue(record.message) ?? ""
-  }`;
-  return record.errcode === code || message.includes(String(code));
+  // The official SDK rejects a negative ACK with its structured frame. A
+  // timeout can include arbitrary request IDs: matching digits in its text
+  // would turn an unknown delivery outcome into a proactive duplicate.
+  return asRecord(error).errcode === code;
 }
 
 export function renderWeComTemplateCard(

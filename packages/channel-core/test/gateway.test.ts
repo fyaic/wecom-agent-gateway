@@ -3031,6 +3031,157 @@ describe("WeComAgentGateway", () => {
     expect(mediaSpool.released).toEqual(["artifact-1"]);
   });
 
+  it.each([
+    { fault: "upload-rejected", recover: true },
+    { fault: "send-ack-unknown", recover: true },
+    { fault: "upload-rejected", recover: false },
+    { fault: "send-ack-unknown", recover: false },
+  ])(
+    "settles media $fault with recovery=$recover without inventing delivery evidence",
+    async ({ fault, recover }) => {
+      class FaultMediaTransport extends FakeTransport {
+        readonly outputModalities: ReadonlySet<MediaType> = new Set(["file"]);
+        override readonly capabilities: ReadonlySet<ChannelCapability> =
+          new Set(["proactive-message", "media-upload", "multimodal-output"]);
+        attempts = 0;
+        remoteCopies = 0;
+        override async deliver(
+          command: OutboundCommand,
+        ): Promise<DeliveryReceipt> {
+          this.attempts += 1;
+          if (this.attempts === 1 || !recover) {
+            if (fault === "send-ack-unknown") this.remoteCopies += 1;
+            throw new Error(fault);
+          }
+          this.remoteCopies += 1;
+          return super.deliver(command);
+        }
+      }
+      const transport = new FaultMediaTransport();
+      const store = new MemoryGatewayStore();
+      const mediaSpool = new FakeMediaSpool();
+      const delivered: string[] = [];
+      let now = Date.parse("2026-09-05T00:00:00Z");
+      const gateway = new WeComAgentGateway({
+        transport,
+        store,
+        mediaSpool,
+        adapters: [new FakeRuntime()],
+        router: new StaticRuntimeRouter("fake-runtime"),
+        wallClock: () => now,
+        outboxRetryBaseMs: 1_000,
+        outboxPollIntervalMs: 2,
+        outboxMaxAttempts: 2,
+        onDeliveryLifecycleEvent: (event) => delivered.push(event.phase),
+      });
+      await gateway.start();
+      try {
+        expect(
+          await gateway.sendProactiveMedia({
+            accountId: "bot-a",
+            conversationId: "chat-a",
+            media: { type: "file", path: "/allowed/report.pdf" },
+          }),
+        ).toBe("queued");
+        expect(await store.getDeliveryOutboxStats()).toMatchObject({
+          pending: 1,
+          delivered: 0,
+          dead: 0,
+        });
+        expect(delivered).not.toContain("delivered");
+        expect(mediaSpool.released).toEqual([]);
+        expect(transport.remoteCopies).toBe(
+          fault === "send-ack-unknown" ? 1 : 0,
+        );
+        now += 1_001;
+        await waitFor(() => mediaSpool.released.length === 1);
+        expect(await store.getDeliveryOutboxStats()).toMatchObject({
+          pending: 0,
+          leased: 0,
+          delivered: recover ? 1 : 0,
+          dead: recover ? 0 : 1,
+        });
+        expect(transport.attempts).toBe(2);
+        expect(delivered.at(-1)).toBe(recover ? "delivered" : "dead-lettered");
+        if (!recover) expect(delivered).not.toContain("delivered");
+        // Unknown ACKs can leave remote copies on both recovery and exhaustion.
+        // A dead-letter is a terminal retry budget, not proof of non-delivery.
+        expect(transport.remoteCopies).toBe(
+          fault === "send-ack-unknown" ? 2 : recover ? 1 : 0,
+        );
+        expect(mediaSpool.released).toEqual(["artifact-1"]);
+      } finally {
+        await gateway.stop();
+      }
+    },
+  );
+
+  it("retains media until an ACK with failed local completion can be recovered", async () => {
+    class MediaTransport extends FakeTransport {
+      readonly outputModalities: ReadonlySet<MediaType> = new Set(["file"]);
+      override readonly capabilities: ReadonlySet<ChannelCapability> = new Set([
+        "proactive-message",
+        "media-upload",
+        "multimodal-output",
+      ]);
+    }
+    class RecoveringStore extends MemoryGatewayStore {
+      failCompletion = true;
+      override async completeDelivery(
+        record: Parameters<MemoryGatewayStore["completeDelivery"]>[0],
+      ): Promise<void> {
+        if (this.failCompletion)
+          throw new Error("local completion unavailable");
+        await super.completeDelivery(record);
+      }
+    }
+    const store = new RecoveringStore();
+    const transport = new MediaTransport();
+    const mediaSpool = new FakeMediaSpool();
+    let now = Date.parse("2026-09-05T00:00:00Z");
+    const phases: string[] = [];
+    const gateway = new WeComAgentGateway({
+      transport,
+      store,
+      mediaSpool,
+      adapters: [new FakeRuntime()],
+      router: new StaticRuntimeRouter("fake-runtime"),
+      wallClock: () => now,
+      outboxLeaseMs: 1_000,
+      outboxPollIntervalMs: 2,
+      onDeliveryLifecycleEvent: (event) => phases.push(event.phase),
+    });
+    await gateway.start();
+    try {
+      // This API result reflects the remote ACK, not a successful local commit.
+      expect(
+        await gateway.sendProactiveMedia({
+          accountId: "bot-a",
+          conversationId: "chat-a",
+          media: { type: "file", path: "/allowed/report.pdf" },
+        }),
+      ).toBe("delivered");
+      expect(await store.getDeliveryOutboxStats()).toMatchObject({
+        leased: 1,
+        delivered: 0,
+      });
+      expect(phases).not.toContain("delivered");
+      expect(mediaSpool.released).toEqual([]);
+      store.failCompletion = false;
+      now += 1_001;
+      await waitFor(() => mediaSpool.released.length === 1);
+      expect(await store.getDeliveryOutboxStats()).toMatchObject({
+        leased: 0,
+        delivered: 1,
+      });
+      expect(transport.commands).toHaveLength(2);
+      expect(transport.commands[1]).toEqual(transport.commands[0]);
+      expect(phases.filter((phase) => phase === "delivered")).toHaveLength(1);
+    } finally {
+      await gateway.stop();
+    }
+  });
+
   it("fails closed when an allowlist does not authorize the sender", async () => {
     const transport = new FakeTransport();
     const runtime = new FakeRuntime();
