@@ -1,314 +1,163 @@
-<p align="center">
-  <img src="docs/assets/social-preview.png" width="100%" alt="WeCom Agent Gateway — one IM channel, pluggable agent kernels">
-</p>
-
-<p align="center">
-  <a href="https://github.com/fyaic/wecom-agent-gateway/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/fyaic/wecom-agent-gateway/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-f2c744.svg"></a>
-  <a href="package.json"><img alt="Node 22 or newer" src="https://img.shields.io/badge/node-%3E%3D22-339933.svg"></a>
-  <a href="ROADMAP.md"><img alt="Public Preview status" src="https://img.shields.io/badge/status-public_preview-6f42c1.svg"></a>
-</p>
-
-<p align="center">
-  <a href="#26-秒看懂"><strong>26 秒演示</strong></a> ·
-  <a href="#快速开始"><strong>快速开始</strong></a> ·
-  <a href="docs/verified-kernel-cases.md">真实案例</a> ·
-  <a href="#参考-agent-adapter"><strong>Agent Adapter</strong></a> ·
-  <a href="docs/README.md">文档</a> ·
-  <a href="README.en.md">English</a>
-</p>
-
 # WeCom Agent Gateway
 
-把一个企业微信 Bot 变成 Codex、Kimi Code、OpenClaw、Pi Agent 及其他 Agent Kernel 的可靠 IM 入口。
+**在企业微信里用你已经在用的 Agent。离开电脑，也能继续问、发图、看结果。**
 
-**企业微信负责触达，Agent 负责思考，Gateway 负责把中间链路做好。**
+把 Codex、Kimi Code、OpenClaw 或 Pi 接到一个企业微信机器人：私聊继续任务，群里 @Bot 提问，
+长回复边生成边显示。更换 Agent 时复用同一条企微链路。
 
-用户在企业微信里像平常聊天一样发送文字和媒体；Gateway 使用企业微信官方 SDK 接收实际产生的 callback，
-维护会话与流式回复，再通过一个稳定的 Runtime Contract 按 Adapter 已声明能力交给所选 Agent。Agent 也可以
-沿同一条受控链路主动发消息、返回媒体，或发起确认、选择和取消等原生交互。
+[![CI](https://github.com/fyaic/wecom-agent-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/fyaic/wecom-agent-gateway/actions/workflows/ci.yml)
+[![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Public Preview](https://img.shields.io/badge/status-public_preview-6f42c1.svg)](ROADMAP.md)
 
-> [!IMPORTANT]
-> 本项目是独立社区项目，不是腾讯企业微信官方产品。只需要 OpenClaw 的用户应同时评估企业微信官方
-> [`wecom-openclaw-plugin`](https://github.com/WecomTeam/wecom-openclaw-plugin)；本项目的重点是
-> 多 Kernel、稳定 Runtime Contract 和独立可靠传输层。
-
-## 当前证据边界
-
-本仓库处于 **Public Preview**，不是“所有功能均已端到端完成”或“生产认证完成”。以下状态刻意区分代码实现、
-确定性自动化和真实企业微信客户端证据：
-
-| 能力                          | 当前证据                                                                                               |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------ |
-| 私聊/群聊文本与流式回复       | **真实通过**：授权客户端、真实 Bot 与多个 Kernel 均有记录                                              |
-| 图片、普通文件与主动媒体      | **部分真实通过**：具体输入/输出仍按 Adapter 能力分别验收                                               |
-| 视频                          | **部分通过**：协议 fixture 和媒体生命周期自动化通过；桌面 MP4 语义分类/明确拒绝真实通过                |
-| 原生 `msgtype=video` callback | **未完成**：尚未捕获真实客户端 callback；当前 Pi Adapter 也不能理解视频                                |
-| 引用/回复 callback            | **未完成真实验收**：Contract、媒体生命周期及 Adapter 映射已自动化通过，真实客户端入口仍待证明          |
-| 生产运行                      | **未完成生产认证**：单机部署/故障基线已覆盖；宿主机物理断网、24 小时 Linux soak 与跨主机多实例仍未完成 |
-
-权威明细见[当前状态](docs/status.md)、[路线图](ROADMAP.md)和[证据声明规范](docs/evidence-claims.md)。任何
-“已支持”都必须同时说明是实现能力、自动化证据还是真实端到端证据。
-
-## 为什么需要它
-
-让一个 Agent “能回复企业微信”并不难；难的是把它长期、可靠地运行起来。每接入一个 Kernel 都重新实现
-Bot 鉴权、心跳重连、群聊范围、媒体解密、会话恢复、流式更新、失败重试和安全边界，最终会得到多套
-彼此不兼容的 Channel 插件。
-
-WeCom Agent Gateway 把这些重复工作收敛为一层：企业微信侧只实现一次，Agent 侧只写一个小型 Adapter。
-更换 Kernel 不需要重做企业微信链路，升级交互或可靠性也不需要侵入 Agent 的推理循环。
-
-## 一条消息如何流动
-
-```text
-企业微信用户 ⇄ 官方 Bot WebSocket ⇄ Gateway ⇄ Kernel Adapter ⇄ Agent
-    文字 / 图片 / 文件 / 视频       会话 / ACL / 流式 / Outbox       推理 / 模型 / 工具
-```
-
-1. Gateway 在白名单检查后立即确认收到，不让用户面对长时间空白；
-2. 文本和媒体被归一化为与厂商无关的消息，按会话严格有序交给 Agent；
-3. Agent 的显式状态和文本增量原位更新同一条 Bot 消息，最终回复进入耐久 Outbox；
-4. Agent 原生请求确认、选择或取消时，Gateway 可投影为企业微信卡片并把结果恢复到原会话；
-5. Agent 也能通过受控本地接口主动向已授权私聊或群聊发送文本与媒体。
+[快速开始](#快速开始) · [选你的 Agent](#参考-agent-adapter) · [日常怎么用](docs/use-cases.md) · [文档](docs/README.md) · [English](README.en.md)
 
 ## 26 秒看懂
 
-<p align="center">
-  <a href="docs/assets/demo/wecom-agent-gateway-demo.mp4">
-    <img src="docs/assets/demo/wecom-agent-gateway-demo.gif" width="960" alt="26 秒真实企业微信演示：即时回执、可变回复、交互卡片、任务恢复和主动媒体">
-  </a>
-</p>
+[![真实企业微信与 Pi：流式回复、确认卡片、任务恢复、主动通知](docs/assets/demo/wecom-agent-gateway-demo.gif)](docs/assets/demo/wecom-agent-gateway-demo.mp4)
 
-<p align="center"><em>真实 macOS 企业微信客户端与真实 Pi Agent：即时状态、最终回复、原生确认卡片、同任务恢复，以及 Agent 主动文本/图片。点击动画打开高清 MP4。</em></p>
+_真实企业微信 + Pi Agent，点击查看高清 MP4。普通聊天默认不附卡片；演示中的确认由显式交互触发。_
 
-演示使用正式 Gateway、官方 Bot SDK 和受控主动消息接口完成，不是 UI mock。公开资产只保留聊天内容区，
-已裁掉会话侧栏、账号名称、内部 ID 和凭据；默认普通回复不会附带卡片。
+| 日常困扰                            | 接入后                                    |
+| ----------------------------------- | ----------------------------------------- |
+| 每次问 Agent 都要回到电脑、打开终端 | 在企业微信私聊里提问，继续同一会话        |
+| 截图在手机上，Agent 在电脑上        | 把图片发给 Bot，交给支持图片的 Agent      |
+| 跑完构建或报告后，还要反复查看进度  | 让本地任务经 Gateway 主动通知你           |
+| 换 Agent 就要再写一遍企微插件       | 换 Adapter 配置，复用收发、会话与投递能力 |
+
+> **Public Preview。** Codex、Kimi、OpenClaw、Pi 有[真实企微接入记录](docs/verified-kernel-cases.md)。
+> 每个进程选择一个 Agent；需要已配置好的 Agent 和企业微信 Bot。媒体、卡片和工具能力因 Adapter 而异，
+> 详见[当前证据边界](#当前证据边界)。本项目是独立社区项目。
 
 ## 快速开始
 
-### 先验证仓库，不需要企业微信或模型凭据
+需要 **Node.js 22.13+、pnpm 11.8.0**；当前部署路径面向 macOS / Linux。仓库从源码安装，
+尚未提供发布到 npm 的一键安装包。先用你已经能独立回答的 Agent，模型和登录继续由它管理。
+
+### 1. 下载，立即看一次本地效果
 
 ```bash
 git clone https://github.com/fyaic/wecom-agent-gateway.git
 cd wecom-agent-gateway
 pnpm install --frozen-lockfile
-pnpm run ci
+pnpm demo
 ```
 
-超过 230 项 deterministic tests 会经过 Runtime Contract、Gateway Core、官方 SDK 映射、会话、流式、媒体、
-Outbox、交互 Broker 和全部参考 Adapter，不消耗模型额度，也不会连接真实 Bot。
+终端会展示收消息、回复、去重、权限拒绝、重建 Gateway 后会话引用恢复和主动通知，最后输出
+`6/6 checks passed`。它运行真实 Core、SQLite 和外部 Adapter 加载器，使用本地 Echo；
+**不调用 AI、不连接企微、不读取你的 .env**。真实客户端效果见上面的演示。
 
-### 接入真实企业微信与一个 Agent
-
-准备 Node.js 22、pnpm 11.8.0、一个开启长连接/API 模式的企业微信智能机器人，以及一个能独立运行的
-Agent Kernel。然后创建仅保存在本机的配置：
+### 2. 选一个已有 Agent，生成最小配置
 
 ```bash
-cp .env.example .env
-chmod 600 .env
+# 换成 codex / kimi / pi / openclaw；仅在首次安装运行。
+pnpm onboard --adapter pi
 ```
 
-最小示例使用本地 OpenClaw；也可以改选下表中的其他 Adapter：
+命令创建私有 `.env` 和独立的 `agent-workspace/`，已有配置会保留。想问已有代码库的问题，
+加 `--workspace /path/to/project`。打开 `.env` 填入 API/长连接 Bot 的
+`WECOM_BOT_ID`、`WECOM_BOT_SECRET`；OpenClaw 还需要已有 Gateway 的 token 或 password。
+[各 Agent 配置与登录说明](docs/getting-started.md#2-选择已有-agent)。
 
-```dotenv
-WECOM_BOT_ID=
-WECOM_BOT_SECRET=
-GATEWAY_ADAPTER=openclaw
-OPENCLAW_GATEWAY_URL=ws://127.0.0.1:18789
-```
-
-先注册一个允许访问 Gateway 的私聊，不需要复制或公开任何内部 ID：
+### 3. 认领私聊，开始聊天
 
 ```bash
-pnpm enroll:direct --name '授权测试成员'
-```
-
-命令会显示一次性口令；在该成员与 Bot 的私聊中发送口令，注册完成后再检查并启动：
-
-```bash
-pnpm doctor
+pnpm enroll:direct
+# 在你与 Bot 的私聊中发终端显示的一次性口令，等待注册完成。
 pnpm start:checked
 ```
 
-Gateway 在 allowlist 为空时拒绝启动；`.env`、SQLite、日志和媒体目录不会进入 Git。更完整的最短
-接入说明见 [`15 分钟接入指南`](docs/getting-started.md)；群聊授权、完整真实收发步骤和 smoke
-命令见 [`真实企业微信联调手册`](docs/real-wecom-runbook.md)。群聊名称解析使用已授权的 `wecom-cli`，
-不要求用户手工处理会话 ID。生产部署见 [`docs/deployment.md`](docs/deployment.md)。
+在企微里发「只回复：连接成功」，然后试「记住这次测试代号是青竹」和「刚才的代号是什么？」。
+预期先收到回执，再在同一条气泡中看到回答。持续使用时，让 Gateway 和 Agent 所在电脑保持在线，
+并按[部署指南](docs/deployment.md)安装受管服务。
 
-## 你会得到什么
+想在连接 Bot **之前**验证 Agent 登录、模型回答和上下文续接：
 
-| 能力             | Gateway 提供的语义                                                                      |
-| ---------------- | --------------------------------------------------------------------------------------- |
-| 官方企业微信链路 | 复用官方 SDK 的鉴权、心跳、重连、媒体下载/解密、流式回复和主动推送                      |
-| Kernel 中立接入  | Core 不依赖模型厂商；Codex、ACP/Kimi、OpenClaw、Pi 与外部 Adapter 共用 Runtime Contract |
-| 对话与多模态保真 | 对已收到的私聊、群聊、引用上下文、文字和媒体按能力精确协商；未验收项明确 fail closed    |
-| 丝滑 Bot UX      | 即时回执、同一消息流式更新、显式状态/emoji，以及可选确认、选择、审批和取消卡片          |
-| 可靠双向投递     | SQLite Outbox、重试、死信、崩溃恢复、受保护媒体 spool 和授权范围内的 Agent 主动消息     |
-| 安全与运维       | 分域 ACL、最小子进程环境、写工具审批、隐私日志、健康检查、Prometheus、systemd/容器基线  |
+```bash
+pnpm agent:check
+```
+
+这会使用配置的 Agent 额度执行两个真实模型回合，不连接 Bot。Agent 尚未配置好时，可先用
+`pnpm onboard --adapter echo` 验证真实企微收发；Echo 是回显探针，不具有 AI 能力。
+完整步骤、预期结果和常见卡点见[接入指南](docs/getting-started.md)。
 
 ## 参考 Agent Adapter
 
-| Adapter   | 上游接口               | 已实现或已协商能力                                                              |
-| --------- | ---------------------- | ------------------------------------------------------------------------------- |
-| Codex     | SDK / App Server JSONL | 流式、恢复、回复动作、原生提问、取消、状态、审批、动态工具、图片/音频           |
-| Kimi Code | ACP v1 stdio           | 流式、恢复、回复动作、取消、权限、状态、图片                                    |
-| 通用 ACP  | ACP v1 stdio           | 按 `initialize` 动态协商恢复、回复动作和输入模态                                |
-| OpenClaw  | Gateway WebSocket v4   | 流式、恢复、回复动作、取消、状态、图片/音频/视频/文件                           |
-| Pi Agent  | 官方严格 LF JSONL RPC  | 流式、恢复、回复动作、取消、状态、动态图片输入、有界 worker pool、原生 ask-user |
+| 你已在用         | 选择                       | 接入前需要                                             | 真实证据                               |
+| ---------------- | -------------------------- | ------------------------------------------------------ | -------------------------------------- |
+| Codex            | `--adapter codex`          | 本地 CLI 已登录；默认只读工作区                        | 私聊/群聊、图片、恢复、审批            |
+| Kimi Code        | `--adapter kimi`           | `kimi acp` 可启动且已登录                              | 私聊、图片、恢复                       |
+| Pi Agent         | `--adapter pi`             | 已配置 provider/model；图片需视觉模型                  | 私聊/群聊、图片、原生交互、恢复        |
+| OpenClaw         | `--adapter openclaw`       | 本地 Gateway 已启动，提供 token/password               | 私聊/群聊、图片/文件、恢复             |
+| 其他 ACP harness | `GATEWAY_ADAPTER=acp`      | ACP v1 命令及协商能力                                  | Kimi 是已验证代表；其他逐个验收        |
+| 自研 Agent       | `GATEWAY_ADAPTER=external` | 公共 SDK 的小型 Adapter                                | [模板及一致性检查](examples/README.md) |
+| Claude Code      | 实验包                     | [隔离测试说明](docs/claude-code-adapter-evaluation.md) | 尚未接入默认启动入口                   |
 
-该表描述 Adapter 的实现/协议范围，**不代表每项能力都已完成真实企业微信端到端验收**。真实场景、证据等级和
-未完成项以 [`docs/verified-kernel-cases.md`](docs/verified-kernel-cases.md) 与
-[`docs/status.md`](docs/status.md) 为准；尤其原生视频 callback 和当前 Pi 视频理解尚未完成。
+**连接会创建/恢复 Gateway 管理的 Agent 会话，不会自动接管终端或桌面 App 里已打开的任务。**
+更换 Kernel 不会自动迁移聊天记忆。新 harness 需要已有 ACP 接口或编写 Adapter；
+通用扩展契约并不意味着任意 Agent 名称都能即插即用。
 
-每个 Gateway 进程只选择一个确定的 Kernel，不根据自然语言动态切换。第三方 Kernel 可以按照
-[`docs/adapter-authoring.md`](docs/adapter-authoring.md) 使用 `@fyaic/wecom-adapter-sdk` 实现小型
-Adapter，并通过 `GATEWAY_ADAPTER=external` 加载，无需修改 Gateway Registry。仓库内的
-[`examples/adapter-template`](examples/adapter-template) 是可运行模板；
-[`clean-room-adapter`](examples/clean-room-adapter) 的运行时代码只依赖公共 SDK，并有可重复的
-[`机器认证报告`](docs/evidence/adapter-conformance-clean-room.json)。运行
-`pnpm conformance:adapter --module <adapter>` 可在不连接企业微信的情况下检查第三方 Adapter。
-Claude Code 另有一个使用官方 Agent SDK 的[隔离 C0 实验包](packages/adapter-claude-code)，目前只完成
-确定性的文本/流式/session/取消协议验证，未注册进默认 Gateway，也不属于下方真实验证矩阵。
-Channel 侧同样有版本化扩展边界：无厂商依赖的
-[`transport-loopback`](packages/transport-loopback) 已通过固定
-[`22 项机器报告`](docs/evidence/transport-conformance-loopback.json)。新 IM 可以实现 Transport v1，
-但仍需独立证明厂商鉴权、回调和客户端可见性，不能把接受回执当作用户已看到。
+## 日常怎么用
 
-真实企业微信端到端案例、代表性延迟和复现入口见
-[`docs/verified-kernel-cases.md`](docs/verified-kernel-cases.md)。
+- **通勤时查看代码解释**：「看下这个项目登录流程，列出三个可能失败的位置。」先把工作目录指向代码库；
+  默认 Codex 只读配置适合阅读和排查。
+- **手机截图问问题**：「这张报错截图是什么意思？下一步检查什么？」需要图片 Adapter 和视觉模型。
+- **任务完成提醒**：在本机任务成功后的脚本里执行下方通知命令，不用一直守着终端。
+- **Agent 向你确认**：支持的原生提问事件可变成确认/选择卡片；单靠一句“给我按钮”不能保证产生卡片。
 
-交互卡片的完整设计和里程碑见 [`docs/interaction-cards.md`](docs/interaction-cards.md)。
-无副作用的 Pi 原生交互示例见 [`examples/pi-wecom-interaction.mjs`](examples/pi-wecom-interaction.mjs)。
+```bash
+# onboard 已启用本地控制面；Gateway 保持运行，在第二个终端执行。
+pnpm proactive:send --target direct --text '报告生成完了，可以查看。'
+```
 
-## 它与相邻项目的关系
+定时调度、构建、查文档仍由 Agent 或脚本完成。更多具体对话、条件和边界见[日常使用配方](docs/use-cases.md)。
+`direct` 别名要求恰好一个授权成员；多人部署需配置明确的目标别名。
 
-| 方案                          | 最适合的场景                                    | 与本项目的关系                                                 |
-| ----------------------------- | ----------------------------------------------- | -------------------------------------------------------------- |
-| 企业微信官方 OpenClaw 插件    | 只需要把 OpenClaw 快速接入企业微信              | 优先评估的官方方案；本项目面向多 Kernel 和独立可靠性层         |
-| `wecom-cli` / `wecom-unified` | 让 Agent 操作通讯录、日程、待办、文档等办公能力 | 可选工具层，不承担持续 IM 会话接入                             |
-| 自建 Webhook Bot              | 固定命令、通知或轻量业务自动化                  | 适合简单业务；本项目增加会话、流式、多模态、Adapter 与耐久投递 |
-| **WeCom Agent Gateway**       | 用同一条企业微信链路承载不同 Agent Kernel       | 统一 Channel 能力，同时保持 Agent 的模型、推理和工具自主权     |
-
-它不是新的 Agent 框架，也不会代替模型、OpenClaw 或 Codex。它处在企业微信与 Agent 之间，像一个
-专门为 Agent 会话设计的 IM 基础设施层。
-
-## 架构与边界
+## 项目在链路中的位置
 
 ```mermaid
 flowchart LR
-    W[WeCom Bot] <-->|official WebSocket SDK| T[WeCom Transport]
-    T <--> C[Gateway Core]
-    C <--> S[(SQLite Outbox<br/>Session Store)]
-    C <--> M[Protected Media Spool]
-    L[Local Agent / Automation] -->|0600 Unix socket<br/>target alias only| C
-    C <-->|Runtime Contract v1| A[Kernel Adapter]
-    A <--> K[Codex / Kimi /<br/>OpenClaw / Pi / ACP]
-    K -. optional tools .-> CLI[wecom-cli]
+    U[企业微信私聊 / 群聊] <--> B[官方 Bot SDK]
+    B <--> G[Gateway<br/>权限 · 会话 · 流式 · 持久投递]
+    G <--> A[Kernel Adapter]
+    A <--> K[你的 Agent<br/>模型 · 工具 · 工作区]
+    S[本地任务 / 定时脚本] -->|主动通知| G
 ```
 
-- WeCom Transport 负责官方 Bot 协议和媒体传输；
-- Gateway Core 负责顺序、去重、会话、能力检查、流式投影和持久投递；
-- Adapter 只翻译某个 Kernel 的 SDK/RPC、session 和 events；
-- Kernel 拥有模型、推理、工具、工作区和 transcript；
-- `wecom-cli` 是可选办公工具层，不承担 IM 接入，也不提供真人身份替代；
-- 本地主动控制面只提交别名和消息，仍复用同一 Bot、Outbox 和官方 SDK。
+Gateway 负责收发、顺序、去重和失败恢复；Adapter 翻译 Agent 协议；Agent 决定模型、推理与工具。
+鉴权、心跳、重连和媒体加解密复用[官方 SDK](https://github.com/WecomTeam/aibot-node-sdk)。
+官方 `wecom-cli` 是可选办公工具层，无需安装它即可完成首次私聊。
 
-> [!NOTE]
-> 主线优先级始终是 IM 接入、消息归一化、会话与媒体保真、可靠投递和稳定 Adapter Contract。
-> 卡片只是 Transport 能力允许时的可选交互投影，默认普通回复不会附卡，也不能改变 Agent 的推理语义。
+只需要 OpenClaw 的用户也可以选择[企业微信官方 OpenClaw 插件](https://github.com/WecomTeam/wecom-openclaw-plugin)。
+本项目适合需要多种 Agent 接入选择、独立部署与可扩展 Adapter 的用户。所有收发使用单一 Bot 身份。
 
-## 企业微信能力
+## 当前证据边界
 
-- Bot WebSocket 鉴权、心跳和重连；
-- 私聊与群聊 `@Bot`；
-- 文本和 Agent 显式状态的可变流式回复；
-- 引用/回复消息的结构化上下文保真，引用媒体复用同一受保护生命周期；
-- 官方非阻塞流式背压、最终帧保证和可选回复反馈；
-- 可选静态 `enter_chat` 欢迎语，不启动 Kernel；
-- 图片、文件、视频下载/解密和受保护临时物化；
-- 图片、语音、视频、文件上传与主动推送；
-- 分域 sender/conversation allowlist；
-- 会话恢复、入站去重、背压和分层延迟事件；
-- 持久文本/媒体 outbox、重试、死信和恢复；
-- 可选 `wecom-cli` 只读工具和审批后写工具。
-- Channel-neutral 五类模板卡片，以及绑定发送者/会话的审批按钮卡片与文本降级。
-- 耐久 Interaction Broker：确认、单选、多选、表单、TTL 与同 session 异步恢复。
-- Pi 原生 select/confirm/input/editor：卡片或限定文本回复后恢复原 tool call，不注入 Prompt。
-- 最终回复快捷动作：Codex、ACP/Kimi、OpenClaw、Pi 和外部模板均以同 session 新回合续接，重复 callback 不创建第二轮。
-- 长任务取消卡：仅对声明 `cancel` 的 Adapter 出现，按发送者/会话持久绑定，快速任务和不可取消 Kernel 不展示。
+| 能力                          | 当前状态                                                                      |
+| ----------------------------- | ----------------------------------------------------------------------------- |
+| 私聊/群聊文本、流式、多轮会话 | 多个 Kernel 真实通过；不是全模型、全版本认证                                  |
+| 图片、普通文件、主动媒体      | 按 Adapter/方向有真实记录；模型理解另行验证                                   |
+| 原生 `msgtype=video` callback | 未完成真实验收；桌面 MP4 的 `file` 回调不能替代                               |
+| 入站引用/回复 callback        | 自动化覆盖；当前 macOS 客户端未取得真实回调                                   |
+| 原生交互与取消                | 按 Adapter 声明提供；普通消息默认不附快捷卡                                   |
+| 生产运行                      | 单机故障基线已验证；24h Linux soak、宿主物理断网与跨主机 active-active 未认证 |
 
-企业微信语音回调目前只提供官方转写文本时，Gateway 不会虚报原始音频输入。媒体能否被 Agent
-进一步理解取决于所选 Kernel 及其工具，而不是传输层。
+一个 Bot 只运行一个 Gateway；投递语义是 at-least-once。主动消息限于已授权会话，
+不等于可以向任意外部联系人发消息。授权和工具权限由部署者控制。
+[完整状态](docs/status.md) · [真实测试案例](docs/verified-kernel-cases.md) · [证据规范](docs/evidence-claims.md)
 
-## 让 Agent 主动发消息（可选）
+## 仓库导航与社区
 
-显式设置 `GATEWAY_CONTROL_ENABLED=true` 后，唯一 scoped 私聊和群聊会自动获得 `direct`、`group`
-别名。客户端不读取 `.env`，只连接权限为 `0600` 的本地 socket：
+| 目录                              | 用途                                                     |
+| --------------------------------- | -------------------------------------------------------- |
+| `apps/gateway/`                   | 启动入口、Adapter 注册、配置检查                         |
+| `packages/`                       | Core、Runtime Contract、Adapter、Transport、存储和控制面 |
+| [`examples/`](examples/README.md) | 外部 Adapter 模板与 Pi 原生交互示例                      |
+| [`docs/`](docs/README.md)         | 上手、使用配方、接入证据、架构与运维                     |
+| `scripts/` / `deploy/`            | 演示、配置生成、验收命令与部署样例                       |
 
-```bash
-pnpm proactive:health
-pnpm proactive:send --target direct --text '构建已经完成。'
-pnpm proactive:send --target group --file /allowed/report.pdf --media-type file
-```
+[报告上手卡点](https://github.com/fyaic/wecom-agent-gateway/issues/new?template=onboarding.yml) ·
+[报告 Bug](https://github.com/fyaic/wecom-agent-gateway/issues/new?template=bug_report.yml) ·
+[贡献 Adapter](CONTRIBUTING.md) · [路线图](ROADMAP.md) · [变更记录](CHANGELOG.md)
 
-多目标必须使用 `GATEWAY_PROACTIVE_TARGETS_JSON` 显式配置别名，而且每个目标仍须在对应 scoped
-allowlist 内。媒体路径还必须位于 `WECOM_MEDIA_OUTPUT_ROOTS` 允许目录。
-
-## 可靠性与安全语义
-
-- 同一会话严格有序，不同会话可以并行；
-- 同一 Bot 的第二个本机 Gateway 在连接官方 SDK 前快速失败；跨主机 active-active 仍不受支持；
-- 投递语义是 **at-least-once**，不是 exactly-once；
-- 流式窗口过期时，最终文本可降级为官方主动推送；
-- 入站媒体只在单次 run 内临时存在，结束后清理；
-- 出站媒体先复制到 Gateway 控制的 spool，并校验大小与哈希；
-- 只有 `WECOM_MEDIA_OUTPUT_ROOTS` 下的普通文件允许外发；
-- 写工具必须经过与发送者、会话和 run 绑定的持久审批；
-- Adapter 子进程默认只继承最小运行环境；额外变量必须按 Adapter 显式 allowlist，Bot secret 不会下传；
-- SDK 原始消息和 Adapter stderr 默认不写日志；显式开启诊断时仍会对已知凭据和值字段脱敏；
-- SQLite schema 版本不兼容时拒绝启动；终态运行数据默认保留 30 天并分批清理，pending/leased/dead 工作不被删除；
-- 普通网络故障默认无限重连，鉴权失败仍有独立有限重试上限；私有 SDK 端点只接受不含凭据的 `wss://` URL。
-
-完整设计见 [`docs/architecture.md`](docs/architecture.md) 和
-[`ADR`](docs/README.md)。安全问题请按 [`SECURITY.md`](SECURITY.md) 私下报告。
-
-## 成熟度
-
-项目处于 **Public Preview**，尚未承诺稳定的 v1 API。当前有超过 230 项 deterministic tests，并完成
-真实企业微信私聊、群聊、流式回复、会话恢复、图片/文件/MP4、主动媒体、受管重启及四类 Kernel
-接入验证。真实 OS 子进程 `SIGKILL` 后的 SQLite Outbox 租约恢复、macOS 受管 Gateway 强杀拉起和
-重新鉴权也已通过；隔离 Linux 网络断开/恢复、持久卷只读和受限 tmpfs 容量耗尽均完成真实故障验收。
-宿主机物理网卡中断、原生 `msgtype=video` 客户端回调和跨主机多实例 fencing/全局顺序仍在路线图中。
-
-- 当前能力与真实验收：[`docs/status.md`](docs/status.md)
-- 路线图：[`ROADMAP.md`](ROADMAP.md)
-- 变更记录：[`CHANGELOG.md`](CHANGELOG.md)
-
-## 按目标阅读文档
-
-| 如果你想……               | 从这里开始                                         |
-| ------------------------ | -------------------------------------------------- |
-| 看真实 Agent 接入效果    | [真实 Kernel 案例](docs/verified-kernel-cases.md)  |
-| 接入一个真实企业微信 Bot | [15 分钟接入指南](docs/getting-started.md)         |
-| 执行完整真实验收         | [真实企业微信联调手册](docs/real-wecom-runbook.md) |
-| 增加另一种 Agent         | [Adapter 开发指南](docs/adapter-authoring.md)      |
-| 增加另一种 IM Channel    | [Transport 接入指南](docs/transport-authoring.md)  |
-| 理解卡片和交互回调       | [交互卡片设计](docs/interaction-cards.md)          |
-| 部署和运维 Gateway       | [生产部署基线](docs/deployment.md)                 |
-| 检查官方上游兼容性       | [上游兼容矩阵](docs/upstream-compatibility.md)     |
-| 核对当前能力和已知缺口   | [项目状态](docs/status.md) 与 [路线图](ROADMAP.md) |
-
-## 参与项目
-
-欢迎提交可复现的 bug、文档改进和新的 Kernel Adapter。开始前请阅读
-[`CONTRIBUTING.md`](CONTRIBUTING.md)、[`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) 和
-[`SUPPORT.md`](SUPPORT.md)。
-
-## 许可证与上游声明
-
-本项目采用 [MIT License](LICENSE)。第三方依赖、企业微信官方参考项目和源码来源规则见
-[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) 与
-[`docs/licensing.md`](docs/licensing.md)。
-
-WeCom、企业微信、Tencent、Codex、Kimi、OpenClaw 和 Pi 等名称与商标归各自权利人所有。
+使用 [MIT License](LICENSE)。官方项目参考与第三方依赖见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+企业微信及各 Agent 名称、商标归相应权利人所有。

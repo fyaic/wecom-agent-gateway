@@ -8,6 +8,21 @@ tagged.
 
 ### Added
 
+- A credential-free six-check Core/SQLite/external-Echo demo, a non-overwriting
+  private starter generator for Codex/Kimi/Pi/OpenClaw/Echo, and a bounded,
+  privacy-safe two-turn real Agent continuity check without a Bot connection.
+- Task-oriented bilingual READMEs and setup guides, everyday recipes, an
+  examples index and Adapter template guide, plus an onboarding feedback form.
+
+### Fixed
+
+- Direct enrollment now shares Bot process ownership, preserves/deduplicates
+  existing authorized senders, and releases ownership on startup failure.
+- Minimal OpenClaw setup now explicitly requires its local Gateway token or
+  password. Starter configuration disables automatic follow-up/control cards.
+
+### Previously added
+
 - A fail-closed Linux/systemd 24-hour soak verifier with privacy-safe service,
   health, durable outbox, media spool, disk-watermark, journal-invocation, and
   observed network-recovery evidence. Short runs are explicitly non-certifying,

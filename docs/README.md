@@ -1,5 +1,28 @@
 # 文档导航
 
+## 先用起来 / Start here
+
+1. **第一次使用：** [中文接入指南](getting-started.md) / [English setup](getting-started.en.md)。
+2. **解决什么问题：** [日常使用配方](use-cases.md) / [Everyday recipes](use-cases.en.md)。
+3. **先看可信效果：** [真实 Agent 案例](verified-kernel-cases.md) / [English cases](verified-kernel-cases.en.md)。
+4. **自己写适配器：** [示例导航](../examples/README.md) → [Adapter 开发](adapter-authoring.md) → [一致性验证](adapter-conformance.md)。
+
+## 按任务找文档
+
+| 你现在要做什么                    | 阅读入口                                                                               |
+| --------------------------------- | -------------------------------------------------------------------------------------- |
+| 配 Bot、授权私聊 / 群聊、验收媒体 | [真实联调手册](real-wecom-runbook.md)                                                  |
+| 让 Bot 主动通知或接收选择/确认    | [使用配方](use-cases.md)、[卡片交互](interaction-cards.md)                             |
+| 让服务常驻、查健康与故障          | [部署](deployment.md)、[状态](status.md)                                               |
+| 理解 Gateway / Adapter 边界       | [架构](architecture.md)、[Adapter 开发](adapter-authoring.md)                          |
+| 核对哪些已测试，哪些不能宣称完成  | [证据规范](evidence-claims.md)、[实际状态](status.md)                                  |
+| 参与下一阶段工作                  | [上手体验审计](onboarding-review.md)、[主线计划](ecosystem-watch-and-mainline-plan.md) |
+
+## 完整参考索引
+
+<details>
+<summary>展开架构、运维、生态与发布文档</summary>
+
 - [`getting-started.md`](getting-started.md) / [`English`](getting-started.en.md)：从全新 clone 到首条授权私聊的最短接入路径。
 - [`verified-kernel-cases.md`](verified-kernel-cases.md) / [`English`](verified-kernel-cases.en.md)：Codex、Kimi、OpenClaw、Pi 与通用 ACP 的真实接入证据和复现入口。
 - [`architecture.md`](architecture.md)：系统边界、数据流和包职责。
@@ -19,6 +42,12 @@
 - [`public-release-checklist.md`](public-release-checklist.md)：切换公开可见性前的阻塞检查清单。
 - [`releases/v0.1.0.md`](releases/v0.1.0.md)：首个 Public Preview 的发布说明与已知限制。
 - [`releases/v0.2.0.md`](releases/v0.2.0.md)：安全、可靠性与仓库治理收口的候选发布说明。
+
+</details>
+
+<details>
+<summary>展开架构决策 ADR（保持编号与历史链接稳定）</summary>
+
 - [`adr/0001-bot-only-identity.md`](adr/0001-bot-only-identity.md)：单一 Bot 身份决策。
 - [`adr/0002-runtime-neutral-contract.md`](adr/0002-runtime-neutral-contract.md)：通用 Agent Kernel 边界。
 - [`adr/0003-official-sdk-first.md`](adr/0003-official-sdk-first.md)：官方 SDK 优先决策。
@@ -47,6 +76,8 @@
 - [`adr/0026-single-bot-process-ownership.md`](adr/0026-single-bot-process-ownership.md)：单 Bot 本机进程所有权、崩溃回收与 active-active 前置边界。
 - [`adr/0027-adapter-conformance-evidence.md`](adr/0027-adapter-conformance-evidence.md)：外部 Adapter 一致性报告和四层证据口径。
 - [`adr/0028-versioned-transport-spi.md`](adr/0028-versioned-transport-spi.md)：版本化 Transport SPI、接受回执语义与 loopback 证据。
+
+</details>
 
 原始 `wecom-cli` 功能清单和测试台账仍由
 [`CAPABILITY_TEST_MATRIX_2026-08-19.md`](https://github.com/fyaic/wecom-cli/blob/agent/capability-test-matrix/docs/fyaic/CAPABILITY_TEST_MATRIX_2026-08-19.md)

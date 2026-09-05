@@ -2,9 +2,9 @@ import { randomBytes } from "node:crypto";
 import { chmodSync, readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import type { InboundMessage } from "@fyaic/wecom-runtime-contract";
-import { redactSecrets } from "../apps/gateway/src/redaction.js";
+import { acquireBotOwnerLock } from "../apps/gateway/src/bot-owner-lock.js";
 import { WeComBotTransport } from "../packages/transport-wecom-bot/src/index.js";
-import { setEnvValue } from "./configure-allowlist.js";
+import { getEnvValue, setEnvValue } from "./configure-allowlist.js";
 
 export function isEnrollmentMessage(
   message: InboundMessage,
@@ -18,14 +18,21 @@ export function isEnrollmentMessage(
   );
 }
 
-async function run(): Promise<void> {
+export async function runEnrollment(): Promise<void> {
   const directName = option("--name") ?? "authorized direct chat";
   const envPath = option("--env") ?? ".env";
   const token =
     option("--token") ?? `WECOM_ENROLL_${randomBytes(8).toString("hex")}`;
   const timeoutMs = Number(option("--timeout-ms") ?? "120000");
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 600000) {
+    throw new Error(
+      "Enrollment timeout must be between 1 and 600000 milliseconds",
+    );
+  }
   const botId = required("WECOM_BOT_ID");
   const secret = required("WECOM_BOT_SECRET");
+  // Verify the target exists before opening a Bot connection.
+  readFileSync(envPath, "utf8");
 
   let settle: ((senderId: string) => void) | undefined;
   let fail: ((error: Error) => void) | undefined;
@@ -33,22 +40,17 @@ async function run(): Promise<void> {
     settle = resolve;
     fail = reject;
   });
+  // Connection errors may occur before start() returns; always observe rejection.
+  void match.catch(() => undefined);
   const transport = new WeComBotTransport({
     accountId: botId,
     botId,
     secret,
     onError: (error) => fail?.(error),
-    onSdkLog: (level, message) => {
-      if (level !== "debug") {
-        console.log(
-          JSON.stringify({
-            event: "wecom_sdk",
-            level,
-            message: redactSecrets(message, [botId, secret]),
-          }),
-        );
-      }
-    },
+  });
+  const owner = await acquireBotOwnerLock({
+    accountId: botId,
+    root: process.env.GATEWAY_OWNER_LOCK_ROOT || undefined,
   });
 
   console.log(
@@ -59,17 +61,28 @@ async function run(): Promise<void> {
       timeout_ms: timeoutMs,
     }),
   );
-  await transport.start(async (message) => {
-    if (isEnrollmentMessage(message, token)) settle?.(message.senderId);
-  });
   const timeout = setTimeout(
     () => fail?.(new Error("等待私聊注册口令超时")),
     timeoutMs,
   );
   try {
+    await transport.start(async (message) => {
+      if (isEnrollmentMessage(message, token)) settle?.(message.senderId);
+    });
     const senderId = await match;
     let env = readFileSync(envPath, "utf8");
-    env = setEnvValue(env, "WECOM_ALLOWED_DIRECT_SENDERS", senderId);
+    const senders = new Set(
+      getEnvValue(env, "WECOM_ALLOWED_DIRECT_SENDERS")
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean),
+    );
+    senders.add(senderId);
+    env = setEnvValue(
+      env,
+      "WECOM_ALLOWED_DIRECT_SENDERS",
+      [...senders].join(","),
+    );
     writeFileSync(envPath, env, { encoding: "utf8", mode: 0o600 });
     chmodSync(envPath, 0o600);
     console.log(
@@ -81,7 +94,11 @@ async function run(): Promise<void> {
     );
   } finally {
     clearTimeout(timeout);
-    await transport.stop();
+    try {
+      await transport.stop();
+    } finally {
+      await owner.release();
+    }
   }
 }
 
@@ -100,5 +117,5 @@ if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
-  await run();
+  await runEnrollment();
 }
