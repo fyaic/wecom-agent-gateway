@@ -1,9 +1,13 @@
 # WeCom Agent Gateway
 
-**Use your existing Agent from WeCom. Ask questions, send screenshots, and get results away from your desk.**
+**Independent middleware connecting your existing Agent to WeCom. Simple integration, durable transport, clear diagnostics.**
 
 Connect Codex, Kimi Code, OpenClaw, or Pi to one WeCom Bot. Continue a Gateway conversation in a direct chat,
 @mention the Bot in an authorized group, and watch answers stream. Change Agents without rebuilding the WeCom connection.
+Models, authentication and reasoning stay with your Agent.
+
+No reply? [Diagnose by layer](docs/gateway-status.md): `doctor` checks configuration, `agent:check` checks
+the Agent, and `gateway:status` reads running-service health and delivery backlog (local observability must be enabled).
 
 [![CI](https://github.com/fyaic/wecom-agent-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/fyaic/wecom-agent-gateway/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)

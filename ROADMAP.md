@@ -28,10 +28,12 @@ changes.
 - [x] Credential-free local demo using the real Core, SQLite and external Adapter.
 - [x] Private minimal starter profiles and a separate real Agent continuity check.
 - [x] User-centered bilingual README, practical recipes and onboarding feedback.
+- [x] Read-only running-service status with separate work/backlog/dead-delivery findings.
 - [ ] Validate the guide with new community users and publish scoped friction findings.
 - [ ] Design a versioned distribution/upgrade/uninstall path before promising an npm one-command install.
 
 Details and measured local results: [onboarding review](docs/onboarding-review.md).
+Community pain points and middleware-only priorities: [September review](docs/middleware-community-review.md).
 
 Mainline priorities take precedence over additional card themes or business UI:
 

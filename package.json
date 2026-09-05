@@ -31,6 +31,7 @@
     "demo": "tsx scripts/demo.ts",
     "onboard": "tsx scripts/setup.ts",
     "agent:check": "tsx --env-file-if-exists=.env scripts/check-agent.ts",
+    "gateway:status": "tsx --env-file-if-exists=.env scripts/gateway-status.ts",
     "doctor": "tsx --env-file-if-exists=.env scripts/doctor.ts",
     "doctor:live": "tsx --env-file-if-exists=.env scripts/doctor.ts --live",
     "start": "tsx --env-file-if-exists=.env apps/gateway/src/index.ts",

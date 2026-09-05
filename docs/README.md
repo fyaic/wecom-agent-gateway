@@ -6,6 +6,7 @@
 2. **解决什么问题：** [日常使用配方](use-cases.md) / [Everyday recipes](use-cases.en.md)。
 3. **先看可信效果：** [真实 Agent 案例](verified-kernel-cases.md) / [English cases](verified-kernel-cases.en.md)。
 4. **自己写适配器：** [示例导航](../examples/README.md) → [Adapter 开发](adapter-authoring.md) → [一致性验证](adapter-conformance.md)。
+5. **不回复 / 变慢 / 投递失败：** [分层运行排障](gateway-status.md)。
 
 ## 按任务找文档
 
@@ -28,6 +29,7 @@
 - [`architecture.md`](architecture.md)：系统边界、数据流和包职责。
 - [`official-wecom-ecosystem.md`](official-wecom-ecosystem.md)：企业微信官方及周边生态调研。
 - [`ecosystem-watch-and-mainline-plan.md`](ecosystem-watch-and-mainline-plan.md)：近期同类项目、社区问题信号、主线差距与带退出条件的后续执行计划；后续优先级的主要参考。
+- [`middleware-community-review.md`](middleware-community-review.md)：2026-09-05 新增同类中间层对照、Issue 痛点、落地改进与退出条件。
 - [`upstream-compatibility.md`](upstream-compatibility.md)：官方 SDK/插件版本台账、上游问题采用状态与固定兼容回归矩阵。
 - [`interaction-cards.md`](interaction-cards.md)：Agent 交互卡片、Interaction Broker、状态机、UX 与里程碑。
 - [`real-wecom-runbook.md`](real-wecom-runbook.md)：真实 Bot 凭据、白名单与收发联调手册。
