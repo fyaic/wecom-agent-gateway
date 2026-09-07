@@ -1405,15 +1405,21 @@ export class WeComAgentGateway {
     // post-restart callbacks stay silent so WeCom does not render duplicate
     // result cards for one physical control card.
     if (!resolved) return true;
-    await this.updateInteraction(
+    const shouldCancel = resolved.active && active && !active.finished;
+    if (shouldCancel) active.cancelRequested = true;
+    // Rendering is best-effort feedback, not a prerequisite for stopping the
+    // Agent. In particular, a slow/offline card ACK must not delay cancellation.
+    const update = this.updateInteraction(
       message,
       inbound.presentationId,
       resolved.active && active
         ? "⏹️ 正在停止当前任务。"
         : "任务已经结束，无需停止。",
     );
-    if (!resolved.active || !active || active.finished) return true;
-    active.cancelRequested = true;
+    if (!shouldCancel) {
+      await update;
+      return true;
+    }
     try {
       await active.cancel();
       this.notifyInteractionLifecycle({
@@ -1431,6 +1437,8 @@ export class WeComAgentGateway {
         conversationId: message.conversationId,
         text: "停止请求失败，当前任务可能仍在执行。",
       });
+    } finally {
+      await update;
     }
     return true;
   }

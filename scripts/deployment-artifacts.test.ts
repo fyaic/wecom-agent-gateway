@@ -1,10 +1,33 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { createStarterConfig } from "./setup.js";
 
 const root = resolve(import.meta.dirname, "..");
 
 describe("production deployment artifacts", () => {
+  it("keeps run-control cards opt-in across all public startup paths", async () => {
+    const [example, entrypoint] = await Promise.all([
+      read(".env.example"),
+      read("apps/gateway/src/index.ts"),
+    ]);
+    expect(example).toMatch(/^GATEWAY_RUN_CONTROL_ENABLED=false$/m);
+    for (const profile of [
+      "codex",
+      "kimi",
+      "pi",
+      "openclaw",
+      "echo",
+    ] as const) {
+      expect(createStarterConfig(profile, "/fixture/workspace")).toMatch(
+        /^GATEWAY_RUN_CONTROL_ENABLED=false$/m,
+      );
+    }
+    expect(entrypoint).toMatch(
+      /booleanValue\(\s*process\.env\.GATEWAY_RUN_CONTROL_ENABLED,\s*false\s*,?\s*\)/,
+    );
+  });
+
   it("keeps secrets out of the image and runs the container as non-root", async () => {
     const [dockerfile, ignore, compose] = await Promise.all([
       read("Dockerfile"),
