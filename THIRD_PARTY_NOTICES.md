@@ -12,7 +12,7 @@ below. Each dependency remains subject to its own license.
 | [`@openclaw/gateway-client`](https://github.com/openclaw/openclaw)                            | OpenClaw Gateway protocol client          | MIT                                                                               |
 | [`@openai/codex-sdk`](https://github.com/openai/codex)                                        | Codex reference adapter                   | Apache-2.0                                                                        |
 | [`@agentclientprotocol/sdk`](https://github.com/agentclientprotocol/typescript-sdk)           | Generic ACP v1 adapter                    | Apache-2.0                                                                        |
-| [`@anthropic-ai/claude-agent-sdk`](https://github.com/anthropics/claude-agent-sdk-typescript) | Optional experimental Claude Code adapter | Anthropic Commercial Terms; package `0.3.258` declares `SEE LICENSE IN README.md` |
+| [`@anthropic-ai/claude-agent-sdk`](https://github.com/anthropics/claude-agent-sdk-typescript) | Optional experimental Claude Code adapter | Anthropic Commercial Terms; package `0.3.260` declares `SEE LICENSE IN README.md` |
 
 The optional `wecom-cli` integration invokes the official
 [`WecomTeam/wecom-cli`](https://github.com/WecomTeam/wecom-cli) executable as a
@@ -24,6 +24,8 @@ relicensed under this repository's MIT license. The optional Adapter requires
 each operator to provide and manage an eligible credential directly; this
 project does not collect, store, proxy, or redistribute Claude.ai session
 tokens or shared subscription access.
+The [version-specific review](docs/reviews/claude-sdk-0.3.260.md) records the
+license evidence and restrictions for this exact optional update.
 
 ## Architectural references
 

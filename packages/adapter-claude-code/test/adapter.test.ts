@@ -18,6 +18,63 @@ const inbound: InboundMessage = {
 };
 
 describe("ClaudeCodeRuntimeAdapter", () => {
+  it("ignores new SDK progress metadata and preserves only visible text", async () => {
+    const adapter = new ClaudeCodeRuntimeAdapter({
+      queryFactory: () =>
+        messages([
+          init("session-1"),
+          {
+            type: "system",
+            subtype: "thinking_tokens",
+            session_id: "session-1",
+            user_message_uuid: "private-message",
+            thinking: "private reasoning",
+          },
+          {
+            type: "rate_limit_event",
+            session_id: "session-1",
+            rate_limit_info: { status: "rejected" },
+          },
+          {
+            ...(delta("ok") as Record<string, unknown>),
+            user_message_uuids: ["private-message"],
+          },
+          {
+            ...(success("session-1", "ok") as Record<string, unknown>),
+            first_content_frame_ms: 12,
+            first_stream_post_ack_ms: 34,
+            user_message_uuids: ["private-message"],
+          },
+        ]),
+    });
+    expect(await collect(adapter.run({ message: inbound }))).toEqual([
+      { type: "session-started", sessionId: "session-1" },
+      { type: "text-delta", text: "ok" },
+      { type: "message-completed", text: "ok" },
+    ]);
+  });
+
+  it("does not forward structured-output diagnostics added by SDK 0.3.260", async () => {
+    const adapter = new ClaudeCodeRuntimeAdapter({
+      queryFactory: () =>
+        messages([
+          init("session-1"),
+          {
+            type: "result",
+            subtype: "error_max_structured_output_retries",
+            session_id: "session-1",
+            is_error: true,
+            errors: ["private tool field and value"],
+            result: "private tool field and value",
+          },
+        ]),
+    });
+    expect((await collect(adapter.run({ message: inbound }))).at(-1)).toEqual({
+      type: "failed",
+      message: "Claude Code could not produce the required output",
+    });
+  });
+
   it("loads the pinned official SDK without creating a model turn", async () => {
     const sdk = await import("@anthropic-ai/claude-agent-sdk");
     expect(sdk.query).toBeTypeOf("function");

@@ -1,6 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, extname, resolve } from "node:path";
+import {
+  isReviewedNonSpdxDependency,
+  type DependencyLicenseEntry,
+} from "./lib/dependency-license-policy.js";
 
 const root = process.cwd();
 const failures: string[] = [];
@@ -209,28 +213,4 @@ function globPackageManifests(parent: string): string[] {
   )
     .split("\n")
     .filter(Boolean);
-}
-
-interface DependencyLicenseEntry {
-  name: string;
-  versions: string[];
-}
-
-function isReviewedNonSpdxDependency(entry: DependencyLicenseEntry): boolean {
-  const reviewedClaudePackages = new Set([
-    "@anthropic-ai/claude-agent-sdk",
-    "@anthropic-ai/claude-agent-sdk-darwin-arm64",
-    "@anthropic-ai/claude-agent-sdk-darwin-x64",
-    "@anthropic-ai/claude-agent-sdk-linux-arm64",
-    "@anthropic-ai/claude-agent-sdk-linux-arm64-musl",
-    "@anthropic-ai/claude-agent-sdk-linux-x64",
-    "@anthropic-ai/claude-agent-sdk-linux-x64-musl",
-    "@anthropic-ai/claude-agent-sdk-win32-arm64",
-    "@anthropic-ai/claude-agent-sdk-win32-x64",
-  ]);
-  return (
-    entry.versions.length === 1 &&
-    entry.versions[0] === "0.3.258" &&
-    reviewedClaudePackages.has(entry.name)
-  );
 }

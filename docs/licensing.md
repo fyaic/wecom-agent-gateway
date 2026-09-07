@@ -1,6 +1,6 @@
 # Licensing and upstream provenance
 
-Updated 2026-09-02.
+Updated 2026-09-07.
 
 ## Project license
 
@@ -23,7 +23,7 @@ MPL-2.0 packages; no dependency is relicensed by this repository.
 
 Claude Code has an isolated, optional C0 protocol Adapter package but is not
 registered by the default Gateway or advertised as a production-supported
-Kernel. Its exact official Agent SDK dependency is `0.3.258`; the npm manifest
+Kernel. Its exact official Agent SDK dependency is `0.3.260`; the npm manifest
 uses the non-SPDX value `SEE LICENSE IN README.md`, and the package README points
 to Anthropic's Commercial Terms. The published platform binary remains
 unmodified. The SDK is an optional dependency and the default production image's
@@ -31,6 +31,8 @@ unmodified. The SDK is an optional dependency and the default production image's
 the Gateway does not collect or intermediate Claude.ai login/session tokens.
 The dependency and its terms are recorded in `THIRD_PARTY_NOTICES.md`. See
 [`claude-code-adapter-evaluation.md`](claude-code-adapter-evaluation.md).
+The [0.3.260 review](reviews/claude-sdk-0.3.260.md) records the installed package
+notices, official terms, compatibility checks and remaining signed-out boundary.
 
 ## Source provenance rule
 
@@ -46,9 +48,9 @@ substantially adapted in the future, the change must:
 4. pass maintainer review before merge.
 
 Run `pnpm licenses list` for the complete lockfile-derived inventory. CI rejects
-unreviewed SPDX categories and permits a non-SPDX package only by exact reviewed
-package name and version; a future Agent SDK upgrade therefore fails closed
-until its terms are reviewed again.
+unreviewed SPDX categories. For the optional Claude packages it requires the
+exact reviewed name/version, matching installed manifest and reviewed LICENSE.md
+hash; a future upgrade or changed/missing notice fails closed until reviewed.
 
 ## Names and trademarks
 
