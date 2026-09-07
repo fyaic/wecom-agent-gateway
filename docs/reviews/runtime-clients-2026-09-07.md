@@ -27,11 +27,14 @@ Codex 发布 JS SHA256 为 `d62ed107033bdba802b283c77d875e4bec3deb2704a910bb7e3f
 2. 真实 SDK 检查超时后，旧 SDK Adapter 没有停止路径，检查已报告失败但仍等待 SDK 子进程自然退出。
    将 Adapter stop 映射到官方 SDK 的每次运行 AbortSignal，不自行管理厂商进程协议；正常完成的
    controller 及时移除，支持多个活跃 run 一同退出。新增 fake SDK 测试覆盖并发停止与完成后清理。
+   主审补充：消费者提前 return 也会 abort 自有 query；stop 后不投影已缓冲的文本/成功；
+   `turn.completed` / `turn.failed` 后即结束消费，不等待无必要的后续 frame。再增加 4 项回归。
 
 ## 本地执行证据
 
 - `pnpm install` 完成；首次 CLI 平台包下载重试后成功，锁定 CLI `--version` 为 `0.153.2`。
-- `pnpm run ci`：37 个测试文件、343 项通过，格式、类型和公开内容检查通过。
+- 首次 `pnpm run ci`：37 个测试文件、343 项通过；主审追加清理回归后 347 项通过，
+  格式、类型和公开内容检查通过。
 - `GATEWAY_ADAPTER=codex CODEX_ADAPTER=sdk pnpm agent:check`：启动新 SDK 的真实两轮检查，
   120 秒预算结束，返回 `agent-check-timeout`。不能判断为已登录成功、已完成对话、或厂商不兼容。
   独立 `codex login status` 仅说明本机现有 CLI 报告已登录，不替代这一新 SDK 成功证据。

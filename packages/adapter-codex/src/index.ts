@@ -100,9 +100,9 @@ export class CodexRuntimeAdapter implements AgentRuntimeAdapter {
       });
       const snapshots = new Map<string, string>();
       let finalText = "";
-      let completed = false;
       let lastStreamError: string | undefined;
       for await (const event of streamed.events) {
+        if (controller.signal.aborted) return;
         if (event.type === "thread.started") {
           yield { type: "session-started", sessionId: event.thread_id };
         } else if (
@@ -122,20 +122,25 @@ export class CodexRuntimeAdapter implements AgentRuntimeAdapter {
           snapshots.set(event.item.id, event.item.text);
           finalText = event.item.text;
         } else if (event.type === "turn.completed") {
-          completed = true;
           yield { type: "message-completed", text: finalText || undefined };
+          return;
         } else if (event.type === "turn.failed") {
           yield { type: "failed", message: event.error.message };
+          return;
         } else if (event.type === "error") {
           // Codex can emit reconnect notices as error events and later complete the turn.
           // Preserve the latest error, but do not prematurely terminate a recoverable stream.
           lastStreamError = event.message;
         }
       }
-      if (!completed && lastStreamError) {
+      if (!controller.signal.aborted && lastStreamError) {
         yield { type: "failed", message: lastStreamError };
       }
+    } catch (error) {
+      if (!controller.signal.aborted) throw error;
     } finally {
+      // Consumer return, terminal events and shutdown all end this query.
+      controller.abort();
       this.activeRuns.delete(controller);
     }
   }
