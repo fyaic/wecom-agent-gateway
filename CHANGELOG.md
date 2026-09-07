@@ -25,6 +25,13 @@ tagged.
 
 ### Fixed
 
+- Reviewed September Codex/OpenClaw/Claude dependencies; the OpenClaw client
+  now requires Node 22.19.0+, enforced by both package metadata and Doctor.
+- Codex SDK shutdown forwards an AbortSignal so bounded probes and Gateway
+  shutdown do not leave their SDK process running after cancellation.
+- Added fresh-directory real Pi/WeCom onboarding evidence, explicitly separate
+  from credential-free CI and independent new-user acceptance.
+
 - Stream expiry fallback now requires the official structured ACK error code;
   unknown acknowledgements are not treated as successful fallback delivery.
 - Claude Code session ownership, cancellation and terminal cleanup now reject
