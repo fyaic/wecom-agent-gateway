@@ -18,6 +18,36 @@ const inbound: InboundMessage = {
 };
 
 describe("CodexRuntimeAdapter", () => {
+  it("cancels active SDK runs on stop and forgets completed runs", async () => {
+    const signals: AbortSignal[] = [];
+    const adapter = new CodexRuntimeAdapter({
+      client: {
+        startThread: () => ({
+          id: null,
+          runStreamed: async (_prompt, options) => {
+            signals.push(options!.signal!);
+            return { events: asAsync(textTurn("thread-stop", "done", true)) };
+          },
+        }),
+        resumeThread: () => {
+          throw new Error("unexpected resume");
+        },
+      },
+    });
+    const first = adapter.run({ message: inbound })[Symbol.asyncIterator]();
+    await first.next();
+    const second = adapter.run({ message: inbound })[Symbol.asyncIterator]();
+    await second.next();
+    expect(signals.every((signal) => !signal.aborted)).toBe(true);
+    await adapter.stop();
+    expect(signals.every((signal) => signal.aborted)).toBe(true);
+    await first.return?.();
+    await second.return?.();
+    for await (const _event of adapter.run({ message: inbound })) void _event;
+    await adapter.stop();
+    expect(signals[2]!.aborted).toBe(false);
+  });
+
   it("passes the shared text, streaming, and resume contract", async () => {
     const responses: ThreadEvent[][] = [
       textTurn("thread-contract", "codex-turn-1", true),
