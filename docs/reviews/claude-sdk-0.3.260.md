@@ -50,6 +50,16 @@ manifest declaration, and the reviewed LICENSE.md hash. Missing paths/files,
 changed notices, unknown packages, or multiple/unreviewed versions fail closed.
 The helper is limited to this Claude exception, not a general licensing platform.
 
+Integration-review correction: a generic allowed-SPDX group previously skipped
+the exact Claude check. The inventory dispatcher now handles these nine Claude
+packages first, before ordinary SPDX categories; even a changed declaration to
+MIT/Apache requires a new review. Tests exercise this dispatcher for all nine
+names, both the reviewed and an unreviewed version, as well as unchanged ordinary
+dependency policy. This closes the bypass rather than only testing the helper.
+After this correction, local full CI passed 38 files / 355 tests, including
+19 license-policy tests; the original upgrade-only result below remains dated
+evidence of the preceding revision, not the current total.
+
 ## Compatibility and tests
 
 [0.3.260 release](https://github.com/anthropics/claude-agent-sdk-typescript/releases/tag/v0.3.260)

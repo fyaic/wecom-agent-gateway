@@ -25,6 +25,30 @@ const reviewedClaudePackages = new Set([
   "@anthropic-ai/claude-agent-sdk-win32-x64",
 ]);
 
+const reviewedLicenses = new Set([
+  "Apache-2.0",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "MIT",
+  "MPL-2.0",
+  "Unlicense",
+]);
+
+/** Claude's version-specific review takes precedence over generic SPDX policy. */
+export function isReviewedDependencyLicense(
+  license: string,
+  entry: DependencyLicenseEntry,
+  read?: (path: string) => string,
+): boolean {
+  if (reviewedClaudePackages.has(entry.name)) {
+    // pnpm 11.8 classifies the reviewed non-SPDX manifests as Unknown. A new
+    // declaration (even MIT) is new evidence, not an implicit review approval.
+    return license === "Unknown" && isReviewedNonSpdxDependency(entry, read);
+  }
+  return reviewedLicenses.has(license);
+}
+
 export function isReviewedNonSpdxDependency(
   entry: DependencyLicenseEntry,
   read: (path: string) => string = (path) => readFileSync(path, "utf8"),

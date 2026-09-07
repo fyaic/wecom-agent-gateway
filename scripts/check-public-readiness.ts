@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, extname, resolve } from "node:path";
 import {
-  isReviewedNonSpdxDependency,
+  isReviewedDependencyLicense,
   type DependencyLicenseEntry,
 } from "./lib/dependency-license-policy.js";
 
@@ -143,19 +143,9 @@ const licenseInventory = JSON.parse(
     stdio: ["ignore", "pipe", "pipe"],
   }),
 ) as Record<string, DependencyLicenseEntry[]>;
-const reviewedLicenses = new Set([
-  "Apache-2.0",
-  "BSD-2-Clause",
-  "BSD-3-Clause",
-  "ISC",
-  "MIT",
-  "MPL-2.0",
-  "Unlicense",
-]);
 for (const [license, entries] of Object.entries(licenseInventory)) {
-  if (reviewedLicenses.has(license)) continue;
   for (const entry of entries) {
-    if (!isReviewedNonSpdxDependency(entry)) {
+    if (!isReviewedDependencyLicense(license, entry)) {
       failures.push(
         `unreviewed-dependency-license:${license}:${entry.name}@${entry.versions.join(",")}`,
       );
