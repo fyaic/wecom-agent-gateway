@@ -23,7 +23,8 @@ Codex 发布 JS SHA256 为 `d62ed107033bdba802b283c77d875e4bec3deb2704a910bb7e3f
 ## 随更新修复的实际问题
 
 1. 原仓库要求 Node 22.13+，doctor 甚至只检查 major >=22，与新客户端要求不符。
-   根 engines、双语 README/入门文档和 doctor 同步至 22.19.0+，增加 8 项版本边界 fixture。
+   首次同步至 22.19.0+ 后，主审发现 Vitest 5 不支持 Node 23/25；源码仓库 engines、双语
+   README/入门文档和 doctor 最终采用 `^22.19.0 || ^24.0.0 || >=26.0.0`，共 14 项版本边界 fixture。
 2. 真实 SDK 检查超时后，旧 SDK Adapter 没有停止路径，检查已报告失败但仍等待 SDK 子进程自然退出。
    将 Adapter stop 映射到官方 SDK 的每次运行 AbortSignal，不自行管理厂商进程协议；正常完成的
    controller 及时移除，支持多个活跃 run 一同退出。新增 fake SDK 测试覆盖并发停止与完成后清理。
@@ -34,6 +35,7 @@ Codex 发布 JS SHA256 为 `d62ed107033bdba802b283c77d875e4bec3deb2704a910bb7e3f
 
 - `pnpm install` 完成；首次 CLI 平台包下载重试后成功，锁定 CLI `--version` 为 `0.153.2`。
 - 首次 `pnpm run ci`：37 个测试文件、343 项通过；主审追加清理回归后 347 项通过，
+  Node 支持范围补充后 353 项通过；
   格式、类型和公开内容检查通过。
 - `GATEWAY_ADAPTER=codex CODEX_ADAPTER=sdk pnpm agent:check`：启动新 SDK 的真实两轮检查，
   120 秒预算结束，返回 `agent-check-timeout`。不能判断为已登录成功、已完成对话、或厂商不兼容。

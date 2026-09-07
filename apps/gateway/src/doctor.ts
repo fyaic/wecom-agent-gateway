@@ -21,7 +21,7 @@ export function isSupportedNodeVersion(version: string): boolean {
   if (!match) return false;
   const major = Number(match[1]);
   const minor = Number(match[2]);
-  return major > 22 || (major === 22 && minor >= 19);
+  return major >= 26 || major === 24 || (major === 22 && minor >= 19);
 }
 
 export async function diagnoseGatewayEnvironment(
@@ -37,7 +37,7 @@ export async function diagnoseGatewayEnvironment(
       nodeSupported ? "ok" : "error",
       nodeSupported
         ? "Node.js runtime is supported"
-        : "Node.js 22.19.0+ is required",
+        : "Node.js 22.19+ (22.x), 24.x, or 26+ is required",
     ),
   );
   checks.push(

@@ -12,11 +12,17 @@ describe("gateway doctor", () => {
     ["22.18.9", false],
     ["22.19.0", true],
     ["22.20.0", true],
+    ["23.0.0", false],
+    ["23.99.0", false],
     ["24.0.0", true],
+    ["25.0.0", false],
+    ["25.99.0", false],
+    ["26.0.0", true],
     ["26.3.1", true],
+    ["27.0.0", true],
     ["invalid", false],
   ] as const)(
-    "checks the runtime dependency floor for Node %s",
+    "checks the source workspace dependency range for Node %s",
     (version, supported) => {
       expect(isSupportedNodeVersion(version)).toBe(supported);
     },
