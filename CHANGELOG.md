@@ -25,6 +25,11 @@ tagged.
 
 ### Fixed
 
+- Preserve durable text/media retry budgets while the Transport is known
+  offline; bounded health probes gate claims without weakening permanent-error
+  dead letters. Six SQLite/spool regressions and real Linux fault recovery
+  verify the fix; the separate 24-hour soak is running, not yet complete.
+
 - Reviewed September Codex/OpenClaw/Claude dependencies; the OpenClaw client
   now requires Node 22.19.0+, enforced by both package metadata and Doctor.
 - Codex SDK shutdown forwards an AbortSignal so bounded probes and Gateway

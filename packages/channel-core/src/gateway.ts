@@ -1946,6 +1946,7 @@ export class WeComAgentGateway {
     deliveryId: string,
     now = this.wallClock(),
   ): Promise<DeliveryOutboxEntry | undefined> {
+    if (!(await this.canClaimDelivery())) return undefined;
     try {
       return await this.options.store.claimDelivery({
         deliveryId,
@@ -1969,6 +1970,7 @@ export class WeComAgentGateway {
   }
 
   private async flushDeliveries(): Promise<void> {
+    if (!(await this.canClaimDelivery())) return;
     const now = this.wallClock();
     let entries: DeliveryOutboxEntry[];
     try {
@@ -1988,6 +1990,30 @@ export class WeComAgentGateway {
       return;
     }
     await Promise.all(entries.map((entry) => this.dispatchSerialized(entry)));
+  }
+
+  private async canClaimDelivery(): Promise<boolean> {
+    const health = this.options.transport.health;
+    // Legacy transports without a health probe retain their existing behavior.
+    if (typeof health !== "function") return true;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      // Claiming consumes a durable attempt. An unauthenticated/offline
+      // transport must not burn that budget or release pending media. Bound
+      // custom probes so a broken health implementation cannot hang shutdown.
+      return await Promise.race([
+        Promise.resolve()
+          .then(() => health.call(this.options.transport))
+          .then((result) => result.ok === true),
+        new Promise<boolean>((resolve) => {
+          timeout = setTimeout(() => resolve(false), 1_000);
+        }),
+      ]);
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   private async flushInteractionResumes(): Promise<void> {

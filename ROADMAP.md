@@ -100,6 +100,10 @@ in [`docs/ecosystem-watch-and-mainline-plan.md`](docs/ecosystem-watch-and-mainli
       revalidation from `main`.
 
 - Exercise host-level physical network loss and a real Linux/systemd soak.
+  Real Pi/Bot text and media now survive a known-offline guest egress fault
+  and reconnect without restarting the Gateway. The actual 24-hour VM window
+  started on September 7, 2026; it is running, not certified complete.
+  [Failure, fix and scoped evidence](docs/reviews/linux-real-recovery-2026-09-07.md).
   Native WeCom video callback certification is tracked in M3.0. Cross-process
   SQLite lease recovery after `SIGKILL`, isolated Linux network
   detach/reconnect, bounded disk exhaustion, read-only recovery, and macOS
