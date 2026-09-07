@@ -77,7 +77,10 @@ sudo -u wecom-gateway pnpm soak:linux -- \
 聚合、媒体 spool 文件数和状态盘剩余空间；结束时只读取 journal 的时间戳与 invocation 元数据，不读取或
 写入消息内容。默认报告写入私有 `data/evidence/`，模式 `0600`，只包含计数、时长和布尔判定。
 
-报告 `schemaVersion: 2` 将未知 Outbox 数值保留为 `null`，不能按零积压读取；旧版报告消费者必须适配。
+报告 `schemaVersion: 3` 将未知 Outbox、spool 和磁盘数值保留为 `null`，不能按零积压或健康读取；旧版报告消费者必须适配。
+`resources.resourceProbeFailures` 统计整个窗口内资源读数无效的采样数，必须为零；中间失败不能由最终恢复掩盖。
+认证还要求非空 journal 和恰好一个 invocation 佐证，但不声称日志保留完整。旧 schema v2 报告无法追溯中间 spool
+读取错误，不得自动升级为 v3 认证；必须保留旧证据，以新采集器运行独立完整窗口。
 五种 Outbox 状态必须齐全且各出现一次，健康检查同时校验 JSON 语义。窗口首尾、采样间隔和服务代际
 都参与判定：采样空洞、PID/invocation/restart 变化或任一采样发现 dead 均不能认证通过。
 这是严格的无重启稳定窗口；受控重启恢复单独验收，恢复后重新开始 24 小时窗口。轮询采样不等于连续

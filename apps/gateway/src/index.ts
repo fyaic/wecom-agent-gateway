@@ -302,7 +302,10 @@ const gateway = new WeComAgentGateway({
     process.env.GATEWAY_REPLY_ACTION_TIMEOUT_MS,
     24 * 60 * 60 * 1_000,
   ),
-  runControlAfterMs: booleanValue(process.env.GATEWAY_RUN_CONTROL_ENABLED, true)
+  runControlAfterMs: booleanValue(
+    process.env.GATEWAY_RUN_CONTROL_ENABLED,
+    false,
+  )
     ? positiveInteger(process.env.GATEWAY_RUN_CONTROL_AFTER_MS, 15_000)
     : undefined,
   runControlTimeoutMs: positiveInteger(

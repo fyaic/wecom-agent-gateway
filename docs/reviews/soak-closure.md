@@ -1,5 +1,26 @@
 # Linux soak 验收门复核
 
+## 2026-09-08 补充审查：旧采集报告不能追认新门
+
+Linux 专项 sub-agent 只用内存 fixture 复现：中间一次 spool 读取抛错被转换为
+`Number.MAX_SAFE_INTEGER`，仍满足有效整数判据；最后一次 spool 恢复为零时，旧门可误报通过。
+空 journal 的 `readable=true, entries=0, invocations=0` 同样不能充分佐证进程代际。
+这不是已发现线上丢消息，而是验收器不能充分证明“没有异常”。
+
+修复后报告为 schema v3：未知资源值为 `null`，`resources.resourceProbeFailures` 记录整个窗口的无效采样数，
+必须为零；认证要求至少一条 journal 且恰好一个 invocation。空可读 journal 只允许显式非认证 fixture。
+定向新增五项回归，覆盖中途 spool/磁盘失败后恢复、最后 spool 未知及两类 journal 佐证缺失。
+
+主 Agent 将修复限定在现有采集器与回归，不改变 Gateway、Kernel、卡片或正在运行的 Linux `/app`。
+旧报告没有保留可重建中间资源错误的字段，不能用最终目录为空或当前 ready 追认整段资源观测有效。
+当前 9 月 7 日开始的窗口保留为旧门观察；结束后使用审查通过的新采集器运行独立完整 24 小时，
+不拼接时长，也不删除旧证据。新报告仍只代表低负载、有限采样，不认证物理宿主断网或生产容量。
+
+关闭时还需独立核对 systemd 单调运行时长与日志保留，完成唯一标记真实消息，再先停 Linux Bot、
+后恢复 macOS 单实例。墙钟持续偏移、日志轮转完整性仍不能由有限采样单独保证。
+
+## 2026-09-05 历史复核
+
 日期：2026-09-05。范围：已有 `scripts/linux-soak.ts`，不新增运行平台、后台任务或第二条 Bot 连接。
 本次结论是**验收器的假通过缺陷已修复并有确定性回归**，不是 Linux 24 小时真实运行已通过。
 目标依据：[产品基线](../product-intent.md)、[证据规范](../evidence-claims.md)。

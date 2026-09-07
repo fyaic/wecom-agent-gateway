@@ -39,12 +39,12 @@ export interface SoakSample {
   // Used only to compare process generations; never included in the report.
   invocationId: string;
   outbox: Record<string, number>;
-  spoolFiles: number;
-  freeBytes: number;
+  spoolFiles: number | null;
+  freeBytes: number | null;
 }
 
 export interface SoakReport {
-  schemaVersion: 2;
+  schemaVersion: 3;
   event: "linux_systemd_soak";
   certifying: boolean;
   passed: boolean;
@@ -80,11 +80,13 @@ export interface SoakReport {
     finalPending: number | null;
     finalLeased: number | null;
     finalDead: number | null;
-    finalSpoolFiles: number;
+    finalSpoolFiles: number | null;
   };
   resources: {
-    minimumFreeBytes: number;
+    minimumFreeBytes: number | null;
     requiredFreeBytes: number;
+    // Number of samples with at least one unknown or invalid resource probe.
+    resourceProbeFailures: number;
   };
   networkOutage: {
     expected: boolean;
@@ -210,9 +212,15 @@ export function evaluateSoak(
     Math.max(...samples.map((sample) => sample.restarts)) -
       samples[0]!.restarts,
   );
-  const minimumFreeBytes = Math.min(
-    ...samples.map((sample) => sample.freeBytes),
-  );
+  const resourceProbeFailures = samples.filter(
+    (sample) =>
+      !validResourceCount(sample.spoolFiles) ||
+      !validResourceCount(sample.freeBytes),
+  ).length;
+  const freeByteSamples = samples.map((sample) => sample.freeBytes);
+  const minimumFreeBytes = freeByteSamples.every(validResourceCount)
+    ? Math.min(...freeByteSamples)
+    : null;
   const checks: Record<string, boolean> = {
     linuxPlatform: process.platform === "linux" || config.nonCertifying,
     durationMet: finishedMs - startedMs >= config.durationMs,
@@ -233,13 +241,7 @@ export function evaluateSoak(
       samples.every((sample) => sample.restarts === samples[0]!.restarts) &&
       journal.invocations <= 1,
     metricsAvailableAndValid: metricsFailures === 0,
-    resourceSnapshotsValid: samples.every(
-      (sample) =>
-        Number.isSafeInteger(sample.spoolFiles) &&
-        sample.spoolFiles >= 0 &&
-        Number.isSafeInteger(sample.freeBytes) &&
-        sample.freeBytes >= 0,
-    ),
+    resourceSnapshotsValid: resourceProbeFailures === 0,
     serviceStayedActive: inactiveSamples === 0,
     livenessStayedUp: liveFailures === 0,
     readinessStayedUpUnlessExpectedOutage:
@@ -252,8 +254,15 @@ export function evaluateSoak(
       (sample) => count(sample.outbox, "dead") === 0,
     ),
     mediaSpoolDrained: final.spoolFiles === 0,
-    diskWatermarkMaintained: minimumFreeBytes >= config.minimumFreeBytes,
+    diskWatermarkMaintained:
+      minimumFreeBytes !== null && minimumFreeBytes >= config.minimumFreeBytes,
     journalReadable: journal.readable ?? journal.entries > 0,
+    // A readable empty journal is useful for a non-certifying fixture, but
+    // provides no independent process-generation evidence for certification.
+    // Nonempty evidence is a minimum corroboration, not proof of retention.
+    journalEvidencePresent:
+      config.nonCertifying ||
+      (journal.entries > 0 && journal.invocations === 1),
     journalSummaryValid:
       Number.isSafeInteger(journal.entries) &&
       journal.entries >= 0 &&
@@ -268,6 +277,7 @@ export function evaluateSoak(
     "The report contains aggregate health and durability evidence only; it excludes messages, conversation identifiers, credentials, paths, and journal contents.",
     "Network-outage observation proves ready loss and recovery while the process stayed live; physical NIC/route/DNS disruption still requires an external operator attestation.",
     "Health evidence is sampled, not continuous; bounded sample gaps do not prove that no shorter interruption occurred. Outbox aggregates do not prove that any real user traffic was exercised.",
+    "Resource probe failures are counted across the full window; unknown resource counts are null, never healthy sentinel values. Nonempty journal evidence is minimum corroboration, not proof of complete log retention.",
   ];
   if (config.nonCertifying) {
     notes.push(
@@ -275,7 +285,7 @@ export function evaluateSoak(
     );
   }
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     event: "linux_systemd_soak",
     certifying,
     passed: Object.values(checks).every(Boolean),
@@ -307,9 +317,15 @@ export function evaluateSoak(
       finalPending: reportedCount(final.outbox, "pending"),
       finalLeased: reportedCount(final.outbox, "leased"),
       finalDead: reportedCount(final.outbox, "dead"),
-      finalSpoolFiles: final.spoolFiles,
+      finalSpoolFiles: validResourceCount(final.spoolFiles)
+        ? final.spoolFiles
+        : null,
     },
-    resources: { minimumFreeBytes, requiredFreeBytes: config.minimumFreeBytes },
+    resources: {
+      minimumFreeBytes,
+      requiredFreeBytes: config.minimumFreeBytes,
+      resourceProbeFailures,
+    },
     networkOutage: {
       expected: config.expectNetworkOutage,
       observedReadyLossWhileLive: readyLossWhileLive,
@@ -394,10 +410,8 @@ async function collectSample(
       dependencies
         .endpoint("/metrics", config)
         .catch(() => ({ ok: false, body: "" })),
-      dependencies
-        .spoolFiles(config.spoolPath)
-        .catch(() => Number.MAX_SAFE_INTEGER),
-      dependencies.freeBytes(config.statePath).catch(() => 0),
+      dependencies.spoolFiles(config.spoolPath).catch(() => null),
+      dependencies.freeBytes(config.statePath).catch(() => null),
     ]);
   return {
     at: new Date(dependencies.now()).toISOString(),
@@ -540,6 +554,10 @@ const realDependencies: SoakDependencies = {
 
 function count(outbox: Record<string, number>, state: string): number {
   return outbox[state] ?? Number.NaN;
+}
+
+function validResourceCount(value: number | null): value is number {
+  return value !== null && Number.isSafeInteger(value) && value >= 0;
 }
 
 function reportedCount(

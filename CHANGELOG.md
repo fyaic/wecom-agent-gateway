@@ -25,6 +25,18 @@ tagged.
 
 ### Fixed
 
+- Run-control cancellation starts without waiting for the card-update ACK;
+  a withheld-ACK regression verifies Adapter cancellation and final reply progress.
+- Keep run-control cards opt-in in the application fallback and `.env.example`,
+  matching the starter generator; existing explicit opt-ins are preserved.
+
+- Linux soak schema v3 records unknown resource probes as null and rejects
+  failures anywhere in the window, even after recovery; certification also
+  requires nonempty journal generation evidence. Legacy v2 reports cannot be
+  retroactively certified against these stronger checks.
+- Separate Codex App Server and SDK case evidence, historical successes and
+  latest retest outcomes; native ask-user automation is not real-client acceptance.
+
 - Preserve durable text/media retry budgets while the Transport is known
   offline; bounded health probes gate claims without weakening permanent-error
   dead letters. Six SQLite/spool regressions and real Linux fault recovery

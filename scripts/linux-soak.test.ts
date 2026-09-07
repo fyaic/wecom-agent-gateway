@@ -86,7 +86,7 @@ describe("Linux/systemd soak gate", () => {
     );
     expect(report.passed).toBe(process.platform === "linux");
     expect(report.certifying).toBe(true);
-    expect(report.schemaVersion).toBe(2);
+    expect(report.schemaVersion).toBe(3);
     expect(JSON.stringify(report)).not.toContain("/var/lib");
     expect(JSON.stringify(report)).not.toContain(
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -165,18 +165,43 @@ describe("Linux/systemd soak gate", () => {
     expect(report.checks.readinessStayedUpUnlessExpectedOutage).toBe(false);
   });
 
-  it("accepts an empty but readable journal for a quiet service", () => {
-    const config = { ...baseConfig, nonCertifying: true };
-    const started = Date.parse("2026-09-04T00:00:00.000Z");
+  it("permits an empty readable journal only for explicitly non-certifying fixtures", () => {
     const report = evaluateSoak(
-      config,
-      [sample(started)],
-      started,
-      started + config.durationMs,
+      shortConfig(),
+      [sample(0), sample(30_000), sample(60_000)],
+      0,
+      60_000,
       { readable: true, entries: 0, invocations: 0 },
     );
     expect(report.checks.journalReadable).toBe(true);
+    expect(report.checks.journalEvidencePresent).toBe(true);
+    expect(report.passed).toBe(true);
+    expect(report.certifying).toBe(false);
   });
+
+  it.each([
+    { readable: true, entries: 0, invocations: 0 },
+    { readable: true, entries: 12, invocations: 0 },
+  ])(
+    "requires minimum journal generation evidence for certification (%#)",
+    (journal) => {
+      const report = evaluateSoak(
+        baseConfig,
+        Array.from(
+          { length: baseConfig.durationMs / baseConfig.intervalMs + 1 },
+          (_, index) => sample(index * baseConfig.intervalMs),
+        ),
+        0,
+        baseConfig.durationMs,
+        journal,
+      );
+      expect(report.certifying).toBe(true);
+      expect(report.checks.journalReadable).toBe(true);
+      expect(report.checks.samplingWindowCovered).toBe(true);
+      expect(report.checks.journalEvidencePresent).toBe(false);
+      expect(report.passed).toBe(false);
+    },
+  );
 
   it("does not certify a 24-hour wall-clock jump with only two observations", () => {
     const report = evaluateSoak(
@@ -316,7 +341,42 @@ describe("Linux/systemd soak gate", () => {
       journal(),
     );
     expect(report.checks.resourceSnapshotsValid).toBe(false);
+    expect(report.resources.resourceProbeFailures).toBe(1);
+    expect(report.resources.minimumFreeBytes).toBeNull();
     expect(report.passed).toBe(false);
+  });
+
+  it.each(["spoolFiles", "freeBytes"] as const)(
+    "retains a failed intermediate %s probe even after final recovery",
+    async (probe) => {
+      const deps = dependencies()!;
+      const original = deps[probe];
+      let calls = 0;
+      deps[probe] = async (path) => {
+        if (++calls === 2) throw new Error("private resource failure");
+        return original(path);
+      };
+      const report = await runLinuxSoak(shortConfig(), deps);
+      expect(report.durability.finalSpoolFiles).toBe(0);
+      expect(report.checks.mediaSpoolDrained).toBe(true);
+      expect(report.resources.resourceProbeFailures).toBe(1);
+      expect(report.checks.resourceSnapshotsValid).toBe(false);
+      expect(report.passed).toBe(false);
+      expect(JSON.stringify(report)).not.toContain("private");
+    },
+  );
+
+  it("reports an unreadable final spool as unknown rather than a large valid count", async () => {
+    const deps = dependencies()!;
+    deps.spoolFiles = async () => {
+      throw new Error("private resource failure");
+    };
+    const report = await runLinuxSoak(shortConfig(), deps);
+    expect(report.durability.finalSpoolFiles).toBeNull();
+    expect(report.resources.resourceProbeFailures).toBe(3);
+    expect(report.checks.mediaSpoolDrained).toBe(false);
+    expect(report.passed).toBe(false);
+    expect(JSON.stringify(report)).not.toContain("private");
   });
 
   it.each(["unavailable", "malformed", "false-health"] as const)(
