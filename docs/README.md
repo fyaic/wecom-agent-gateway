@@ -5,6 +5,7 @@
 维护者先看[产品目标与防偏航基线](product-intent.md)：判断任务是否仍服务于中间层主线。
 本轮工程验收见[合并主审](reviews/mainline-integration.md)，下含传输、Claude 与 soak 的独立证据。
 新增[真实新目录接入](reviews/fresh-real-onboarding-2026-09-07.md)：注册、Pi 多轮、主动通知和重启续接，非 Echo 演示。
+新增[Linux 真实故障实验](reviews/linux-real-recovery-2026-09-07.md)：保留失败、修复与文本/文件实际恢复证据，24h 已启动但未完成。
 
 1. **第一次使用：** [中文接入指南](getting-started.md) / [English setup](getting-started.en.md)。
 2. **解决什么问题：** [日常使用配方](use-cases.md) / [Everyday recipes](use-cases.en.md)。
