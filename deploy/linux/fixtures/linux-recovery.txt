@@ -1,0 +1,3 @@
+WeCom Agent Gateway Linux recovery fixture.
+This non-sensitive file is used to verify durable delivery after a controlled guest-network interruption.
+It contains no account identifiers or credentials.

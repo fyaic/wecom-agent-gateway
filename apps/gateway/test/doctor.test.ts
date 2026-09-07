@@ -1,8 +1,32 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as registry from "../src/adapter-registry.js";
-import { diagnoseGatewayEnvironment } from "../src/doctor.js";
+import {
+  diagnoseGatewayEnvironment,
+  isSupportedNodeVersion,
+} from "../src/doctor.js";
 
 describe("gateway doctor", () => {
+  it.each([
+    ["20.19.0", false],
+    ["22.13.0", false],
+    ["22.18.9", false],
+    ["22.19.0", true],
+    ["22.20.0", true],
+    ["23.0.0", false],
+    ["23.99.0", false],
+    ["24.0.0", true],
+    ["25.0.0", false],
+    ["25.99.0", false],
+    ["26.0.0", true],
+    ["26.3.1", true],
+    ["27.0.0", true],
+    ["invalid", false],
+  ] as const)(
+    "checks the source workspace dependency range for Node %s",
+    (version, supported) => {
+      expect(isSupportedNodeVersion(version)).toBe(supported);
+    },
+  );
   afterEach(() => vi.restoreAllMocks());
 
   it.each(["unhealthy", "throws"])(

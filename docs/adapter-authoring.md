@@ -117,7 +117,7 @@ Kernel 自己拥有工具不等于 `tools`；模型支持图片也不等于 Adap
 | Clean-room 外部示例   | 公共 Adapter SDK    | Contract v1 / report schema v1                 | 文本、流式、恢复、引用、图片、回复动作幂等、取消；不导入 Core/Transport                    |
 
 Claude Code 已于 2026-09-01 纳入下一参考 Kernel 的范围。2026-09-02 已加入隔离的实验性
-`packages/adapter-claude-code` C0 package：固定官方 Agent SDK `0.3.258`，并以 deterministic fake
+`packages/adapter-claude-code` C0 package：固定官方 Agent SDK `0.3.260`，并以 deterministic fake
 验证文本流、session 恢复、取消、错误收口和引用文本。它没有注册到默认 Gateway，也不在真实验证矩阵中；
 图片、审批、`AskUserQuestion` 和真实企业微信证据尚未完成。协议与认证/条款边界见
 [`claude-code-adapter-evaluation.md`](claude-code-adapter-evaluation.md)。

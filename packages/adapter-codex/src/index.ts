@@ -34,7 +34,10 @@ export {
 
 interface CodexThreadLike {
   readonly id: string | null;
-  runStreamed(prompt: string): Promise<{ events: AsyncIterable<ThreadEvent> }>;
+  runStreamed(
+    prompt: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<{ events: AsyncIterable<ThreadEvent> }>;
 }
 
 interface CodexClientLike {
@@ -67,6 +70,7 @@ export class CodexRuntimeAdapter implements AgentRuntimeAdapter {
   ]);
   private readonly codex: CodexClientLike;
   private readonly completedInteractionResumes = new Set<string>();
+  private readonly activeRuns = new Set<AbortController>();
 
   constructor(private readonly options: CodexRuntimeAdapterOptions = {}) {
     this.codex = options.client ?? (new Codex() as CodexClientLike);
@@ -88,44 +92,64 @@ export class CodexRuntimeAdapter implements AgentRuntimeAdapter {
           : `[${part.type}] ${part.name ?? part.url ?? "附件"}`,
       )
       .join("\n");
-    const streamed = await thread.runStreamed(prompt);
-    const snapshots = new Map<string, string>();
-    let finalText = "";
-    let completed = false;
-    let lastStreamError: string | undefined;
-    for await (const event of streamed.events) {
-      if (event.type === "thread.started") {
-        yield { type: "session-started", sessionId: event.thread_id };
-      } else if (
-        event.type === "item.updated" &&
-        event.item.type === "agent_message"
-      ) {
-        const previous = snapshots.get(event.item.id) ?? "";
-        snapshots.set(event.item.id, event.item.text);
-        if (event.item.text.startsWith(previous)) {
-          const delta = event.item.text.slice(previous.length);
-          if (delta) yield { type: "text-delta", text: delta };
+    const controller = new AbortController();
+    this.activeRuns.add(controller);
+    try {
+      const streamed = await thread.runStreamed(prompt, {
+        signal: controller.signal,
+      });
+      const snapshots = new Map<string, string>();
+      let finalText = "";
+      let lastStreamError: string | undefined;
+      for await (const event of streamed.events) {
+        if (controller.signal.aborted) return;
+        if (event.type === "thread.started") {
+          yield { type: "session-started", sessionId: event.thread_id };
+        } else if (
+          event.type === "item.updated" &&
+          event.item.type === "agent_message"
+        ) {
+          const previous = snapshots.get(event.item.id) ?? "";
+          snapshots.set(event.item.id, event.item.text);
+          if (event.item.text.startsWith(previous)) {
+            const delta = event.item.text.slice(previous.length);
+            if (delta) yield { type: "text-delta", text: delta };
+          }
+        } else if (
+          event.type === "item.completed" &&
+          event.item.type === "agent_message"
+        ) {
+          snapshots.set(event.item.id, event.item.text);
+          finalText = event.item.text;
+        } else if (event.type === "turn.completed") {
+          yield { type: "message-completed", text: finalText || undefined };
+          return;
+        } else if (event.type === "turn.failed") {
+          yield { type: "failed", message: event.error.message };
+          return;
+        } else if (event.type === "error") {
+          // Codex can emit reconnect notices as error events and later complete the turn.
+          // Preserve the latest error, but do not prematurely terminate a recoverable stream.
+          lastStreamError = event.message;
         }
-      } else if (
-        event.type === "item.completed" &&
-        event.item.type === "agent_message"
-      ) {
-        snapshots.set(event.item.id, event.item.text);
-        finalText = event.item.text;
-      } else if (event.type === "turn.completed") {
-        completed = true;
-        yield { type: "message-completed", text: finalText || undefined };
-      } else if (event.type === "turn.failed") {
-        yield { type: "failed", message: event.error.message };
-      } else if (event.type === "error") {
-        // Codex can emit reconnect notices as error events and later complete the turn.
-        // Preserve the latest error, but do not prematurely terminate a recoverable stream.
-        lastStreamError = event.message;
       }
+      if (!controller.signal.aborted && lastStreamError) {
+        yield { type: "failed", message: lastStreamError };
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) throw error;
+    } finally {
+      // Consumer return, terminal events and shutdown all end this query.
+      controller.abort();
+      this.activeRuns.delete(controller);
     }
-    if (!completed && lastStreamError) {
-      yield { type: "failed", message: lastStreamError };
-    }
+  }
+
+  async stop(): Promise<void> {
+    // Use the SDK's supported cancellation path; do not leave an exec child
+    // consuming quota after the Gateway or its bounded check has stopped.
+    for (const controller of this.activeRuns) controller.abort();
+    this.activeRuns.clear();
   }
 
   async *resumeInteraction(

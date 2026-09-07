@@ -1,6 +1,18 @@
 # 工作状态
 
-更新于 2026-09-05。
+更新于 2026-09-07。
+
+## 新环境真实接入与依赖兼容（2026-09-07）
+
+不再仅验证 Echo：在独立新目录用公开命令完成真实 Pi 私聊注册、两轮记忆、主动通知和 Gateway 重启后
+续接；三轮客户端回复正确，真实 ingress 各九项通过，无新默认卡片，Outbox/spool 清理归零。
+这是维护者复用已有 Agent/Bot 的真实接入，不是陌生用户、无缓存安装或新账号创建认证。
+详见[新目录真实验收](reviews/fresh-real-onboarding-2026-09-07.md)。
+
+同步审查 Claude SDK `0.3.260`、Codex SDK `0.153.2`、OpenClaw client `2026.9.1`；后者将最低 Node
+要求提高到 `22.19.0`。真实检查另暴露 Codex SDK 超时后的进程停止缺陷，已添加官方 AbortSignal 清理。
+版本审查不替代真实成功：Claude 仍未登录，Codex SDK 本轮两轮超时，OpenClaw 本机服务不可用。
+详见[Claude 审查](reviews/claude-sdk-0.3.260.md)、[运行时兼容](reviews/runtime-clients-2026-09-07.md)。
 
 ## 并行专项修复与主审（2026-09-05）
 
@@ -58,7 +70,7 @@ Claude 自有登录、原生视频/引用真实回调、Linux 24h 与宿主断�
 | 外部 Adapter 模板 Doctor                        | 本机真实验证              | 通过部署入口动态加载模板；普通 10/10、live health 11/11                            |
 | Adapter Conformance Kit                         | M3.2 首切片完成           | 独立模块装载、schema v1 JSON、稳定错误码；passed/failed/skipped 不混淆             |
 | SDK-only clean-room Adapter                     | 完成并自动化验证          | 只依赖公共 SDK；文本/流式/恢复/引用/图片/回复动作幂等/取消 8 项通过                |
-| Claude Code 官方 SDK Adapter                    | M3.2 C0 + C1 工具完成     | SDK 0.3.258；真实 smoke 入口与 signed-out 诊断通过；成功 text/session 待自有凭据   |
+| Claude Code 官方 SDK Adapter                    | M3.2 C0 + C1 工具完成     | SDK 0.3.260；真实 smoke 入口与 signed-out 诊断通过；成功 text/session 待自有凭据   |
 | 通用 ACP v1 Adapter                             | 完成并真实验证            | stdio、协商、流式/load/cancel/图片真实通过；permission 自动化通过                  |
 | Codex/ACP 共享 Runtime Contract                 | 完成并自动化验证          | 两个 Adapter 共用文本、流式、首轮 session 与恢复 testkit                           |
 | Kimi Code ACP Adapter                           | 完成并真实验证            | 本机真实两轮及企业微信文本、同会话图片均通过                                       |

@@ -16,20 +16,28 @@ export interface DoctorCheck {
   detail: string;
 }
 
+export function isSupportedNodeVersion(version: string): boolean {
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
+  if (!match) return false;
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  return major >= 26 || major === 24 || (major === 22 && minor >= 19);
+}
+
 export async function diagnoseGatewayEnvironment(
   env: NodeJS.ProcessEnv,
   options: { live?: boolean; cwd?: string } = {},
 ): Promise<DoctorCheck[]> {
   const cwd = options.cwd ?? process.cwd();
   const checks: DoctorCheck[] = [];
-  const nodeMajor = Number(process.versions.node.split(".")[0]);
+  const nodeSupported = isSupportedNodeVersion(process.versions.node);
   checks.push(
     check(
       "node-version",
-      nodeMajor >= 22 ? "ok" : "error",
-      nodeMajor >= 22
+      nodeSupported ? "ok" : "error",
+      nodeSupported
         ? "Node.js runtime is supported"
-        : "Node.js 22+ is required",
+        : "Node.js 22.19+ (22.x), 24.x, or 26+ is required",
     ),
   );
   checks.push(

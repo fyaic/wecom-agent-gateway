@@ -30,6 +30,8 @@ changes.
 - [x] User-centered bilingual README, practical recipes and onboarding feedback.
 - [x] Read-only running-service status with separate work/backlog/dead-delivery findings.
 - [x] Fresh-checkout CLI acceptance gate with uncached macOS/Linux CI jobs (no Bot/model credentials).
+- [x] Maintainer-run fresh-directory real Pi/Bot enrollment, multi-turn memory,
+      proactive text and restart continuity; existing credentials, not a new-user study.
 - [ ] Validate the guide with new community users and publish scoped friction findings.
 - [ ] Design a versioned distribution/upgrade/uninstall path before promising an npm one-command install.
 

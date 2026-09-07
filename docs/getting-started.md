@@ -6,7 +6,7 @@
 
 ## 1. 无账号演示
 
-准备 Node.js 22.13+ 和 pnpm 11.8.0。当前面向 macOS / Linux，从源码运行，尚无 npm 一键安装包。
+准备 Node.js 22.x（≥22.19）、24.x 或 ≥26，以及 pnpm 11.8.0；不支持 Node 23/25。当前面向 macOS / Linux，从源码运行，尚无 npm 一键安装包。
 
 ```bash
 git clone https://github.com/fyaic/wecom-agent-gateway.git

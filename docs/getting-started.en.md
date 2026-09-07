@@ -6,7 +6,7 @@ Separate three questions: does the Gateway work, can your Agent answer independe
 
 ## 1. Credential-free demo
 
-Requires Node.js 22.13+ and pnpm 11.8.0. The source-based path targets macOS / Linux; there is no published npm installer.
+Requires Node.js 22.x (≥22.19), 24.x, or ≥26, and pnpm 11.8.0; Node 23/25 are unsupported. The source-based path targets macOS / Linux; there is no published npm installer.
 
 ```bash
 git clone https://github.com/fyaic/wecom-agent-gateway.git

@@ -35,7 +35,7 @@ _Real WeCom + Pi Agent; click for the MP4. Ordinary replies do not append cards 
 
 ## Quick start
 
-Requires **Node.js 22.13+ and pnpm 11.8.0**. The source-based deployment path targets macOS / Linux.
+Requires **Node.js 22.x (≥22.19), 24.x, or ≥26, and pnpm 11.8.0**; Node 23/25 are unsupported. The source-based deployment path targets macOS / Linux.
 There is no published one-command npm installer or hosted Agent service.
 
 ### 1. See the plumbing work — no credentials

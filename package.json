@@ -25,7 +25,7 @@
   "type": "module",
   "packageManager": "pnpm@11.8.0",
   "engines": {
-    "node": ">=22.13"
+    "node": "^22.19.0 || ^24.0.0 || >=26.0.0"
   },
   "scripts": {
     "demo": "tsx scripts/demo.ts",
@@ -77,6 +77,6 @@
     "prettier": "3.9.6",
     "tsx": "4.23.13",
     "typescript": "5.9.3",
-    "vitest": "4.1.11"
+    "vitest": "5.0.0"
   }
 }
