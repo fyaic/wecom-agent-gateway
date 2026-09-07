@@ -41,7 +41,8 @@ SQLite `PRAGMA user_version` 当前为 `1`。遇到更高版本数据库会 fail
 1. 创建不可登录的 `wecom-gateway` 用户，把仓库安装到 `/opt/wecom-agent-gateway`；
 2. 将私有配置写入 `/etc/wecom-agent-gateway/gateway.env`，属主设为 `root:root`、模式设为 `0600`；
    systemd manager 会在降权前读取，Gateway 服务用户无需修改凭据文件；
-3. 将 unit 中 `__PNPM_PATH__` 替换为 `command -v pnpm` 得到的绝对路径；
+3. 在仓库执行 `pnpm install --frozen-lockfile`（含 `tsx`，不要加 `--prod`）；将 unit 中
+   `__NODE_PATH__` 替换为 `command -v node` 的绝对路径；
 4. 若 Kernel 需要写 workspace 或专用 auth/session 目录，只把精确绝对路径加入 `ReadWritePaths`；
 5. 安装后运行 `systemd-analyze verify`、`systemctl enable --now`，再检查：
 
@@ -54,6 +55,12 @@ curl --fail --silent http://127.0.0.1:9464/metrics
 
 unit 使用专用用户、`UMask=0077`、systemd `StateDirectory`、有限写目录、自动失败重启和 120 秒优雅
 停机。不要为了让某个 Kernel 工作而取消全部文件系统保护；增加最小需要目录。
+主进程及 `ExecStartPre` Doctor 都直接由 Node 加载本地 `tsx`，不经过 `pnpm` 或 `tsx` CLI 包装器；
+后者在真实 Linux 预检的正常停机中可能返回 143，使 systemd 错报 failed。root 安装依赖后由专属服务用户
+运行 `pnpm doctor` 还可能触发 pnpm 的自动安装/目录清理检查；服务启动阶段不应修改依赖，不用 `CI=true`
+放行清空目录来绕过。环境由 `EnvironmentFile` 注入，不需要 CLI 再加载配置。安装后先在工作目录
+执行 `node --import tsx --eval 'console.log("tsx-loader-ready")'` 检查加载器，再按 ready 端点判断启动完成；
+`systemctl start` 返回只代表进程已启动，并不意味着 Agent/Transport 已 ready。
 
 ### 24 小时 soak 验收
 

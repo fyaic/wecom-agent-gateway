@@ -1,0 +1,22 @@
+[Unit]
+Description=Credential-free WeCom Gateway deployment fixture (not a real Bot)
+
+[Service]
+Type=simple
+User=gateway
+Group=gateway
+WorkingDirectory=/app
+ExecStart=/usr/local/bin/node --import tsx scripts/linux-lab-service.ts
+Restart=on-failure
+RestartSec=2s
+StateDirectory=wecom-agent-gateway
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/wecom-agent-gateway
+
+[Install]
+WantedBy=multi-user.target

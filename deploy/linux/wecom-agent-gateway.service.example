@@ -21,8 +21,8 @@ Environment=GATEWAY_OBSERVABILITY_PORT=9464
 StateDirectory=wecom-agent-gateway
 StateDirectoryMode=0700
 UMask=0077
-ExecStartPre=__PNPM_PATH__ doctor
-ExecStart=__PNPM_PATH__ start
+ExecStartPre=__NODE_PATH__ --import tsx scripts/doctor.ts
+ExecStart=__NODE_PATH__ --import tsx apps/gateway/src/index.ts
 Restart=on-failure
 RestartSec=5s
 TimeoutStartSec=120s

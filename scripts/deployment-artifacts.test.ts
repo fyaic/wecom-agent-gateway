@@ -38,10 +38,31 @@ describe("production deployment artifacts", () => {
     expect(unit).toContain("User=wecom-gateway");
     expect(unit).toContain("UMask=0077");
     expect(unit).toContain("NoNewPrivileges=true");
+    expect(unit).toContain(
+      "ExecStartPre=__NODE_PATH__ --import tsx scripts/doctor.ts",
+    );
+    expect(unit).toContain(
+      "ExecStart=__NODE_PATH__ --import tsx apps/gateway/src/index.ts",
+    );
+    expect(unit).not.toContain("ExecStart=__PNPM_PATH__ start");
+    expect(unit).not.toContain("__PNPM_PATH__");
+    expect(unit).not.toContain("SuccessExitStatus=143");
     expect(unit).not.toContain("WECOM_BOT_SECRET=");
     expect(unit).toContain(
       "GATEWAY_OWNER_LOCK_ROOT=/var/lib/wecom-agent-gateway/owner-locks",
     );
+  });
+
+  it("keeps the dedicated Linux VM resource-bounded and unshared", async () => {
+    const config = await read("deploy/linux/lima-lab.yaml");
+    expect(config).toContain("plain: true");
+    expect(config).toContain("cpus: 2");
+    expect(config).toContain("memory: 2GiB");
+    expect(config).toContain("disk: 10GiB");
+    expect(config).toContain("mounts: []");
+    expect(config).toContain("forwardAgent: false");
+    expect(config).toContain("loadDotSSHPubKeys: false");
+    expect(config).toContain("portForwards: []");
   });
 
   it("revalidates tagged source before publishing version-matched notes", async () => {
