@@ -754,6 +754,15 @@ export interface GatewayStore {
     receipt: DeliveryReceipt;
     now: string;
   }): Promise<void>;
+  /** Relinquish this owner's leased delivery without a receipt or failure.
+   * Call only before starting a transport attempt; it cannot retract a send.
+   * Preserve prior attempt/error history: superseded does not mean never sent.
+   */
+  supersedeDelivery(record: {
+    deliveryId: string;
+    owner: string;
+    now: string;
+  }): Promise<void>;
   retryDelivery(record: {
     deliveryId: string;
     owner: string;
@@ -803,6 +812,9 @@ export interface GatewayStore {
     actionId: "cancel";
     now: string;
   }): Promise<ResolvedRunControl | undefined>;
+  /** Complete the run and retire its pending control presentations, including
+   * already-resolved controls. Leased/in-flight deliveries are left untouched.
+   */
   completeRunControl(options: {
     controlId: string;
     now: string;

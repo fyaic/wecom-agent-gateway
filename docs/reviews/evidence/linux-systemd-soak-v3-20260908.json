@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 3,
+  "event": "linux_systemd_soak",
+  "certifying": true,
+  "passed": false,
+  "startedAt": "2026-09-08T05:03:11.375Z",
+  "finishedAt": "2026-09-09T05:03:11.416Z",
+  "plannedDurationMs": 86400000,
+  "observedDurationMs": 86400041,
+  "intervalMs": 30000,
+  "samples": 2877,
+  "service": {
+    "inactiveSamples": 0,
+    "pidChanges": 0,
+    "restartDelta": 0,
+    "invocationChanges": 0,
+    "journalEntries": 0,
+    "journalInvocations": 0
+  },
+  "health": {
+    "liveFailures": 0,
+    "readyFailures": 0,
+    "longestReadyFailureMs": 0,
+    "recoveredAfterReadyFailure": false,
+    "metricsFailures": 0
+  },
+  "sampling": {
+    "maximumGapMs": 30107,
+    "allowedGapMs": 40000,
+    "coversPlannedWindow": true
+  },
+  "durability": {
+    "peakPending": 0,
+    "peakLeased": 0,
+    "finalPending": 0,
+    "finalLeased": 0,
+    "finalDead": 0,
+    "finalSpoolFiles": 0
+  },
+  "resources": {
+    "minimumFreeBytes": 7381970944,
+    "requiredFreeBytes": 536870912,
+    "resourceProbeFailures": 0
+  },
+  "networkOutage": {
+    "expected": false,
+    "observedReadyLossWhileLive": false,
+    "observedRecovery": false,
+    "externallyAttested": false
+  },
+  "checks": {
+    "linuxPlatform": true,
+    "durationMet": true,
+    "certifyingDuration": true,
+    "samplingWindowCovered": true,
+    "samplingGapsBounded": true,
+    "serviceSnapshotsValid": true,
+    "processStayedSame": true,
+    "metricsAvailableAndValid": true,
+    "resourceSnapshotsValid": true,
+    "serviceStayedActive": true,
+    "livenessStayedUp": true,
+    "readinessStayedUpUnlessExpectedOutage": true,
+    "finalReady": true,
+    "finalOutboxDrained": true,
+    "noDeadLetters": true,
+    "mediaSpoolDrained": true,
+    "diskWatermarkMaintained": true,
+    "journalReadable": true,
+    "journalEvidencePresent": false,
+    "journalSummaryValid": true,
+    "networkOutageObserved": true
+  },
+  "notes": [
+    "The report contains aggregate health and durability evidence only; it excludes messages, conversation identifiers, credentials, paths, and journal contents.",
+    "Network-outage observation proves ready loss and recovery while the process stayed live; physical NIC/route/DNS disruption still requires an external operator attestation.",
+    "Health evidence is sampled, not continuous; bounded sample gaps do not prove that no shorter interruption occurred. Outbox aggregates do not prove that any real user traffic was exercised.",
+    "Resource probe failures are counted across the full window; unknown resource counts are null, never healthy sentinel values. Nonempty journal evidence is minimum corroboration, not proof of complete log retention."
+  ]
+}

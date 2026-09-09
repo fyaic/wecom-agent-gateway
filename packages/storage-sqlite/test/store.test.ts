@@ -471,6 +471,257 @@ describe("SqliteGatewayStore", () => {
     expect(journal.error).toBe("permanent failure");
   });
 
+  it.each(["pending", "resolved"])(
+    "completes a %s control by superseding only its pending cards, without delivery journal entries",
+    async (status) => {
+      const directory = mkdtempSync(join(tmpdir(), "wecom-control-supersede-"));
+      directories.push(directory);
+      const path = join(directory, "gateway.db");
+      const store = new SqliteGatewayStore(path);
+      const now = "2026-09-09T00:00:00.000Z";
+      const controlId = "run_control_current";
+      await store.createRunControl({
+        controlId,
+        accountId: "bot",
+        conversationId: "chat",
+        senderId: "user",
+        createdAt: now,
+        expiresAt: "2026-09-09T00:05:00.000Z",
+      });
+      const command: DurableOutboundCommand = {
+        type: "proactive-presentation",
+        accountId: "bot",
+        conversationId: "chat",
+        presentation: {
+          kind: "actions",
+          id: controlId,
+          title: "running",
+          actions: [{ id: "cancel", label: "stop" }],
+        },
+      };
+      const pendingId = await store.enqueueDelivery({
+        messageId: controlId,
+        command,
+        now,
+      });
+      const leasedId = await store.enqueueDelivery({
+        messageId: controlId,
+        command,
+        now,
+      });
+      await store.enqueueDelivery({
+        messageId: controlId,
+        command: replyCommand("ordinary final", true),
+        now,
+      });
+      await store.enqueueDelivery({ messageId: "unrelated", command, now });
+      await store.claimDelivery({
+        deliveryId: leasedId,
+        owner: "worker",
+        now,
+        leaseUntil: "2026-09-09T00:00:30.000Z",
+      });
+      if (status === "resolved") {
+        await store.resolveRunControl({
+          controlId,
+          accountId: "bot",
+          conversationId: "chat",
+          senderId: "user",
+          actionId: "cancel",
+          now,
+        });
+      }
+      expect(await store.completeRunControl({ controlId, now })).toBe(
+        status === "pending",
+      );
+      expect(await store.getDeliveryOutboxStats()).toEqual({
+        pending: 2,
+        leased: 1,
+        delivered: 0,
+        dead: 0,
+        superseded: 1,
+      });
+      await expect(
+        store.supersedeDelivery({
+          deliveryId: leasedId,
+          owner: "wrong-worker",
+          now,
+        }),
+      ).rejects.toThrow("lease was lost");
+      await expect(
+        store.supersedeDelivery({
+          deliveryId: pendingId,
+          owner: "worker",
+          now,
+        }),
+      ).rejects.toThrow("lease was lost");
+      await store.supersedeDelivery({
+        deliveryId: leasedId,
+        owner: "worker",
+        now,
+      });
+      store.close();
+      const reopened = new SqliteGatewayStore(path);
+      expect(await reopened.getDeliveryOutboxStats()).toEqual({
+        pending: 2,
+        leased: 0,
+        delivered: 0,
+        dead: 0,
+        superseded: 2,
+      });
+      reopened.close();
+      const database = new DatabaseSync(path, { readOnly: true });
+      expect(
+        database
+          .prepare("SELECT COUNT(*) AS total FROM delivery_journal")
+          .get(),
+      ).toMatchObject({ total: 0 });
+      expect(
+        database
+          .prepare(
+            "SELECT status, attempts, lease_owner, lease_until FROM delivery_outbox WHERE id = ?",
+          )
+          .get(leasedId),
+      ).toMatchObject({
+        status: "superseded",
+        attempts: 1,
+        lease_owner: null,
+        lease_until: null,
+      });
+      database.close();
+    },
+  );
+
+  it("rolls back control completion when retiring its pending card fails", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "wecom-control-atomic-"));
+    directories.push(directory);
+    const path = join(directory, "gateway.db");
+    const store = new SqliteGatewayStore(path);
+    const now = "2026-09-09T00:00:00.000Z";
+    const controlId = "run_control_atomic";
+    await store.createRunControl({
+      controlId,
+      accountId: "bot",
+      conversationId: "chat",
+      senderId: "user",
+      createdAt: now,
+      expiresAt: "2026-09-09T00:05:00.000Z",
+    });
+    await store.enqueueDelivery({
+      messageId: controlId,
+      now,
+      command: {
+        type: "proactive-presentation",
+        accountId: "bot",
+        conversationId: "chat",
+        presentation: {
+          kind: "actions",
+          id: controlId,
+          title: "running",
+          actions: [{ id: "cancel", label: "stop" }],
+        },
+      },
+    });
+    const database = new DatabaseSync(path);
+    database.exec(`
+      CREATE TRIGGER fail_card_retirement BEFORE UPDATE ON delivery_outbox
+      WHEN NEW.status = 'superseded'
+      BEGIN SELECT RAISE(ABORT, 'injected retirement failure'); END;
+    `);
+    await expect(store.completeRunControl({ controlId, now })).rejects.toThrow(
+      "injected retirement failure",
+    );
+    expect(
+      database.prepare("SELECT status FROM run_controls").get(),
+    ).toMatchObject({ status: "pending" });
+    expect(await store.getDeliveryOutboxStats()).toMatchObject({
+      pending: 1,
+      leased: 0,
+      superseded: 0,
+      delivered: 0,
+      dead: 0,
+    });
+    database.exec("DROP TRIGGER fail_card_retirement");
+    expect(await store.completeRunControl({ controlId, now })).toBe(true);
+    expect(
+      database.prepare("SELECT status FROM run_controls").get(),
+    ).toMatchObject({ status: "completed" });
+    expect(await store.getDeliveryOutboxStats()).toMatchObject({
+      pending: 0,
+      superseded: 1,
+    });
+    expect(
+      database.prepare("SELECT COUNT(*) AS total FROM delivery_journal").get(),
+    ).toMatchObject({ total: 0 });
+    database.close();
+    store.close();
+  });
+
+  it("preserves unknown-ACK history when a recovered owner supersedes an obsolete retry", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "wecom-control-recovered-"));
+    directories.push(directory);
+    const path = join(directory, "gateway.db");
+    const store = new SqliteGatewayStore(path);
+    const now = "2026-09-09T00:00:00.000Z";
+    const controlId = "run_control_old_process";
+    const deliveryId = await store.enqueueDelivery({
+      messageId: controlId,
+      now,
+      command: {
+        type: "proactive-presentation",
+        accountId: "bot",
+        conversationId: "chat",
+        presentation: {
+          kind: "actions",
+          id: controlId,
+          title: "running",
+          actions: [{ id: "cancel", label: "stop" }],
+        },
+      },
+    });
+    await store.claimDelivery({
+      deliveryId,
+      owner: "old",
+      now,
+      leaseUntil: "2026-09-09T00:00:30.000Z",
+    });
+    await store.retryDelivery({
+      deliveryId,
+      owner: "old",
+      now,
+      nextAttemptAt: now,
+      error: "ACK outcome unknown",
+    });
+    store.close();
+    const recovered = new SqliteGatewayStore(path);
+    expect(
+      await recovered.claimDelivery({
+        deliveryId,
+        owner: "new",
+        now,
+        leaseUntil: "2026-09-09T00:00:30.000Z",
+      }),
+    ).toMatchObject({ attempts: 2 });
+    await recovered.supersedeDelivery({ deliveryId, owner: "new", now });
+    recovered.close();
+    const database = new DatabaseSync(path, { readOnly: true });
+    expect(
+      database
+        .prepare(
+          "SELECT status, attempts, last_error FROM delivery_outbox WHERE id = ?",
+        )
+        .get(deliveryId),
+    ).toMatchObject({
+      status: "superseded",
+      attempts: 2,
+      last_error: "ACK outcome unknown",
+    });
+    expect(
+      database.prepare("SELECT COUNT(*) AS total FROM delivery_journal").get(),
+    ).toMatchObject({ total: 0 });
+    database.close();
+  });
+
   it("persists only durable media references and lists live spool artifacts", async () => {
     const directory = mkdtempSync(join(tmpdir(), "wecom-agent-media-spool-"));
     directories.push(directory);

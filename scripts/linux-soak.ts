@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, readdir, statfs, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, statfs, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
@@ -27,6 +27,19 @@ interface ServiceSnapshot {
   mainPid: number;
   restarts: number;
   invocationId: string;
+  bootId: string;
+}
+
+interface JournalAnchor {
+  service: string;
+  bootId: string;
+  invocationId: string;
+  atMs: number;
+}
+
+interface JournalAnchors {
+  start: JournalAnchor | null;
+  end: JournalAnchor | null;
 }
 
 export interface SoakSample {
@@ -38,13 +51,14 @@ export interface SoakSample {
   restarts: number;
   // Used only to compare process generations; never included in the report.
   invocationId: string;
+  bootId: string;
   outbox: Record<string, number>;
   spoolFiles: number | null;
   freeBytes: number | null;
 }
 
 export interface SoakReport {
-  schemaVersion: 3;
+  schemaVersion: 4;
   event: "linux_systemd_soak";
   certifying: boolean;
   passed: boolean;
@@ -59,8 +73,11 @@ export interface SoakReport {
     pidChanges: number;
     restartDelta: number;
     invocationChanges: number;
+    bootChanges: number;
     journalEntries: number;
     journalInvocations: number;
+    journalStartAnchorVerified: boolean;
+    journalEndAnchorVerified: boolean;
   };
   health: {
     liveFailures: number;
@@ -111,6 +128,10 @@ interface SoakDependencies {
   }>;
   spoolFiles(path: string): Promise<number>;
   freeBytes(path: string): Promise<number>;
+  journalAnchor(
+    service: string,
+    sample: SoakSample,
+  ): Promise<JournalAnchor | null>;
   journalSummary(
     service: string,
     sinceMs: number,
@@ -127,8 +148,14 @@ export async function runLinuxSoak(
 ): Promise<SoakReport> {
   const started = dependencies.now();
   const samples: SoakSample[] = [];
+  let startAnchor: JournalAnchor | null = null;
   while (true) {
     samples.push(await collectSample(config, dependencies));
+    if (samples.length === 1) {
+      startAnchor = await dependencies
+        .journalAnchor(config.service, samples[0]!)
+        .catch(() => null);
+    }
     const remaining = started + config.durationMs - dependencies.now();
     if (remaining <= 0) break;
     await dependencies.sleep(Math.min(config.intervalMs, remaining));
@@ -136,7 +163,13 @@ export async function runLinuxSoak(
 
   const finished = dependencies.now();
   const journal = await dependencies.journalSummary(config.service, started);
-  return evaluateSoak(config, samples, started, finished, journal);
+  const endAnchor = await dependencies
+    .journalAnchor(config.service, samples.at(-1)!)
+    .catch(() => null);
+  return evaluateSoak(config, samples, started, finished, journal, {
+    start: startAnchor,
+    end: endAnchor,
+  });
 }
 
 export function evaluateSoak(
@@ -145,6 +178,7 @@ export function evaluateSoak(
   startedMs: number,
   finishedMs: number,
   journal: { readable?: boolean; entries: number; invocations: number },
+  anchors: JournalAnchors = { start: null, end: null },
 ): SoakReport {
   if (samples.length === 0)
     throw new Error("Soak requires at least one sample");
@@ -199,6 +233,15 @@ export function evaluateSoak(
     .filter(
       (sample, index) => sample.invocationId !== samples[index]!.invocationId,
     ).length;
+  const bootChanges = samples
+    .slice(1)
+    .filter((sample, index) => sample.bootId !== samples[index]!.bootId).length;
+  const startAnchorVerified = verifiesAnchor(
+    anchors.start,
+    samples[0]!,
+    config.service,
+  );
+  const endAnchorVerified = verifiesAnchor(anchors.end, final, config.service);
   const pidChanges = samples.slice(1).filter((sample, index) => {
     const previous = samples[index]!;
     return (
@@ -233,11 +276,13 @@ export function evaluateSoak(
         sample.mainPid > 0 &&
         Number.isSafeInteger(sample.restarts) &&
         sample.restarts >= 0 &&
-        /^[a-f0-9]{32}$/.test(sample.invocationId),
+        /^[a-f0-9]{32}$/.test(sample.invocationId) &&
+        /^[a-f0-9]{32}$/.test(sample.bootId),
     ),
     processStayedSame:
       pidChanges === 0 &&
       invocationChanges === 0 &&
+      bootChanges === 0 &&
       samples.every((sample) => sample.restarts === samples[0]!.restarts) &&
       journal.invocations <= 1,
     metricsAvailableAndValid: metricsFailures === 0,
@@ -257,12 +302,10 @@ export function evaluateSoak(
     diskWatermarkMaintained:
       minimumFreeBytes !== null && minimumFreeBytes >= config.minimumFreeBytes,
     journalReadable: journal.readable ?? journal.entries > 0,
-    // A readable empty journal is useful for a non-certifying fixture, but
-    // provides no independent process-generation evidence for certification.
-    // Nonempty evidence is a minimum corroboration, not proof of retention.
-    journalEvidencePresent:
-      config.nonCertifying ||
-      (journal.entries > 0 && journal.invocations === 1),
+    // A quiet service need not emit logs during the observation window.
+    // Independently bind both boundary samples to real journal metadata;
+    // absence of an anchor is not equivalent to a quiet, verified generation.
+    journalAnchorsVerified: startAnchorVerified && endAnchorVerified,
     journalSummaryValid:
       Number.isSafeInteger(journal.entries) &&
       journal.entries >= 0 &&
@@ -277,7 +320,7 @@ export function evaluateSoak(
     "The report contains aggregate health and durability evidence only; it excludes messages, conversation identifiers, credentials, paths, and journal contents.",
     "Network-outage observation proves ready loss and recovery while the process stayed live; physical NIC/route/DNS disruption still requires an external operator attestation.",
     "Health evidence is sampled, not continuous; bounded sample gaps do not prove that no shorter interruption occurred. Outbox aggregates do not prove that any real user traffic was exercised.",
-    "Resource probe failures are counted across the full window; unknown resource counts are null, never healthy sentinel values. Nonempty journal evidence is minimum corroboration, not proof of complete log retention.",
+    "Resource probe failures are counted across the full window; unknown resource counts are null, never healthy sentinel values. Journal anchors bind the start and end samples to the same boot and invocation independently of window log activity; they do not prove complete log retention.",
   ];
   if (config.nonCertifying) {
     notes.push(
@@ -285,7 +328,7 @@ export function evaluateSoak(
     );
   }
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     event: "linux_systemd_soak",
     certifying,
     passed: Object.values(checks).every(Boolean),
@@ -300,8 +343,11 @@ export function evaluateSoak(
       pidChanges,
       restartDelta,
       invocationChanges,
+      bootChanges,
       journalEntries: journal.entries,
       journalInvocations: journal.invocations,
+      journalStartAnchorVerified: startAnchorVerified,
+      journalEndAnchorVerified: endAnchorVerified,
     },
     health: {
       liveFailures,
@@ -400,6 +446,7 @@ async function collectSample(
         mainPid: 0,
         restarts: 0,
         invocationId: "",
+        bootId: "",
       })),
       dependencies
         .endpoint("/livez", config)
@@ -421,6 +468,7 @@ async function collectSample(
     mainPid: service.mainPid,
     restarts: service.restarts,
     invocationId: service.invocationId,
+    bootId: service.bootId,
     outbox: metrics.ok ? safeOutboxMetrics(metrics.body) : {},
     spoolFiles,
     freeBytes,
@@ -496,6 +544,9 @@ const realDependencies: SoakDependencies = {
       mainPid: Number(values.MainPID ?? 0),
       restarts: Number(values.NRestarts ?? 0),
       invocationId: values.InvocationID ?? "",
+      bootId: (await readFile("/proc/sys/kernel/random/boot_id", "utf8"))
+        .trim()
+        .replaceAll("-", ""),
     };
   },
   async endpoint(path, config) {
@@ -527,6 +578,30 @@ const realDependencies: SoakDependencies = {
     const statistics = await statfs(dirname(path));
     return statistics.bavail * statistics.bsize;
   },
+  async journalAnchor(service, sample) {
+    if (
+      !/^[a-f0-9]{32}$/.test(sample.bootId) ||
+      !/^[a-f0-9]{32}$/.test(sample.invocationId)
+    )
+      return null;
+    const { stdout } = await execFileAsync(
+      "journalctl",
+      [
+        // Exact trusted fields exclude manager/other-unit records that a
+        // broader --unit query may include. Never infer identity from count.
+        `_SYSTEMD_UNIT=${service}`,
+        `--boot=${sample.bootId}`,
+        `_SYSTEMD_INVOCATION_ID=${sample.invocationId}`,
+        `--until=@${(Date.parse(sample.at) / 1_000).toFixed(3)}`,
+        "--lines=1",
+        "--output=json",
+        "--output-fields=_SYSTEMD_UNIT,_BOOT_ID,_SYSTEMD_INVOCATION_ID,__REALTIME_TIMESTAMP",
+        "--no-pager",
+      ],
+      { maxBuffer: 1_024 * 1_024, timeout: 10_000 },
+    );
+    return parseJournalAnchor(stdout);
+  },
   async journalSummary(service, sinceMs) {
     const { stdout } = await execFileAsync(
       "journalctl",
@@ -551,6 +626,61 @@ const realDependencies: SoakDependencies = {
     return { readable: true, entries, invocations: invocations.size };
   },
 };
+
+export function parseJournalAnchor(body: string): JournalAnchor | null {
+  const lines = body.split("\n").filter((line) => line.trim());
+  if (lines.length === 0) return null;
+  if (lines.length !== 1) throw new Error("Ambiguous journal anchor");
+  let value: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(lines[0]!);
+    if (
+      parsed === null ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
+      throw new Error();
+    }
+    value = parsed as Record<string, unknown>;
+  } catch {
+    throw new Error("Invalid journal anchor");
+  }
+  const service = value._SYSTEMD_UNIT;
+  const bootId = value._BOOT_ID;
+  const invocationId = value._SYSTEMD_INVOCATION_ID;
+  const timestamp = value.__REALTIME_TIMESTAMP;
+  if (
+    typeof service !== "string" ||
+    !/^[a-zA-Z0-9@_.-]+\.service$/.test(service) ||
+    typeof bootId !== "string" ||
+    !/^[a-f0-9]{32}$/.test(bootId) ||
+    typeof invocationId !== "string" ||
+    !/^[a-f0-9]{32}$/.test(invocationId) ||
+    typeof timestamp !== "string" ||
+    !/^[0-9]+$/.test(timestamp) ||
+    !Number.isSafeInteger(Number(timestamp))
+  )
+    throw new Error("Invalid journal anchor metadata");
+  return { service, bootId, invocationId, atMs: Number(timestamp) / 1_000 };
+}
+
+function verifiesAnchor(
+  anchor: JournalAnchor | null,
+  sample: SoakSample,
+  service: string,
+): boolean {
+  return (
+    anchor !== null &&
+    anchor.service === service &&
+    /^[a-f0-9]{32}$/.test(anchor.bootId) &&
+    /^[a-f0-9]{32}$/.test(anchor.invocationId) &&
+    anchor.bootId === sample.bootId &&
+    anchor.invocationId === sample.invocationId &&
+    Number.isFinite(anchor.atMs) &&
+    anchor.atMs >= 0 &&
+    anchor.atMs <= Date.parse(sample.at)
+  );
+}
 
 function count(outbox: Record<string, number>, state: string): number {
   return outbox[state] ?? Number.NaN;

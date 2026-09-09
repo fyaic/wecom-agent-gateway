@@ -471,6 +471,24 @@ export class SqliteGatewayStore implements GatewayStore {
     });
   }
 
+  async supersedeDelivery(record: {
+    deliveryId: string;
+    owner: string;
+    now: string;
+  }): Promise<void> {
+    const result = this.database
+      .prepare(
+        `
+        UPDATE delivery_outbox
+        SET status = 'superseded', lease_owner = NULL, lease_until = NULL,
+            updated_at = ?
+        WHERE id = ? AND status = 'leased' AND lease_owner = ?
+      `,
+      )
+      .run(record.now, record.deliveryId, record.owner);
+    if (result.changes !== 1) throw new Error("Outbox lease was lost");
+  }
+
   async retryDelivery(record: {
     deliveryId: string;
     owner: string;
@@ -847,16 +865,30 @@ export class SqliteGatewayStore implements GatewayStore {
     controlId: string;
     now: string;
   }): Promise<boolean> {
-    const result = this.database
-      .prepare(
-        `
+    return this.transaction(() => {
+      const result = this.database
+        .prepare(
+          `
         UPDATE run_controls
         SET status = 'completed', resolved_at = ?
         WHERE control_id = ? AND status = 'pending'
       `,
-      )
-      .run(options.now, options.controlId);
-    return result.changes === 1;
+        )
+        .run(options.now, options.controlId);
+      // Only currently pending work is retired here. A leased item may be in
+      // Transport; its owner must decide before starting its next attempt.
+      this.database
+        .prepare(
+          `
+          UPDATE delivery_outbox SET status = 'superseded', updated_at = ?
+          WHERE status = 'pending' AND message_id = ?
+            AND json_extract(command_json, '$.type') = 'proactive-presentation'
+            AND json_extract(command_json, '$.presentation.id') = ?
+        `,
+        )
+        .run(options.now, options.controlId, options.controlId);
+      return result.changes === 1;
+    });
   }
 
   async createRuntimeInteraction(

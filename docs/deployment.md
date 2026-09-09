@@ -74,13 +74,15 @@ sudo -u wecom-gateway pnpm soak:linux -- \
 ```
 
 验收器持续采集 systemd active/PID/restart 计数、`livez`、`readyz`、无标识符 Prometheus Outbox
-聚合、媒体 spool 文件数和状态盘剩余空间；结束时只读取 journal 的时间戳与 invocation 元数据，不读取或
+聚合、媒体 spool 文件数和状态盘剩余空间；首尾读取 journal 的时间戳、service/boot/invocation 元数据，不读取或
 写入消息内容。默认报告写入私有 `data/evidence/`，模式 `0600`，只包含计数、时长和布尔判定。
 
-报告 `schemaVersion: 3` 将未知 Outbox、spool 和磁盘数值保留为 `null`，不能按零积压或健康读取；旧版报告消费者必须适配。
+报告 `schemaVersion: 4` 将未知 Outbox、spool 和磁盘数值保留为 `null`，不能按零积压或健康读取；旧版报告消费者必须适配。
 `resources.resourceProbeFailures` 统计整个窗口内资源读数无效的采样数，必须为零；中间失败不能由最终恢复掩盖。
-认证还要求非空 journal 和恰好一个 invocation 佐证，但不声称日志保留完整。旧 schema v2 报告无法追溯中间 spool
-读取错误，不得自动升级为 v3 认证；必须保留旧证据，以新采集器运行独立完整窗口。
+首尾锚点必须匹配对应样本的 service、boot、invocation，日志时间不得晚于该边界；任何锚点缺失或矛盾均失败。
+窗口内可以没有新日志，不能将正常静默与代际证据缺失混淆；锚点也不证明日志保留完整。
+旧 v2 无法追溯中间资源读取错误；v3 要求窗口内新日志，会拒绝静默服务。历史报告必须原样保留，
+不能升级为 v4 通过；v4 自动认证需要独立新运行。本项目的实际 v3 失败与有限补证见[收尾记录](reviews/linux-soak-closure-2026-09-09.md)。
 五种 Outbox 状态必须齐全且各出现一次，健康检查同时校验 JSON 语义。窗口首尾、采样间隔和服务代际
 都参与判定：采样空洞、PID/invocation/restart 变化或任一采样发现 dead 均不能认证通过。
 这是严格的无重启稳定窗口；受控重启恢复单独验收，恢复后重新开始 24 小时窗口。轮询采样不等于连续
