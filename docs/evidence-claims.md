@@ -30,6 +30,8 @@
 - 宿主机物理断网、24 小时 Linux soak 和跨主机 active-active 尚未认证。仓库已提供 fail-closed 的
   `pnpm soak:linux` 与脱敏报告 schema，但脚本/短时测试不替代独立 Linux 主机的真实 24 小时运行和
   物理网络操作记录。
+  9 月 9 日实际 v3 窗口已结束，独立补证接受有限低负载观察；原自动报告仍 failed，
+  不以补证替代原认证门。见[完整分层结论](reviews/linux-soak-closure-2026-09-09.md)。
 - Claude Code 仍是实验性 Adapter；真实 signed-out 诊断通过不等于认证成功路径通过。
 
 具体证据和时间线以 [`status.md`](status.md)、[`upstream-compatibility.md`](upstream-compatibility.md) 与

@@ -158,6 +158,7 @@ export interface InfrastructureErrorEvent {
     | "enqueue-delivery"
     | "claim-delivery"
     | "complete-delivery"
+    | "supersede-delivery"
     | "retry-delivery"
     | "dead-letter-delivery"
     | "create-approval"
@@ -235,6 +236,7 @@ interface PendingApprovalResolver {
 interface ActiveRunControlState {
   cancelRequested: boolean;
   finished: boolean;
+  expiresAt?: number;
   cancel(): Promise<void>;
 }
 
@@ -1338,6 +1340,7 @@ export class WeComAgentGateway {
       expiresAt: iso(now + timeoutMs),
     });
     if (!created) throw new Error("Unable to allocate a run control card");
+    options.state.expiresAt = now + timeoutMs;
     this.activeRunControls.set(controlId, options.state);
     const presentation: Presentation = {
       kind: "actions",
@@ -2340,6 +2343,38 @@ export class WeComAgentGateway {
       return false;
     }
     let receipt;
+    if (
+      command.type === "proactive-presentation" &&
+      command.presentation.id.startsWith("run_control_")
+    ) {
+      const active = this.activeRunControls.get(command.presentation.id);
+      if (
+        !active ||
+        active.finished ||
+        active.cancelRequested ||
+        (active.expiresAt ?? 0) <= this.wallClock()
+      ) {
+        try {
+          await this.options.store.supersedeDelivery({
+            deliveryId: entry.id,
+            owner: this.deliveryOwner,
+            now: this.wallClockIso(),
+          });
+        } catch (error) {
+          // Fail closed, retaining the lease for recovery. Normal expiry is
+          // neither a transport success nor a dead-letter delivery failure.
+          this.notifyInfrastructureError({
+            component: "store",
+            componentId: "gateway-store",
+            operation: "supersede-delivery",
+            error: asError(error),
+          });
+        }
+        return false;
+      }
+    }
+    // No lifecycle recheck after calling Transport: an in-flight send cannot
+    // be retracted. Its real ACK or uncertain failure keeps the normal path.
     try {
       receipt = await this.options.transport.deliver(command);
     } catch (error) {

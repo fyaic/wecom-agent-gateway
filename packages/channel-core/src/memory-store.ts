@@ -202,6 +202,17 @@ export class MemoryGatewayStore implements GatewayStore {
     });
   }
 
+  async supersedeDelivery(record: {
+    deliveryId: string;
+    owner: string;
+    now: string;
+  }): Promise<void> {
+    const item = this.leased(record.deliveryId, record.owner);
+    item.status = "superseded";
+    item.leaseOwner = undefined;
+    item.leaseUntil = undefined;
+  }
+
   async retryDelivery(record: {
     deliveryId: string;
     owner: string;
@@ -413,10 +424,22 @@ export class MemoryGatewayStore implements GatewayStore {
     now: string;
   }): Promise<boolean> {
     const control = this.runControls.get(options.controlId);
-    if (!control || control.status !== "pending") return false;
-    control.status = "completed";
-    control.resolvedAt = options.now;
-    return true;
+    const completed = control?.status === "pending";
+    if (completed) {
+      control.status = "completed";
+      control.resolvedAt = options.now;
+    }
+    for (const item of this.outbox.values()) {
+      if (
+        item.status === "pending" &&
+        item.messageId === options.controlId &&
+        item.command.type === "proactive-presentation" &&
+        item.command.presentation.id === options.controlId
+      ) {
+        item.status = "superseded";
+      }
+    }
+    return completed;
   }
 
   async createRuntimeInteraction(

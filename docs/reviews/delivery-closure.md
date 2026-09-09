@@ -1,5 +1,21 @@
 # 出站媒体与失败恢复审查
 
+## 2026-09-09：停止卡终态与耐久队列收口
+
+传输 sub-agent 完成限定 Core/Store 的修复：`completeRunControl` 原子淘汰关联 pending 控制卡；
+当前 owner 已 claim 但尚未调用 Transport 的卡，在实际发送前复查活跃任务、取消、完成与 TTL。
+过期、重启后不存在活跃任务的旧卡均使用既有 `superseded`；不产生 delivered receipt，不计入 dead。
+淘汰写入失败时保留 lease、报告基础设施错误且不发送旧卡。普通文本、媒体和 final 重试路径未改。
+
+新增八项 fake Core 故障测试与三项 SQLite 测试：完成/取消、TTL、重启、已 claim 排队、已在途 ACK/未知 ACK、
+落库失败与恢复、owner 隔离及历史保留。主 Agent 另加 SQLite 事务内淘汰写失败的回滚测试，
+确认控制状态和 pending 卡一起回滚，恢复后可重试；没有部分终态或虚假送达台账。
+
+**边界：已经调用 Transport 的请求不能撤回。** 其真实 ACK 仍完成投递，未知 ACK 的 error/attempts 历史保留；
+之后放弃旧卡重发不代表先前从未送达。此次卡片故障场景是确定性测试，不冒充新增的真实断网卡片认证。
+主 Agent 另做真实普通私聊和单实例恢复验证；不改变控制卡 opt-in 默认值、不增加主题或引导 Agent 思考。
+以下 9 月 8 日段落保留当时发现与未完成状态，当前修复以本节为准。
+
 ## 2026-09-08：取消不应等待展示 ACK
 
 传输专项 sub-agent 复核发现，停止按钮回调原先先等待 `updateInteraction`，再调用 Adapter.cancel。

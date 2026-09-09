@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   evaluateSoak,
+  parseJournalAnchor,
   parseOutboxMetrics,
   parseSoakConfiguration,
   runLinuxSoak,
@@ -83,10 +84,11 @@ describe("Linux/systemd soak gate", () => {
       started,
       started + baseConfig.durationMs,
       { entries: 12, invocations: 1 },
+      anchors(),
     );
     expect(report.passed).toBe(process.platform === "linux");
     expect(report.certifying).toBe(true);
-    expect(report.schemaVersion).toBe(3);
+    expect(report.schemaVersion).toBe(4);
     expect(JSON.stringify(report)).not.toContain("/var/lib");
     expect(JSON.stringify(report)).not.toContain(
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -107,10 +109,14 @@ describe("Linux/systemd soak gate", () => {
       sample(started + 30_000, { ready: false }),
       sample(started + 60_000),
     ];
-    const report = evaluateSoak(config, samples, started, started + 60_000, {
-      entries: 3,
-      invocations: 1,
-    });
+    const report = evaluateSoak(
+      config,
+      samples,
+      started,
+      started + 60_000,
+      { entries: 3, invocations: 1 },
+      anchors(),
+    );
     expect(report.networkOutage).toMatchObject({
       observedReadyLossWhileLive: true,
       observedRecovery: true,
@@ -142,6 +148,7 @@ describe("Linux/systemd soak gate", () => {
       started,
       started + config.durationMs,
       { entries: 1, invocations: 1 },
+      anchors(),
     );
     expect(report.passed).toBe(false);
     expect(report.checks).toMatchObject({
@@ -160,30 +167,158 @@ describe("Linux/systemd soak gate", () => {
       started,
       started + config.durationMs,
       { entries: 1, invocations: 1 },
+      anchors(),
     );
     expect(report.passed).toBe(false);
     expect(report.checks.readinessStayedUpUnlessExpectedOutage).toBe(false);
   });
 
-  it("permits an empty readable journal only for explicitly non-certifying fixtures", () => {
+  it("permits a quiet window when both service generation anchors verify", () => {
     const report = evaluateSoak(
       shortConfig(),
       [sample(0), sample(30_000), sample(60_000)],
       0,
       60_000,
       { readable: true, entries: 0, invocations: 0 },
+      anchors(),
     );
     expect(report.checks.journalReadable).toBe(true);
-    expect(report.checks.journalEvidencePresent).toBe(true);
+    expect(report.checks.journalAnchorsVerified).toBe(true);
     expect(report.passed).toBe(true);
     expect(report.certifying).toBe(false);
+  });
+
+  it("accepts a synthetic full certifying quiet window with historical matching anchors", () => {
+    const started = 100_000;
+    const report = evaluateSoak(
+      baseConfig,
+      Array.from(
+        { length: baseConfig.durationMs / baseConfig.intervalMs + 1 },
+        (_, index) => sample(started + index * baseConfig.intervalMs),
+      ),
+      started,
+      started + baseConfig.durationMs,
+      journal(),
+      anchors(),
+    );
+    expect(report.certifying).toBe(true);
+    expect(report.passed).toBe(process.platform === "linux");
+    expect(
+      Object.entries(report.checks)
+        .filter(([key]) => key !== "linuxPlatform")
+        .every(([, passed]) => passed),
+    ).toBe(true);
+    expect(report.service).toMatchObject({
+      journalEntries: 0,
+      journalInvocations: 0,
+      journalStartAnchorVerified: true,
+      journalEndAnchorVerified: true,
+      bootChanges: 0,
+    });
+    expect(JSON.stringify(report)).not.toContain(anchors().start.bootId);
+    expect(JSON.stringify(report)).not.toContain(anchors().start.invocationId);
+  });
+
+  it.each(["start", "end"] as const)(
+    "fails when the %s boundary has no journal anchor",
+    (boundary) => {
+      const evidence = { ...anchors(), [boundary]: null };
+      const report = evaluateSoak(
+        shortConfig(),
+        [sample(0), sample(30_000), sample(60_000)],
+        0,
+        60_000,
+        { readable: true, entries: 12, invocations: 1 },
+        evidence,
+      );
+      expect(report.checks.journalAnchorsVerified).toBe(false);
+      expect(report.passed).toBe(false);
+    },
+  );
+
+  it.each([
+    { service: "another.service" },
+    { bootId: "dddddddddddddddddddddddddddddddd" },
+    { invocationId: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+    { atMs: 60_001 },
+    { atMs: Number.NaN },
+  ])("rejects a contradictory or invalid end anchor (%#)", (change) => {
+    const evidence = anchors();
+    Object.assign(evidence.end, change);
+    const report = evaluateSoak(
+      shortConfig(),
+      [sample(0), sample(30_000), sample(60_000)],
+      0,
+      60_000,
+      journal(),
+      evidence,
+    );
+    expect(report.service.journalStartAnchorVerified).toBe(true);
+    expect(report.service.journalEndAnchorVerified).toBe(false);
+    expect(report.passed).toBe(false);
+  });
+
+  it("does not use a log created after the starting boundary as a start anchor", () => {
+    const evidence = anchors();
+    evidence.start.atMs = 1;
+    const report = evaluateSoak(
+      shortConfig(),
+      [sample(0), sample(30_000), sample(60_000)],
+      0,
+      60_000,
+      journal(),
+      evidence,
+    );
+    expect(report.service.journalStartAnchorVerified).toBe(false);
+    expect(report.passed).toBe(false);
+  });
+
+  it("parses a single service-attributed journal record without requiring in-window activity", () => {
+    expect(parseJournalAnchor(journalLine())).toEqual(anchors().start);
+    expect(parseJournalAnchor("\n")).toBeNull();
+  });
+
+  it.each([
+    "private malformed content",
+    "null",
+    "[]",
+    journalLine({ _SYSTEMD_UNIT: undefined }),
+    journalLine({ _SYSTEMD_INVOCATION_ID: undefined }),
+    journalLine({ _BOOT_ID: "" }),
+    journalLine({ _BOOT_ID: ["cccccccccccccccccccccccccccccccc"] }),
+    journalLine({ __REALTIME_TIMESTAMP: "NaN" }),
+    journalLine({ __REALTIME_TIMESTAMP: "9007199254740992" }),
+    journalLine() + "\n" + journalLine(),
+  ])(
+    "rejects missing, ambiguous or invalid raw journal metadata (%#)",
+    (body) => {
+      expect(() => parseJournalAnchor(body)).toThrow();
+    },
+  );
+
+  it("collects anchors at both boundaries and fails if the final query is unreadable", async () => {
+    const deps = dependencies()!;
+    const queried: number[] = [];
+    deps.journalAnchor = async (service, sample) => {
+      expect(service).toBe(baseConfig.service);
+      expect(sample.bootId).toBe(anchors().start.bootId);
+      queried.push(Date.parse(sample.at));
+      if (queried.length === 2) throw new Error("private journal query error");
+      return anchors().start;
+    };
+    const report = await runLinuxSoak(shortConfig(), deps);
+    expect(queried).toEqual([0, 60_000]);
+    expect(report.service.journalStartAnchorVerified).toBe(true);
+    expect(report.service.journalEndAnchorVerified).toBe(false);
+    expect(report.passed).toBe(false);
+    expect(JSON.stringify(report)).not.toContain("private");
   });
 
   it.each([
     { readable: true, entries: 0, invocations: 0 },
     { readable: true, entries: 12, invocations: 0 },
   ])(
-    "requires minimum journal generation evidence for certification (%#)",
+    "requires independent journal anchors even if the window journal is readable (%#)",
     (journal) => {
       const report = evaluateSoak(
         baseConfig,
@@ -198,7 +333,7 @@ describe("Linux/systemd soak gate", () => {
       expect(report.certifying).toBe(true);
       expect(report.checks.journalReadable).toBe(true);
       expect(report.checks.samplingWindowCovered).toBe(true);
-      expect(report.checks.journalEvidencePresent).toBe(false);
+      expect(report.checks.journalAnchorsVerified).toBe(false);
       expect(report.passed).toBe(false);
     },
   );
@@ -210,6 +345,7 @@ describe("Linux/systemd soak gate", () => {
       0,
       baseConfig.durationMs,
       { readable: true, entries: 0, invocations: 0 },
+      anchors(),
     );
     expect(report.checks.durationMet).toBe(true);
     expect(report.checks.samplingGapsBounded).toBe(false);
@@ -223,6 +359,7 @@ describe("Linux/systemd soak gate", () => {
       0,
       60_000,
       journal(),
+      anchors(),
     );
     expect(report.checks.samplingWindowCovered).toBe(false);
     expect(report.passed).toBe(false);
@@ -234,7 +371,8 @@ describe("Linux/systemd soak gate", () => {
     [sample(0), sample(60_000), sample(30_000)],
   ])("rejects invalid or nonmonotonic sample timestamps (%#)", (...samples) => {
     expect(
-      evaluateSoak(shortConfig(), samples, 0, 60_000, journal()).passed,
+      evaluateSoak(shortConfig(), samples, 0, 60_000, journal(), anchors())
+        .passed,
     ).toBe(false);
   });
 
@@ -242,6 +380,7 @@ describe("Linux/systemd soak gate", () => {
     { mainPid: 200 },
     { restarts: 1 },
     { invocationId: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+    { bootId: "dddddddddddddddddddddddddddddddd" },
   ])(
     "fails a process generation change even when all probes are healthy (%#)",
     (change) => {
@@ -251,6 +390,7 @@ describe("Linux/systemd soak gate", () => {
         0,
         60_000,
         journal(),
+        anchors(),
       );
       expect(report.checks.processStayedSame).toBe(false);
       expect(report.passed).toBe(false);
@@ -260,10 +400,17 @@ describe("Linux/systemd soak gate", () => {
   it("fails restarts visible only in journal and invalid process metadata", () => {
     const samples = [sample(0), sample(30_000), sample(60_000)];
     expect(
-      evaluateSoak(shortConfig(), samples, 0, 60_000, {
-        entries: 3,
-        invocations: 2,
-      }).checks.processStayedSame,
+      evaluateSoak(
+        shortConfig(),
+        samples,
+        0,
+        60_000,
+        {
+          entries: 3,
+          invocations: 2,
+        },
+        anchors(),
+      ).checks.processStayedSame,
     ).toBe(false);
     samples[1] = sample(30_000, {
       mainPid: 0,
@@ -271,8 +418,8 @@ describe("Linux/systemd soak gate", () => {
       restarts: Number.NaN,
     });
     expect(
-      evaluateSoak(shortConfig(), samples, 0, 60_000, journal()).checks
-        .serviceSnapshotsValid,
+      evaluateSoak(shortConfig(), samples, 0, 60_000, journal(), anchors())
+        .checks.serviceSnapshotsValid,
     ).toBe(false);
   });
 
@@ -285,6 +432,7 @@ describe("Linux/systemd soak gate", () => {
       0,
       60_000,
       journal(),
+      anchors(),
     );
     expect(report.durability.finalDead).toBe(0);
     expect(report.checks.noDeadLetters).toBe(false);
@@ -297,6 +445,7 @@ describe("Linux/systemd soak gate", () => {
       0,
       60_000,
       journal(),
+      anchors(),
     );
     expect(report.health.metricsFailures).toBe(1);
     expect(report.durability.finalPending).toBeNull();
@@ -339,6 +488,7 @@ describe("Linux/systemd soak gate", () => {
       0,
       60_000,
       journal(),
+      anchors(),
     );
     expect(report.checks.resourceSnapshotsValid).toBe(false);
     expect(report.resources.resourceProbeFailures).toBe(1);
@@ -405,6 +555,7 @@ function sample(at: number, overrides: Partial<SoakSample> = {}): SoakSample {
     mainPid: 100,
     restarts: 0,
     invocationId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    bootId: "cccccccccccccccccccccccccccccccc",
     outbox: { pending: 0, leased: 0, delivered: 0, dead: 0, superseded: 0 },
     spoolFiles: 0,
     freeBytes: 2 * 1_073_741_824,
@@ -436,6 +587,27 @@ function journal() {
   return { readable: true, entries: 0, invocations: 0 };
 }
 
+function anchors() {
+  const anchor = {
+    service: baseConfig.service,
+    invocationId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    bootId: "cccccccccccccccccccccccccccccccc",
+    atMs: 0,
+  };
+  return { start: { ...anchor }, end: { ...anchor } };
+}
+
+function journalLine(overrides: Record<string, unknown> = {}) {
+  const anchor = anchors().start;
+  return JSON.stringify({
+    _SYSTEMD_UNIT: anchor.service,
+    _BOOT_ID: anchor.bootId,
+    _SYSTEMD_INVOCATION_ID: anchor.invocationId,
+    __REALTIME_TIMESTAMP: String(anchor.atMs * 1_000),
+    ...overrides,
+  });
+}
+
 function dependencies(
   failure?: "unavailable" | "malformed" | "false-health",
   probeMs = 0,
@@ -454,6 +626,7 @@ function dependencies(
         mainPid: 100,
         restarts: 0,
         invocationId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        bootId: "cccccccccccccccccccccccccccccccc",
       };
     },
     endpoint: async (path) => {
@@ -476,6 +649,7 @@ function dependencies(
     },
     spoolFiles: async () => 0,
     freeBytes: async () => 2 * 1_073_741_824,
+    journalAnchor: async () => anchors().start,
     journalSummary: async () => journal(),
   };
 }
