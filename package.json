@@ -73,10 +73,10 @@
     "ci": "pnpm format:check && pnpm typecheck && pnpm test && pnpm public:check"
   },
   "devDependencies": {
-    "@types/node": "24.13.3",
-    "prettier": "3.9.6",
+    "@types/node": "24.13.5",
+    "prettier": "3.9.8",
     "tsx": "4.23.13",
     "typescript": "5.9.3",
-    "vitest": "5.0.0"
+    "vitest": "5.0.1"
   }
 }
