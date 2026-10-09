@@ -8,6 +8,12 @@ tagged.
 
 ### Added
 
+- Optional Bot-bound authorization-maintenance plugin and serial worker using
+  independently installed MIT `fyaic/wecom-auth-keeper`; private per-user setup,
+  durable action guards, explicit pre-renewal, isolated CLI capability probe and
+  opt-in macOS LaunchAgent template. One real proactive message-permission renewal
+  and post-renewal query passed; unattended cross-cycle operation is not certified.
+
 - Optional local `auth:keeper` operator entrypoint reuses wecom-auth-keeper,
   with same-Bot configuration guards, explicit inspect/renew and no automatic
   grants, business writes or runtime dependency. GUI evidence does not certify APIs.

@@ -28,13 +28,17 @@ changes.
 - [x] Optional local auth-keeper entrypoint: same-Bot config check, explicit
       inspect/renew, bounded execution and no business-write probes or runtime dependency.
 - [x] Explicit health-report coverage: component health does not certify CLI capabilities.
-- [ ] Gateway-specific keeper/CLI identity binding, real permission recovery and
-      per-capability API verification. Existing local keeper config belongs to another Bot.
+- [x] Optional maintenance plugin/worker with per-user Bot-bound setup, durable
+      intent, locking/backoff, independent CLI profile validation and opt-in Aqua deployment template.
+- [x] Same-Bot message permission proactive pre-renewal, expiry advancement,
+      immediate-repeat suppression and independent message-sessions API verification.
+- [ ] Natural-expiry recovery and safe API probes for the other enabled office capabilities.
 - [ ] Unattended navigation and cross-cycle recovery certification; not provided
       by the current existing-window wrapper.
 
 Current implementation, review findings and retained failures:
-[September 23 review](docs/reviews/keeper-and-mainline-2026-09-23.md).
+[October 9 live review](docs/reviews/auth-maintenance-live-2026-10-09.md), with
+[September 23 history](docs/reviews/keeper-and-mainline-2026-09-23.md) retained.
 
 ### First useful reply and community onboarding
 
