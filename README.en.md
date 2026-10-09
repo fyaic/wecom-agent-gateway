@@ -8,6 +8,8 @@ Models, authentication and reasoning stay with your Agent.
 
 No reply? [Diagnose by layer](docs/gateway-status.md): `doctor` checks configuration, `agent:check` checks
 the Agent, and `gateway:status` reads running-service health and delivery backlog (local observability must be enabled).
+Chat works but office-tool authorization expired? See the [optional auth keeper](docs/auth-keeper.md).
+For existing deployments, follow the [upgrade and rollback runbook](docs/upgrade-and-rollback.md).
 
 [![CI](https://github.com/fyaic/wecom-agent-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/fyaic/wecom-agent-gateway/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -132,6 +134,15 @@ The Gateway transports information and explicit Agent events; it does not decide
 The [official WeCom SDK](https://github.com/WecomTeam/aibot-node-sdk) handles Bot connectivity.
 [wecom-cli](https://github.com/WecomTeam/wecom-cli) is an optional office-tool layer, not the inbound IM transport.
 If you only need OpenClaw, also consider the [official WeCom OpenClaw plugin](https://github.com/WecomTeam/wecom-openclaw-plugin).
+
+### Optional: office-capability authorization maintenance
+
+The maintenance plugin invokes [fyaic/wecom-auth-keeper](https://github.com/fyaic/wecom-auth-keeper) (MIT)
+as a separate process. Install Keeper separately; its source is not vendored here. This stays outside the IM core
+and is not an official WeCom token-refresh mechanism. Disabled by default, it requires a logged-in macOS WeCom
+desktop and the correct permissions page or a visible official authorization link.
+Automation across real authorization-expiry cycles is not yet certified; unattended, fully automatic setup is not promised.
+[Configure your Bot](docs/auth-maintenance-setup.md) · [Operation and evidence limits](docs/auth-keeper.md)
 
 ## Current evidence boundary
 

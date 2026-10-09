@@ -12,6 +12,12 @@ export interface GatewayStatusReport {
     | "invalid-configuration"
     | "invalid-response";
   findings: string[];
+  coverage: {
+    gateway: "component-snapshot";
+    agentResponse: "not-checked";
+    wecomCliCapabilities: "not-checked";
+    clientDelivery: "not-checked";
+  };
   snapshot?: {
     ready: boolean;
     transportHealthy: boolean;
@@ -52,7 +58,18 @@ function report(
   status: GatewayStatusReport["status"],
   findings: string[],
 ): GatewayStatusReport {
-  return { schemaVersion: 1, event: "gateway_status", status, findings };
+  return {
+    schemaVersion: 1,
+    event: "gateway_status",
+    status,
+    findings,
+    coverage: {
+      gateway: "component-snapshot",
+      agentResponse: "not-checked",
+      wecomCliCapabilities: "not-checked",
+      clientDelivery: "not-checked",
+    },
+  };
 }
 
 /** Only exact, aggregate fields are allowed into a support report. Never copy labels or text. */

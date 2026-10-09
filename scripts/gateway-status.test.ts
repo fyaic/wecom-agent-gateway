@@ -56,6 +56,12 @@ describe("read-only gateway status", () => {
     expect(await inspectGatewayStatus(env)).toMatchObject({
       status: "healthy",
       findings: [],
+      coverage: {
+        gateway: "component-snapshot",
+        agentResponse: "not-checked",
+        wecomCliCapabilities: "not-checked",
+        clientDelivery: "not-checked",
+      },
     });
     current.work.activeRuns = 1;
     current.work.pendingApprovals = 1;
@@ -180,6 +186,12 @@ describe("read-only gateway status", () => {
     expect(await inspectGatewayStatus(failed)).toEqual({
       schemaVersion: 1,
       event: "gateway_status",
+      coverage: {
+        gateway: "component-snapshot",
+        agentResponse: "not-checked",
+        wecomCliCapabilities: "not-checked",
+        clientDelivery: "not-checked",
+      },
       status: "unavailable",
       findings: ["metrics-unavailable"],
     });

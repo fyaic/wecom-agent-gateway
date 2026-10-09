@@ -46,7 +46,16 @@ different capabilities and acceptance evidence.
 | Pi Agent         | Official strict-LF JSONL RPC           | Real WeCom direct/group, resume, image, worker pool, ask-user, approval and cancel                                      | 2026-08-24 two direct turns: ack 400/385ms, first text 3.919/2.638s, complete 4.610/3.382s                                               |
 | Generic ACP      | ACP v1 stdio                           | Real child-process initialize, capability negotiation and load/cancel/image contract                                    | Kimi is the real WeCom end-to-end representative; other ACP harnesses need separate acceptance                                           |
 
-### Latest retest status (through 2026-09-07)
+### Incremental check on 2026-09-23
+
+A new local Pi two-turn check returned `adapter-start-or-configuration-failed`;
+no new successful acceptance is claimed. This broad error category does not
+identify the failing phase. The host was heavily loaded and ACP fixtures also
+timed out; neither authentication failure nor an exclusive resource root cause
+has been established. See the [review](reviews/keeper-and-mainline-2026-09-23.md).
+Other Kernels have no new real acceptance in this round.
+
+### Per-path retest baseline (through 2026-09-07)
 
 | Adapter / version                 | Latest result                                                                                           | Evidence and interpretation                                                                                                                          |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |

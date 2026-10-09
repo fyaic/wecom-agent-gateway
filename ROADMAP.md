@@ -23,6 +23,19 @@ changes.
 
 ## Next
 
+### Authorization maintenance, without coupling it to chat
+
+- [x] Optional local auth-keeper entrypoint: same-Bot config check, explicit
+      inspect/renew, bounded execution and no business-write probes or runtime dependency.
+- [x] Explicit health-report coverage: component health does not certify CLI capabilities.
+- [ ] Gateway-specific keeper/CLI identity binding, real permission recovery and
+      per-capability API verification. Existing local keeper config belongs to another Bot.
+- [ ] Unattended navigation and cross-cycle recovery certification; not provided
+      by the current existing-window wrapper.
+
+Current implementation, review findings and retained failures:
+[September 23 review](docs/reviews/keeper-and-mainline-2026-09-23.md).
+
 ### First useful reply and community onboarding
 
 - [x] Credential-free local demo using the real Core, SQLite and external Adapter.
@@ -33,6 +46,8 @@ changes.
 - [x] Maintainer-run fresh-directory real Pi/Bot enrollment, multi-turn memory,
       proactive text and restart continuity; existing credentials, not a new-user study.
 - [ ] Validate the guide with new community users and publish scoped friction findings.
+- [x] Source-release directory and cold SQLite backup/restore runbook plus a
+      no-credential same-version fixture; not cross-version migration certification.
 - [ ] Design a versioned distribution/upgrade/uninstall path before promising an npm one-command install.
 
 Details and measured local results: [onboarding review](docs/onboarding-review.md).

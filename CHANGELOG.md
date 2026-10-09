@@ -8,6 +8,13 @@ tagged.
 
 ### Added
 
+- Optional local `auth:keeper` operator entrypoint reuses wecom-auth-keeper,
+  with same-Bot configuration guards, explicit inspect/renew and no automatic
+  grants, business writes or runtime dependency. GUI evidence does not certify APIs.
+- Source-deployment upgrade/rollback runbook and a credential-free release-layout
+  exercise using the real SQLite store, including snapshot loss/replay boundaries.
+- Gateway status reports explicit coverage: component health is not Agent-response,
+  CLI-capability authorization or client-delivery certification.
 - Disposable-checkout first-run acceptance through public pnpm commands, with
   uncached macOS/Linux CI jobs and preflight refusal for existing private state.
 - A product-intent baseline mapping user requirements to evidence and explicit
@@ -25,6 +32,14 @@ tagged.
 
 ### Fixed
 
+- Bound ACP initialization and reap failed/stopped child processes; drain stderr
+  when logging is disabled. Bound test-file worker fanout without raising test
+  deadlines; the earlier timeout remains documented rather than silently erased.
+- Supersede queued stale run-control cards after terminal completion, including
+  leased pre-send checks; retain in-flight ACK semantics and transaction rollback safety.
+- Linux soak schema v4 uses start/end journal anchors for quiet windows; the
+  completed v3 low-load observation has independent evidence, but its original
+  automatic report remains failed. A new v4 24-hour certification is still pending.
 - Run-control cancellation starts without waiting for the card-update ACK;
   a withheld-ACK regression verifies Adapter cancellation and final reply progress.
 - Keep run-control cards opt-in in the application fallback and `.env.example`,
@@ -40,7 +55,8 @@ tagged.
 - Preserve durable text/media retry budgets while the Transport is known
   offline; bounded health probes gate claims without weakening permanent-error
   dead letters. Six SQLite/spool regressions and real Linux fault recovery
-  verify the fix; the separate 24-hour soak is running, not yet complete.
+  verify the fix; the separate 24-hour observation has since concluded with the
+  limited acceptance and automatic-report failure described above.
 
 - Reviewed September Codex/OpenClaw/Claude dependencies; the OpenClaw client
   now requires Node 22.19.0+, enforced by both package metadata and Doctor.

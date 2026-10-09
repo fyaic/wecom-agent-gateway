@@ -3,6 +3,14 @@
 `pnpm gateway:status` reads the running Gateway's aggregate metrics. It does not start a Bot connection,
 invoke a model, read chat history, change configuration or repair/replay deliveries.
 
+报告中的 `coverage` 显式区分证据层级：Gateway 是当前组件快照，Agent 回答、
+`wecom-cli` 业务能力授权和客户端实际送达均为 `not-checked`。即使 `status=healthy`，
+这些能力也可能过期或不可用；不能把聊天通道健康解释为所有办公工具已授权。
+
+可选的本地 [wecom-auth-keeper 集成](auth-keeper.md)负责指定能力的桌面授权维护，
+不进入 Gateway 启动或消息热路径。页面授权成功后仍须对具体业务 API 复探；
+不自动重放待办创建等写操作，也不自动创建新 Bot。
+
 先在服务的私有 `.env` 中显式启用已有观测端点，按正常受管服务流程重启一次：
 
 ```dotenv

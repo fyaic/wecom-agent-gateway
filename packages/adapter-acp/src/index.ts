@@ -29,6 +29,8 @@ export interface AcpRuntimeAdapterOptions {
   cwd: string;
   env?: NodeJS.ProcessEnv;
   requestTimeoutMs?: number;
+  /** Bounds process startup and ACP initialization; defaults to requestTimeoutMs or 5 minutes. */
+  startupTimeoutMs?: number;
   onStderr?: (message: string) => void;
 }
 
@@ -78,6 +80,13 @@ export class AcpRuntimeAdapter implements AgentRuntimeAdapter {
         options.requestTimeoutMs < 1)
     ) {
       throw new Error("ACP requestTimeoutMs must be a positive integer");
+    }
+    if (
+      options.startupTimeoutMs !== undefined &&
+      (!Number.isInteger(options.startupTimeoutMs) ||
+        options.startupTimeoutMs < 1)
+    ) {
+      throw new Error("ACP startupTimeoutMs must be a positive integer");
     }
     this.id = options.id;
     this.sessionCompatibilityId = `${options.id}:acp-v1`;
@@ -131,6 +140,14 @@ export class AcpRuntimeAdapter implements AgentRuntimeAdapter {
     );
     const connection = app.connect(stream);
     this.connection = connection;
+    const startupTimeout = setTimeout(
+      () => {
+        connection.close(new Error("ACP initialization timed out"));
+      },
+      this.options.startupTimeoutMs ??
+        this.options.requestTimeoutMs ??
+        5 * 60_000,
+    );
 
     try {
       const initialized = await connection.agent.request(
@@ -163,7 +180,10 @@ export class AcpRuntimeAdapter implements AgentRuntimeAdapter {
       }
     } catch (error) {
       await this.stop();
+      this.processError = asError(error);
       throw error;
+    } finally {
+      clearTimeout(startupTimeout);
     }
   }
 
@@ -175,17 +195,24 @@ export class AcpRuntimeAdapter implements AgentRuntimeAdapter {
     this.child = undefined;
     connection?.close();
     this.failActiveRuns(new Error("ACP adapter stopped"));
-    if (!child || child.exitCode !== null || child.signalCode !== null) return;
+    if (
+      !child ||
+      !child.pid ||
+      child.exitCode !== null ||
+      child.signalCode !== null
+    )
+      return;
 
-    child.kill("SIGTERM");
-    await Promise.race([
-      new Promise<void>((resolveExit) =>
-        child.once("exit", () => resolveExit()),
-      ),
-      new Promise<void>((resolveTimeout) => setTimeout(resolveTimeout, 1_000)),
-    ]);
-    if (child.exitCode === null && child.signalCode === null)
-      child.kill("SIGKILL");
+    await new Promise<void>((resolveExit) => {
+      // Register before signalling, clear the grace timer on exit, and wait for
+      // forced termination too. A stopped adapter must not leave a child behind.
+      const timer = setTimeout(() => child.kill("SIGKILL"), 1_000);
+      child.once("exit", () => {
+        clearTimeout(timer);
+        resolveExit();
+      });
+      child.kill("SIGTERM");
+    });
   }
 
   async *run(request: AgentRunRequest): AsyncIterable<AgentRunEvent> {
@@ -377,7 +404,12 @@ export class AcpRuntimeAdapter implements AgentRuntimeAdapter {
   }
 
   private forwardStderr(child: ChildProcessWithoutNullStreams): void {
-    if (!this.options.onStderr) return;
+    if (!this.options.onStderr) {
+      // Always consume the pipe, even when logging is disabled: a verbose
+      // kernel otherwise blocks once the OS pipe buffer fills.
+      child.stderr.resume();
+      return;
+    }
     let pending = "";
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk: string) => {

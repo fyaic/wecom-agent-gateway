@@ -162,6 +162,25 @@ account/conversation/sender/TTL 和首答状态；点击后先在企业微信回
 action 的 namespace。任务自然结束后无法在没有 callback 的情况下主动更新旧卡；因此卡面明确限定为
 “本轮”，旧卡第一次点击只会原位显示任务已结束，绝不取消后续 run。
 
+## 可插拔边界：Agent Adapter 与授权维护
+
+Agent Kernel 通过已有 `AgentRuntimeAdapter` 接入消息核心；更换内核不需要更换企微连接。
+授权维护则是独立运维扩展：`AuthMaintenancePlugin` 提供检查/续期接口，由单独 worker
+托管调度、持久化及互斥，当前内置实现复用 `wecom-auth-keeper`。它不是另一个 Agent Adapter，
+也不进入 runtime-contract、消息热路径或 Gateway 启动必选依赖。
+
+```text
+WeCom Bot SDK ↔ Gateway Core ↔ AgentRuntimeAdapter ↔ Agent Kernel
+                    │
+                    └─ 可选办公工具 → 同 Bot wecom-cli
+                                           ↑ 授权状态独立维护
+                         独立 worker → AuthMaintenancePlugin → Keeper / 桌面权限页
+```
+
+周期检查不等于周期撤权；临期预续需要单独选择。页面授权、CLI 凭据归属和业务 API
+可用性分别记证据，插件不可凭 GUI 成功把 Gateway 或办公能力全部标记健康。
+这是两个清晰扩展点，不是通用插件平台；配置及平台限制见[授权维护](auth-keeper.md)。
+
 ## Gateway Core 与 Adapter Host
 
 Gateway 是项目核心，但不是一个只转发字符串的薄壳。它同时是中立的 Adapter Host：
