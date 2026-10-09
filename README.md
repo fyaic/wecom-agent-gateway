@@ -7,6 +7,8 @@
 
 遇到“不回复”？[按层排障](docs/gateway-status.md)：`doctor` 查配置，`agent:check` 查 Agent，
 `gateway:status` 只读检查运行状态与投递积压（需显式启用本地观测）。
+聊天正常但办公工具提示授权过期？见[可选 auth keeper](docs/auth-keeper.md)；
+准备更新已有部署？见[升级与回退](docs/upgrade-and-rollback.md)。
 
 [![CI](https://github.com/fyaic/wecom-agent-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/fyaic/wecom-agent-gateway/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -132,6 +134,14 @@ Gateway 负责收发、顺序、去重和失败恢复；Adapter 翻译 Agent 协
 
 只需要 OpenClaw 的用户也可以选择[企业微信官方 OpenClaw 插件](https://github.com/WecomTeam/wecom-openclaw-plugin)。
 本项目适合需要多种 Agent 接入选择、独立部署与可扩展 Adapter 的用户。所有收发使用单一 Bot 身份。
+
+### 可选：办公能力授权维护
+
+维护插件通过独立子进程复用 [fyaic/wecom-auth-keeper](https://github.com/fyaic/wecom-auth-keeper)（MIT），
+需用户另行安装；未内置其源码，不进入 IM 核心，也不是企业微信官方 token 刷新机制。
+默认关闭，需要已登录的 macOS 企业微信桌面及正确权限页或可见的官方授权链接。
+跨真实授权周期的自动维护尚未认证，不承诺无人值守、开箱全自动。
+[配置自己的 Bot](docs/auth-maintenance-setup.md) · [维护方式与证据边界](docs/auth-keeper.md)
 
 ## 当前证据边界
 

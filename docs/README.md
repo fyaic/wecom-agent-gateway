@@ -5,13 +5,17 @@
 维护者先看[产品目标与防偏航基线](product-intent.md)：判断任务是否仍服务于中间层主线。
 本轮工程验收见[合并主审](reviews/mainline-integration.md)，下含传输、Claude 与 soak 的独立证据。
 新增[真实新目录接入](reviews/fresh-real-onboarding-2026-09-07.md)：注册、Pi 多轮、主动通知和重启续接，非 Echo 演示。
-新增[Linux 真实故障实验](reviews/linux-real-recovery-2026-09-07.md)：保留失败、修复与文本/文件实际恢复证据，24h 已启动但未完成。
+新增[Linux 真实故障实验](reviews/linux-real-recovery-2026-09-07.md)：保留失败、修复与文本/文件实际恢复证据。
+24h 已完成有限低负载观察，原自动门未通过，见[最终收尾](reviews/linux-soak-closure-2026-09-09.md)。
+授权维护插件已完成[同 Bot 消息权限单次真实预续](reviews/auth-maintenance-live-2026-10-09.md)，不等于无人值守跨周期认证。
 
 1. **第一次使用：** [中文接入指南](getting-started.md) / [English setup](getting-started.en.md)。
 2. **解决什么问题：** [日常使用配方](use-cases.md) / [Everyday recipes](use-cases.en.md)。
 3. **先看可信效果：** [真实 Agent 案例](verified-kernel-cases.md) / [English cases](verified-kernel-cases.en.md)。
 4. **自己写适配器：** [示例导航](../examples/README.md) → [Adapter 开发](adapter-authoring.md) → [一致性验证](adapter-conformance.md)。
 5. **不回复 / 变慢 / 投递失败：** [分层运行排障](gateway-status.md)。
+6. **办公工具授权过期：** [可选 auth keeper 集成](auth-keeper.md) → [为自己的 Bot 生成维护配置](auth-maintenance-setup.md)，与聊天通道健康分开处理。
+7. **准备升级或回退：** [源码部署升级指南](upgrade-and-rollback.md)，保留私有配置和一致性状态快照。
 
 ## 按任务找文档
 

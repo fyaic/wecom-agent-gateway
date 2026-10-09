@@ -1,3 +1,4 @@
+// Supported Node versions strip these types natively; no tsx loader is needed.
 import { Readable, Writable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
 
@@ -7,14 +8,23 @@ let turnSequence = 0;
 
 const app = acp
   .agent({ name: "fake-acp-agent" })
-  .onRequest(acp.methods.agent.initialize, (context) => ({
-    protocolVersion: context.params.protocolVersion,
-    agentCapabilities: {
-      loadSession: true,
-      promptCapabilities: { image: true },
-    },
-    agentInfo: { name: "Fake ACP Agent", version: "1.0.0" },
-  }))
+  .onRequest(acp.methods.agent.initialize, async (context) => {
+    if (process.argv.includes("--verbose")) {
+      await new Promise<void>((resolve, reject) => {
+        process.stderr.write("x".repeat(2 * 1024 * 1024), (error) =>
+          error ? reject(error) : resolve(),
+        );
+      });
+    }
+    return {
+      protocolVersion: context.params.protocolVersion,
+      agentCapabilities: {
+        loadSession: true,
+        promptCapabilities: { image: true },
+      },
+      agentInfo: { name: "Fake ACP Agent", version: "1.0.0" },
+    };
+  })
   .onRequest(acp.methods.agent.session.new, () => {
     const sessionId = `fake-session-${++sessionSequence}`;
     sessions.add(sessionId);

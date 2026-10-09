@@ -2,10 +2,75 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createStarterConfig } from "./setup.js";
+import { authMaintenanceMain } from "./auth-maintenance.js";
 
 const root = resolve(import.meta.dirname, "..");
 
 describe("production deployment artifacts", () => {
+  it("ships opt-in Aqua authorization maintenance without a shell, embedded secrets or unconditional respawn", async () => {
+    const plist = await read(
+      "deploy/macos/com.fyaic.wecom-agent-gateway.auth-maintenance.plist.example",
+    );
+    const argumentsBlock = plist.match(
+      /<key>ProgramArguments<\/key>\s*<array>([\s\S]*?)<\/array>/,
+    )?.[1];
+    expect(
+      [...argumentsBlock!.matchAll(/<string>(.*?)<\/string>/g)].map(
+        (match) => match[1],
+      ),
+    ).toEqual([
+      "__NODE_PATH__",
+      "--import",
+      "tsx",
+      "scripts/auth-maintenance.ts",
+      "watch",
+      "--env-file",
+      "__MAINTENANCE_ENV__",
+    ]);
+    expect(plist).toMatch(
+      /<key>WorkingDirectory<\/key>\s*<string>__PROJECT_DIR__<\/string>/,
+    );
+    expect(plist).toMatch(
+      /<key>LimitLoadToSessionType<\/key>\s*<string>Aqua<\/string>/,
+    );
+    expect(plist).toMatch(/<key>RunAtLoad<\/key>\s*<true\/>/);
+    expect(plist).toMatch(
+      /<key>KeepAlive<\/key>\s*<dict>\s*<key>SuccessfulExit<\/key>\s*<false\/>\s*<\/dict>/,
+    );
+    expect(plist).toMatch(/<key>Umask<\/key>\s*<integer>63<\/integer>/);
+    expect(plist).toMatch(/<key>ExitTimeOut<\/key>\s*<integer>360<\/integer>/);
+    expect(plist).toMatch(
+      /<key>ThrottleInterval<\/key>\s*<integer>60<\/integer>/,
+    );
+    expect(plist).toContain("__PRIVATE_LOG_DIR__/auth-maintenance.stdout.log");
+    expect(plist).toContain("__PRIVATE_LOG_DIR__/auth-maintenance.stderr.log");
+    expect(plist).not.toMatch(
+      /WECOM_BOT_SECRET|WECOM_BOT_ID|\/bin\/(?:zsh|bash|sh)|pnpm|StartInterval|StartCalendarInterval|auth init|WECOM_AUTH_MAINTENANCE_ENABLED/,
+    );
+  });
+
+  it("allows disabled maintenance to exit successfully without any plugin, matching failure-only KeepAlive", async () => {
+    let plugins = 0;
+    const events: unknown[] = [];
+    const exitCode = await authMaintenanceMain(["watch"], {
+      env: { WECOM_AUTH_MAINTENANCE_ENABLED: "false" },
+      createPlugin: async () => {
+        plugins++;
+        throw new Error("must-not-create-plugin");
+      },
+      emit: (event) => events.push(event),
+    });
+    expect(exitCode).toBe(0);
+    expect(plugins).toBe(0);
+    expect(events).toEqual([
+      {
+        event: "auth_maintenance",
+        status: "disabled",
+        businessVerified: false,
+      },
+    ]);
+  });
+
   it("keeps run-control cards opt-in across all public startup paths", async () => {
     const [example, entrypoint] = await Promise.all([
       read(".env.example"),

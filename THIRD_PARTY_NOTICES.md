@@ -18,6 +18,18 @@ The optional `wecom-cli` integration invokes the official
 [`WecomTeam/wecom-cli`](https://github.com/WecomTeam/wecom-cli) executable as a
 separate process. That project is licensed under MIT.
 
+The optional authorization-maintenance plugin invokes
+[`fyaic/wecom-auth-keeper`](https://github.com/fyaic/wecom-auth-keeper) as a
+separate process; users install it independently. Its source is not vendored
+here. Keeper is licensed under MIT, **Copyright (c) 2026 fyaic**; see its
+[license](https://github.com/fyaic/wecom-auth-keeper/blob/main/LICENSE).
+This integration remains outside the IM core and is not an official WeCom
+token-refresh mechanism. It is disabled by default and requires a logged-in
+macOS WeCom desktop with the correct permissions page or a visible official
+authorization link. Cross-cycle automatic maintenance is not yet certified.
+See the [setup guide](docs/auth-maintenance-setup.md) and
+[operational boundaries](docs/auth-keeper.md).
+
 The Claude Agent SDK package and its platform-specific, unmodified Claude Code
 binary remain governed by Anthropic's applicable terms. They are not
 relicensed under this repository's MIT license. The optional Adapter requires
