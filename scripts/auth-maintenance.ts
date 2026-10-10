@@ -91,8 +91,14 @@ export async function authMaintenanceMain(
         result.status,
         result.code,
         result.businessVerified,
+        result.cycle?.before?.providerCode,
+        result.cycle?.after?.providerCode,
       ]);
-      if (signature !== previous) {
+      // Actions are evidence, even if consecutive cycles have the same outcome.
+      if (
+        signature !== previous ||
+        (result.cycle && result.cycle.action !== "none")
+      ) {
         emit({ event: "auth_maintenance", ...result });
         previous = signature;
       }

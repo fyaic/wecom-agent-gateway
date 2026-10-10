@@ -320,6 +320,12 @@ describe("optional auth keeper integration", () => {
     [4, "private-error", "keeper-busy"],
     [3, "private-error", "keeper-prerequisites-failed"],
     [2, "page_not_open", "target-page-not-open"],
+    [2, "link_not_visible", "target-link-not-visible"],
+    [2, "identity_unverified", "target-page-unverified"],
+    [2, "ambiguous_window", "target-page-ambiguous"],
+    [2, "rows_incomplete", "target-page-incomplete"],
+    [2, "tree_incomplete", "target-page-incomplete"],
+    [2, "pending_mismatch", "recovery-target-mismatch"],
     [2, "permissions_not_healthy", "permissions-unhealthy"],
     [2, "private-error", "keeper-failed"],
   ])(

@@ -39,6 +39,46 @@ export const AUTH_MAINTENANCE_CODES = [
   "backoff",
 ] as const;
 
+/** Fixed provider diagnostics only; never persist arbitrary upstream messages. */
+export const AUTH_MAINTENANCE_PROVIDER_CODES = [
+  "target-page-not-open",
+  "target-link-not-visible",
+  "target-page-unverified",
+  "target-page-ambiguous",
+  "target-page-incomplete",
+  "configuration-changed",
+  "identity-mismatch",
+  "keeper-busy",
+  "keeper-timeout",
+  "keeper-prerequisites-failed",
+  "recovery-target-mismatch",
+  "observation-invalid",
+  "inspection-unavailable",
+  "business-validation-required",
+] as const;
+
+export interface AuthMaintenanceInspectionSummary {
+  checkedAtMs: number;
+  status: AuthMaintenanceObservation["status"];
+  identityVerified: boolean;
+  businessVerified: boolean;
+  providerCode: (typeof AUTH_MAINTENANCE_PROVIDER_CODES)[number];
+  earliestExpiryMs?: number;
+  expiredCount?: number;
+  pendingRecovery?: boolean;
+}
+
+export interface AuthMaintenanceCycleSummary {
+  startedAtMs: number;
+  finishedAtMs: number;
+  status: AuthMaintenanceResult["status"];
+  code: AuthMaintenanceResult["code"];
+  businessVerified: boolean;
+  action: "none" | "renew" | "pre-renew";
+  before?: AuthMaintenanceInspectionSummary;
+  after?: AuthMaintenanceInspectionSummary;
+}
+
 export interface AuthMaintenanceResult {
   status:
     | "disabled"
@@ -51,6 +91,7 @@ export interface AuthMaintenanceResult {
   attempts: number;
   businessVerified: boolean;
   nextAttemptAtMs?: number;
+  cycle?: AuthMaintenanceCycleSummary;
 }
 
 export interface AuthMaintenanceStateView {
@@ -61,6 +102,10 @@ export interface AuthMaintenanceStateView {
   failures: number;
   nextAttemptAtMs?: number;
   nextPreRenewAtMs?: number;
+  /** Historical evidence only, not a fresh health check or worker heartbeat. */
+  lastCycle?: AuthMaintenanceCycleSummary;
+  lastInspection?: AuthMaintenanceInspectionSummary;
+  lastAction?: AuthMaintenanceCycleSummary;
 }
 
 export interface AuthMaintenanceOptions {
@@ -71,4 +116,6 @@ export interface AuthMaintenanceOptions {
   now?: number;
   maxAttempts?: number;
   backoffMs?: number;
+  /** Deterministic test hook. Production uses the real wall clock. */
+  clock?: () => number;
 }

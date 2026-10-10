@@ -6,22 +6,64 @@ import type {
   AuthMaintenanceObservation,
   AuthMaintenancePlugin,
 } from "./auth-maintenance-contract.js";
+import { AUTH_MAINTENANCE_PROVIDER_CODES } from "./auth-maintenance-contract.js";
 
-const unavailable = (): AuthMaintenanceObservation => ({
+type ProviderCode = (typeof AUTH_MAINTENANCE_PROVIDER_CODES)[number];
+const unavailable = (
+  code: ProviderCode = "inspection-unavailable",
+): AuthMaintenanceObservation => ({
   status: "unavailable",
   identityVerified: false,
   expiredCount: 0,
   pendingRecovery: false,
   businessVerified: false,
-  code: "inspection-unavailable",
+  code,
 });
+
+function failureCode(status: string): ProviderCode {
+  if (status === "timeout") return "keeper-timeout";
+  if (status === "invalid-response") return "observation-invalid";
+  return AUTH_MAINTENANCE_PROVIDER_CODES.includes(status as ProviderCode)
+    ? (status as ProviderCode)
+    : "inspection-unavailable";
+}
 
 /** Page evidence only. Never promotes a GUI result to a business API result. */
 export function keeperObservation(
   report: KeeperReport,
+  now = Date.now(),
 ): AuthMaintenanceObservation {
   const observed = report.observation;
-  if (!observed || report.identity !== "page-verified") return unavailable();
+  if (!observed || report.identity !== "page-verified")
+    return unavailable(failureCode(report.status));
+  // Only fresh, internally consistent evidence may drive a subsequent GUI
+  // mutation. This boundary also rejects malformed third-party/fake providers.
+  const expired = observed.expiredCount > 0 || observed.pendingRecovery;
+  if (
+    report.schemaVersion !== 1 ||
+    report.event !== "auth_keeper" ||
+    !["inspect", "renew", "pre-renew"].includes(report.mode) ||
+    report.scope !== "optional-cli-capabilities" ||
+    !Number.isInteger(report.targetRowCount) ||
+    report.targetRowCount < 1 ||
+    !Number.isSafeInteger(observed.observedAtMs) ||
+    observed.observedAtMs > now ||
+    now - observed.observedAtMs > 60_000 ||
+    !Number.isInteger(observed.expiredCount) ||
+    observed.expiredCount < 0 ||
+    observed.expiredCount > report.targetRowCount ||
+    typeof observed.pendingRecovery !== "boolean" ||
+    (observed.earliestExpiryMs !== null &&
+      (!Number.isSafeInteger(observed.earliestExpiryMs) ||
+        observed.earliestExpiryMs < 0)) ||
+    (!observed.expiredCount &&
+      (observed.earliestExpiryMs === null ||
+        observed.earliestExpiryMs <= now)) ||
+    (expired
+      ? report.ok !== false || report.status !== "permissions-unhealthy"
+      : report.ok !== true || report.status !== "page-authorizations-verified")
+  )
+    return unavailable("observation-invalid");
   return {
     status:
       observed.expiredCount > 0 || observed.pendingRecovery
@@ -61,6 +103,7 @@ export async function createKeeperMaintenancePlugin(options: {
         configHash,
         env.WECOM_AUTH_KEEPER_DIR,
         env.WECOM_AUTH_KEEPER_PYTHON,
+        env.WECOM_AUTH_KEEPER_EXISTING_WINDOW_ONLY,
       ]),
     )
     .digest("hex");
@@ -72,7 +115,7 @@ export async function createKeeperMaintenancePlugin(options: {
     try {
       // Configuration changes require an explicit process restart/new binding.
       if (fingerprint(await readFile(config)) !== configHash)
-        return unavailable();
+        return unavailable("configuration-changed");
       return keeperObservation(
         await inspect({
           mode,
