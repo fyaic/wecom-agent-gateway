@@ -1,12 +1,16 @@
 import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import type {
-  AuthMaintenanceObservation,
-  AuthMaintenanceOptions,
-  AuthMaintenancePlugin,
-  AuthMaintenanceResult,
-  AuthMaintenanceStateView,
+import {
+  AUTH_MAINTENANCE_CODES,
+  AUTH_MAINTENANCE_PROVIDER_CODES,
+  type AuthMaintenanceCycleSummary,
+  type AuthMaintenanceInspectionSummary,
+  type AuthMaintenanceObservation,
+  type AuthMaintenanceOptions,
+  type AuthMaintenancePlugin,
+  type AuthMaintenanceResult,
+  type AuthMaintenanceStateView,
 } from "./auth-maintenance-contract.js";
 
 interface State {
@@ -16,6 +20,9 @@ interface State {
   nextAttemptAtMs?: number;
   nextPreRenewAtMs?: number;
   intent?: { atMs: number; preRenew: boolean; expiryMs?: number };
+  lastCycle?: AuthMaintenanceCycleSummary;
+  lastInspection?: AuthMaintenanceInspectionSummary;
+  lastAction?: AuthMaintenanceCycleSummary;
 }
 
 /** A single opt-in cycle. Scheduling and native UI live outside this engine. */
@@ -71,26 +78,84 @@ export async function runCycle(
   let state: State = { version: 1, attempts: 0, failures: 0 };
   try {
     state = await loadState(statePath);
-    const persist = () => saveState(statePath, state);
-    const defer = async (code: AuthMaintenanceResult["code"]) => {
+    const clock = options.clock ?? Date.now;
+    const startedAtMs = clock();
+    if (!validTime(startedAtMs)) throw new Error();
+    const priorAction = state.lastAction;
+    let lastInspection = state.lastInspection;
+    let before: AuthMaintenanceInspectionSummary | undefined;
+    let after: AuthMaintenanceInspectionSummary | undefined;
+    let action: AuthMaintenanceCycleSummary["action"] = "none";
+    const persist = () => {
+      state.lastInspection = lastInspection;
+      return saveState(statePath, state);
+    };
+    const finish = async (
+      outcome: AuthMaintenanceResult,
+    ): Promise<AuthMaintenanceResult> => {
+      const finishedAtMs = clock();
+      if (!validTime(finishedAtMs) || finishedAtMs < startedAtMs)
+        throw new Error();
+      const cycle: AuthMaintenanceCycleSummary = {
+        startedAtMs,
+        finishedAtMs,
+        status: outcome.status,
+        code: outcome.code,
+        businessVerified: outcome.businessVerified,
+        action,
+        ...(before ? { before } : {}),
+        ...(after ? { after } : {}),
+      };
+      if (!validCycleSummary(cycle)) throw new Error();
+      state.lastCycle = cycle;
+      state.lastAction = action !== "none" ? cycle : priorAction;
+      await persist();
+      return { ...outcome, cycle };
+    };
+    const inspect = async (phase: "before" | "after") => {
+      let observation: AuthMaintenanceObservation;
+      try {
+        observation = validateObservation(await plugin.inspect());
+      } catch {
+        lastInspection = {
+          checkedAtMs: clock(),
+          status: "unavailable",
+          identityVerified: false,
+          businessVerified: false,
+          providerCode: "inspection-unavailable",
+        };
+        if (!validTime(lastInspection.checkedAtMs)) throw new Error();
+        if (phase === "before") before = lastInspection;
+        else after = lastInspection;
+        throw new Error();
+      }
+      lastInspection = inspectionSummary(observation, clock());
+      if (phase === "before") before = lastInspection;
+      else after = lastInspection;
+      return observation;
+    };
+    const defer = async (
+      code: AuthMaintenanceResult["code"],
+      businessVerified = false,
+    ) => {
       state.failures++;
       state.nextAttemptAtMs =
         now +
         Math.min(backoffMs * 2 ** Math.min(state.failures - 1, 10), 3_600_000);
-      await persist();
-      return {
+      return finish({
         ...result("needs-attention", code, state.attempts),
+        businessVerified,
         nextAttemptAtMs: state.nextAttemptAtMs,
-      };
+      });
     };
     if (state.nextAttemptAtMs !== undefined && state.nextAttemptAtMs > now)
-      return {
+      return await finish({
         ...result("backoff", "backoff", state.attempts),
         nextAttemptAtMs: state.nextAttemptAtMs,
-      };
+      });
     let observation: AuthMaintenanceObservation;
     try {
-      observation = validateObservation(await plugin.inspect());
+      observation = await inspect("before");
     } catch {
       return await defer("inspection-unavailable");
     }
@@ -115,8 +180,7 @@ export async function runCycle(
             ? nextPreRenewAt(now, observation.earliestExpiryMs, withinHours)
             : state.nextPreRenewAtMs,
         };
-        await persist();
-        return {
+        return await finish({
           ...result(
             "healthy",
             observation.businessVerified
@@ -125,7 +189,7 @@ export async function runCycle(
             0,
           ),
           businessVerified: observation.businessVerified === true,
-        };
+        });
       }
     }
     // Only an explicitly observed pending-recovery state authorizes resuming
@@ -156,6 +220,7 @@ export async function runCycle(
       expiryMs: observation.earliestExpiryMs,
     };
     await persist(); // Durable intent precedes any provider side effect.
+    action = preRenew ? "pre-renew" : "renew";
     try {
       validateObservation(await plugin.renew({ preRenew, withinHours }));
     } catch {
@@ -163,7 +228,7 @@ export async function runCycle(
     }
     // A returned UI action is not a business API success. Independently inspect.
     try {
-      observation = validateObservation(await plugin.inspect());
+      observation = await inspect("after");
     } catch {
       return await defer("action-outcome-unknown");
     }
@@ -184,8 +249,7 @@ export async function runCycle(
           withinHours,
         ),
       };
-      await persist();
-      return {
+      return await finish({
         ...result(
           "renewed",
           observation.businessVerified
@@ -194,13 +258,13 @@ export async function runCycle(
           0,
         ),
         businessVerified: observation.businessVerified === true,
-      };
+      });
     }
     if (preRenew && pageHealthy(observation, now))
-      return {
-        ...(await defer("expiry-not-extended")),
-        businessVerified: observation.businessVerified === true,
-      };
+      return await defer(
+        "expiry-not-extended",
+        observation.businessVerified === true,
+      );
     if (observation.status === "healthy" && observation.expiredCount === 0)
       return await defer("business-validation-required");
     // A completed, observed failed renewal may retry after backoff; uncertain
@@ -274,6 +338,9 @@ export async function readMaintenanceState(
       ...(state.nextPreRenewAtMs !== undefined
         ? { nextPreRenewAtMs: state.nextPreRenewAtMs }
         : {}),
+      ...(state.lastCycle ? { lastCycle: state.lastCycle } : {}),
+      ...(state.lastInspection ? { lastInspection: state.lastInspection } : {}),
+      ...(state.lastAction ? { lastAction: state.lastAction } : {}),
     };
   } catch (error) {
     return {
@@ -344,6 +411,12 @@ async function loadState(path: string): Promise<State> {
       value.failures < 0 ||
       !optionalTime(value.nextAttemptAtMs) ||
       !optionalTime(value.nextPreRenewAtMs) ||
+      (value.lastInspection !== undefined &&
+        !validInspectionSummary(value.lastInspection)) ||
+      (value.lastCycle !== undefined && !validCycleSummary(value.lastCycle)) ||
+      (value.lastAction !== undefined &&
+        (!validCycleSummary(value.lastAction) ||
+          value.lastAction.action === "none")) ||
       (value.intent !== undefined &&
         (value.intent === null ||
           typeof value.intent !== "object" ||
@@ -385,7 +458,117 @@ async function saveState(path: string, state: State): Promise<void> {
 }
 
 function optionalTime(value: number | undefined): boolean {
-  return value === undefined || (Number.isSafeInteger(value) && value >= 0);
+  return value === undefined || validTime(value);
+}
+
+function validTime(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function inspectionSummary(
+  observation: AuthMaintenanceObservation,
+  checkedAtMs: number,
+): AuthMaintenanceInspectionSummary {
+  if (!validTime(checkedAtMs)) throw new Error();
+  const providerCode = (
+    AUTH_MAINTENANCE_PROVIDER_CODES as readonly string[]
+  ).includes(observation.code)
+    ? (observation.code as AuthMaintenanceInspectionSummary["providerCode"])
+    : "inspection-unavailable";
+  return {
+    checkedAtMs,
+    status: observation.status,
+    identityVerified: observation.identityVerified,
+    businessVerified: observation.businessVerified === true,
+    providerCode,
+    ...(observation.earliestExpiryMs !== undefined
+      ? { earliestExpiryMs: observation.earliestExpiryMs }
+      : {}),
+    expiredCount: observation.expiredCount,
+    pendingRecovery: observation.pendingRecovery,
+  };
+}
+
+/** Stored history is untrusted: accept only the fixed, non-sensitive schema. */
+function hasOnlyKeys(value: unknown, keys: string[]): boolean {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.keys(value).every((key) => keys.includes(key)),
+  );
+}
+
+function validInspectionSummary(
+  value: AuthMaintenanceInspectionSummary,
+): boolean {
+  return (
+    hasOnlyKeys(value, [
+      "checkedAtMs",
+      "status",
+      "identityVerified",
+      "businessVerified",
+      "providerCode",
+      "earliestExpiryMs",
+      "expiredCount",
+      "pendingRecovery",
+    ]) &&
+    validTime(value.checkedAtMs) &&
+    ["healthy", "expired", "unavailable"].includes(value.status) &&
+    typeof value.identityVerified === "boolean" &&
+    typeof value.businessVerified === "boolean" &&
+    (AUTH_MAINTENANCE_PROVIDER_CODES as readonly string[]).includes(
+      value.providerCode,
+    ) &&
+    optionalTime(value.earliestExpiryMs) &&
+    (value.expiredCount === undefined || validTime(value.expiredCount)) &&
+    (value.pendingRecovery === undefined ||
+      typeof value.pendingRecovery === "boolean")
+  );
+}
+
+function validCycleSummary(value: AuthMaintenanceCycleSummary): boolean {
+  if (
+    !hasOnlyKeys(value, [
+      "startedAtMs",
+      "finishedAtMs",
+      "status",
+      "code",
+      "businessVerified",
+      "action",
+      "before",
+      "after",
+    ]) ||
+    !validTime(value.startedAtMs) ||
+    !validTime(value.finishedAtMs) ||
+    value.finishedAtMs < value.startedAtMs ||
+    ![
+      "disabled",
+      "healthy",
+      "renewed",
+      "backoff",
+      "locked",
+      "needs-attention",
+    ].includes(value.status) ||
+    !(AUTH_MAINTENANCE_CODES as readonly string[]).includes(value.code) ||
+    typeof value.businessVerified !== "boolean" ||
+    !["none", "renew", "pre-renew"].includes(value.action)
+  )
+    return false;
+  for (const inspection of [value.before, value.after]) {
+    if (
+      inspection !== undefined &&
+      (!validInspectionSummary(inspection) ||
+        inspection.checkedAtMs < value.startedAtMs ||
+        inspection.checkedAtMs > value.finishedAtMs)
+    )
+      return false;
+  }
+  return !(
+    value.before &&
+    value.after &&
+    value.after.checkedAtMs < value.before.checkedAtMs
+  );
 }
 
 function nextPreRenewAt(

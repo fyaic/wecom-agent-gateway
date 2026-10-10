@@ -13,7 +13,7 @@ const report: KeeperReport = {
   event: "auth_keeper",
   mode: "inspect",
   ok: true,
-  status: "healthy",
+  status: "page-authorizations-verified",
   scope: "optional-cli-capabilities",
   targetRowCount: 1,
   identity: "page-verified",
@@ -21,8 +21,8 @@ const report: KeeperReport = {
   cliCredentialIdentity: "not-verified",
   transport: "not-checked",
   observation: {
-    observedAtMs: 1,
-    earliestExpiryMs: 2,
+    observedAtMs: Date.now(),
+    earliestExpiryMs: Date.now() + 86_400_000,
     expiredCount: 0,
     pendingRecovery: false,
   },
@@ -60,9 +60,67 @@ describe("keeper maintenance plugin", () => {
       keeperObservation({
         ...report,
         ok: false,
+        status: "permissions-unhealthy",
         observation: { ...report.observation!, expiredCount: 1 },
       }),
     ).toMatchObject({ status: "expired", businessVerified: false });
+  });
+  it.each([
+    [
+      "accessibility-permission-unavailable",
+      "accessibility-permission-unavailable",
+    ],
+    ["wecom-not-running", "wecom-not-running"],
+    ["wecom-window-unavailable", "wecom-window-unavailable"],
+    ["wecom-multiple-instances", "wecom-multiple-instances"],
+    ["target-page-not-open", "target-page-not-open"],
+    ["target-link-not-visible", "target-link-not-visible"],
+    ["timeout", "keeper-timeout"],
+    ["invalid-response", "observation-invalid"],
+    ["private-url", "inspection-unavailable"],
+  ])("retains only fixed diagnostic %s", (status, code) => {
+    expect(
+      keeperObservation({
+        ...report,
+        ok: false,
+        status,
+        observation: undefined,
+      }),
+    ).toMatchObject({ status: "unavailable", code, businessVerified: false });
+  });
+  it.each([
+    { observedAtMs: Date.now() - 61_000 },
+    { observedAtMs: Date.now() + 86_400_000 },
+    { observedAtMs: NaN },
+    { expiredCount: -1 },
+    { expiredCount: 2 },
+    { expiredCount: 0.5 },
+    { earliestExpiryMs: null },
+    { earliestExpiryMs: Infinity },
+    { earliestExpiryMs: Date.now() - 1 },
+    { pendingRecovery: true },
+  ])("rejects invalid/stale page evidence %j", (changes) => {
+    expect(
+      keeperObservation({
+        ...report,
+        observation: { ...report.observation!, ...changes },
+      }),
+    ).toMatchObject({
+      status: "unavailable",
+      code: "observation-invalid",
+      identityVerified: false,
+    });
+  });
+  it("rejects contradictory success and invalid target count", () => {
+    expect(
+      keeperObservation({ ...report, mode: "unknown" as KeeperReport["mode"] }),
+    ).toMatchObject({ code: "observation-invalid" });
+    expect(keeperObservation({ ...report, ok: false })).toMatchObject({
+      code: "observation-invalid",
+    });
+    expect(keeperObservation({ ...report, targetRowCount: 0 })).toMatchObject({
+      code: "observation-invalid",
+    });
   });
   it("pins exact config snapshot and restricts pre-renew navigation", async () => {
     const { env } = await fixture();
@@ -87,7 +145,10 @@ describe("keeper maintenance plugin", () => {
     const inspect = vi.fn<typeof inspectAuthKeeper>(async () => report);
     const old = await createKeeperMaintenancePlugin({ env, inspect });
     await writeFile(config, '{"changed":true}');
-    expect(await old.inspect()).toMatchObject({ status: "unavailable" });
+    expect(await old.inspect()).toMatchObject({
+      status: "unavailable",
+      code: "configuration-changed",
+    });
     expect(inspect).not.toHaveBeenCalled();
     const next = await createKeeperMaintenancePlugin({ env, inspect });
     expect(next.binding).not.toBe(old.binding);

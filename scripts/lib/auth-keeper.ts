@@ -376,7 +376,21 @@ export async function inspectAuthKeeper(
       let error: unknown;
       if (object(payload) && payload.ok === false) error = payload.error;
       if (child.exitCode === 4) return fail("keeper-busy");
+      if (error === "accessibility_permission_unavailable")
+        return fail("accessibility-permission-unavailable");
+      if (error === "wecom_not_running") return fail("wecom-not-running");
+      if (error === "wecom_window_unavailable")
+        return fail("wecom-window-unavailable");
+      if (error === "wecom_multiple_instances")
+        return fail("wecom-multiple-instances");
       if (error === "page_not_open") return fail("target-page-not-open");
+      if (error === "link_not_visible") return fail("target-link-not-visible");
+      if (error === "identity_unverified")
+        return fail("target-page-unverified");
+      if (error === "ambiguous_window") return fail("target-page-ambiguous");
+      if (error === "rows_incomplete" || error === "tree_incomplete")
+        return fail("target-page-incomplete");
+      if (error === "pending_mismatch") return fail("recovery-target-mismatch");
       if (error === "permissions_not_healthy")
         return fail("permissions-unhealthy");
       if (child.exitCode === 3) return fail("keeper-prerequisites-failed");

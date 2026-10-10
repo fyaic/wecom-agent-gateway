@@ -38,6 +38,11 @@ tagged.
 
 ### Fixed
 
+- Refresh seven vulnerable dependency resolutions while preserving official SDK
+  versions and the optional Claude Adapter; pin its compatible MCP peer explicitly.
+- Preserve privacy-safe authorization-cycle evidence across later healthy checks,
+  distinguish fixed entry failures, and reject stale or inconsistent page evidence.
+
 - Bound ACP initialization and reap failed/stopped child processes; drain stderr
   when logging is disabled. Bound test-file worker fanout without raising test
   deadlines; the earlier timeout remains documented rather than silently erased.

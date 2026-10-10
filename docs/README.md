@@ -8,6 +8,7 @@
 新增[Linux 真实故障实验](reviews/linux-real-recovery-2026-09-07.md)：保留失败、修复与文本/文件实际恢复证据。
 24h 已完成有限低负载观察，原自动门未通过，见[最终收尾](reviews/linux-soak-closure-2026-09-09.md)。
 授权维护插件已完成[同 Bot 消息权限单次真实预续](reviews/auth-maintenance-live-2026-10-09.md)，不等于无人值守跨周期认证。
+后续[安全依赖修复与常驻验收门槛](reviews/security-maintenance-2026-10-10.md)记录主审、失败原型撤回和真实周期标准。
 
 1. **第一次使用：** [中文接入指南](getting-started.md) / [English setup](getting-started.en.md)。
 2. **解决什么问题：** [日常使用配方](use-cases.md) / [Everyday recipes](use-cases.en.md)。
