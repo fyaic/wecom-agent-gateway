@@ -8,7 +8,7 @@ Models, authentication and reasoning stay with your Agent.
 
 No reply? [Diagnose by layer](docs/gateway-status.md): `doctor` checks configuration, `agent:check` checks
 the Agent, and `gateway:status` reads running-service health and delivery backlog (local observability must be enabled).
-Chat works but office-tool authorization expired? See the [optional auth keeper](docs/auth-keeper.md).
+Chat works but CLI messaging or office-tool authorization expired? See [optional authorization maintenance](docs/auth-keeper.md).
 For existing deployments, follow the [upgrade and rollback runbook](docs/upgrade-and-rollback.md).
 
 [![CI](https://github.com/fyaic/wecom-agent-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/fyaic/wecom-agent-gateway/actions/workflows/ci.yml)
@@ -135,13 +135,27 @@ The [official WeCom SDK](https://github.com/WecomTeam/aibot-node-sdk) handles Bo
 [wecom-cli](https://github.com/WecomTeam/wecom-cli) is an optional office-tool layer, not the inbound IM transport.
 If you only need OpenClaw, also consider the [official WeCom OpenClaw plugin](https://github.com/WecomTeam/wecom-openclaw-plugin).
 
-### Optional: office-capability authorization maintenance
+### Optional: automatic recovery of selected CLI permissions
 
-The maintenance plugin invokes [fyaic/wecom-auth-keeper](https://github.com/fyaic/wecom-auth-keeper) (MIT)
-as a separate process. Install Keeper separately; its source is not vendored here. This stays outside the IM core
-and is not an official WeCom token-refresh mechanism. Disabled by default, it requires a logged-in macOS WeCom
-desktop and the correct permissions page or a visible official authorization link.
-Automation across real authorization-expiry cycles is not yet certified; unattended, fully automatic setup is not promised.
+**Chat still works, but a scheduled CLI notification or office task fails after permission expiry?** Integrate
+the community project [fyaic/wecom-auth-keeper](https://github.com/fyaic/wecom-auth-keeper) (MIT).
+Configure an explicit capability allowlist for your own, same Bot; opt in to periodic checks, expired-permission recovery
+and recorded outcomes. No Agent change is needed, and chat requests never wait for GUI maintenance.
+
+| Component                               | Responsibility and boundary                                                                                   |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Official Bot SDK + Gateway              | Chat, streaming and Gateway proactive notifications; CLI and Keeper are not required                          |
+| Official wecom-cli                      | Optional CLI messaging and office operations; capability authorization is separate from SDK connection health |
+| Optional Auth Keeper maintenance plugin | Only configured capabilities of the same Bot; no blanket grants or failed-business replay                     |
+
+The maintainer's live deployment currently maintains **only `发送消息` (send messages)**, not documents, mail or contacts.
+This is deployment evidence, not an implicit default for other users. The plugin is disabled by default.
+Install Keeper separately; its source is not vendored, and it is not an official CLI renewal API or token-refresh mechanism.
+A logged-in, interactive macOS WeCom session, Accessibility permission for the actual background process,
+and the correct permissions page or a visible official link are required.
+Pre-expiry renewal needs a separate opt-in and temporarily revokes/re-grants access; ordinary expiry recovery does not promise zero downtime.
+Single pre-renewal, background checks/restart and an independent business query have passed;
+**natural-expiry recovery and unattended cross-cycle acceptance are still under observation**, not certified.
 [Configure your Bot](docs/auth-maintenance-setup.md) · [Operation and evidence limits](docs/auth-keeper.md)
 
 ## Current evidence boundary
