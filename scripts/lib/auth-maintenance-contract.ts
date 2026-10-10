@@ -41,6 +41,10 @@ export const AUTH_MAINTENANCE_CODES = [
 
 /** Fixed provider diagnostics only; never persist arbitrary upstream messages. */
 export const AUTH_MAINTENANCE_PROVIDER_CODES = [
+  "accessibility-permission-unavailable",
+  "wecom-not-running",
+  "wecom-window-unavailable",
+  "wecom-multiple-instances",
   "target-page-not-open",
   "target-link-not-visible",
   "target-page-unverified",

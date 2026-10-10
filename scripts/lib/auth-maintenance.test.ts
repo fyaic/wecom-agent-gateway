@@ -64,6 +64,48 @@ function fake(initial = expired()) {
 }
 
 describe("optional authorization maintenance engine", () => {
+  it.each([
+    "accessibility-permission-unavailable",
+    "wecom-not-running",
+    "wecom-window-unavailable",
+    "wecom-multiple-instances",
+  ])(
+    "retains fixed desktop prerequisite diagnostic %s without renewal",
+    async (code) => {
+      const stateDirectory = await temporary();
+      const fixture = fake(
+        healthy({
+          status: "unavailable",
+          identityVerified: false,
+          businessVerified: false,
+          code,
+        }),
+      );
+      const outcome = await runCycle(fixture.plugin, {
+        stateDirectory,
+        enabled: true,
+      });
+      expect(outcome).toMatchObject({
+        status: "needs-attention",
+        businessVerified: false,
+        cycle: {
+          before: {
+            providerCode: code,
+            status: "unavailable",
+            identityVerified: false,
+            businessVerified: false,
+          },
+          action: "none",
+        },
+      });
+      expect(
+        (await readMaintenanceState(fixture.plugin, { stateDirectory }))
+          .lastInspection?.providerCode,
+      ).toBe(code);
+      expect(fixture.plugin.renew).not.toHaveBeenCalled();
+    },
+  );
+
   it("keeps before/after evidence and last action across a later healthy cycle", async () => {
     const stateDirectory = await temporary();
     const fixture = fake(expired());

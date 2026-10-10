@@ -154,6 +154,13 @@ launchctl bootout gui/$(id -u)/com.fyaic.wecom-agent-gateway.auth-maintenance
 
 ### 运行边界
 
+- **终端交互式通过，不等于 LaunchAgent 可以访问辅助功能。** macOS 可能按实际宿主/启动上下文分别判断辅助功能权限；
+  已授权终端或 Codex，并不能证明 launchd 启动的 Node/Python 路径也被允许。`doctor` 只检查本地前置条件，不验证实际 GUI 访问。
+  应在最终的后台启动上下文核对第一轮检查结果；若辅助功能权限不可用，由用户在系统设置中检查实际执行进程的授权，再按停止/重启流程复查。
+  不重置系统隐私数据库、不绕过系统授权、不把脚本改成另一宿主来规避限制。未通过后台检查前，部署状态仍是未验证或需人工处理。
+- 后台前置条件失败会保留固定诊断：`accessibility-permission-unavailable` 表示执行上下文未获辅助功能信任；
+  `wecom-not-running` 表示未发现企业微信进程；`wecom-window-unavailable` 表示发现进程但没有可访问窗口，**不能据此断言一定是权限缺失**；
+  `wecom-multiple-instances` 表示多个有窗口的企业微信实例，需先由用户确认目标实例。这些失败不会触发授权点击或被标为业务恢复。
 - 仅加载到当前用户的 `Aqua` 图形会话；仍要求企业微信桌面已登录、相关系统权限可用，并有正确权限页或可见授权链接。
   登录项不是桌面导航自动化，也不保证注销、睡眠、锁屏或界面变化期间可用。
 - `KeepAlive.SuccessfulExit=false` 仅在异常/非零退出后重启，最少节流 60 秒；disabled 和正常停止的成功退出不会形成重启循环。

@@ -66,6 +66,13 @@ describe("keeper maintenance plugin", () => {
     ).toMatchObject({ status: "expired", businessVerified: false });
   });
   it.each([
+    [
+      "accessibility-permission-unavailable",
+      "accessibility-permission-unavailable",
+    ],
+    ["wecom-not-running", "wecom-not-running"],
+    ["wecom-window-unavailable", "wecom-window-unavailable"],
+    ["wecom-multiple-instances", "wecom-multiple-instances"],
     ["target-page-not-open", "target-page-not-open"],
     ["target-link-not-visible", "target-link-not-visible"],
     ["timeout", "keeper-timeout"],
