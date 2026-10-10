@@ -7,7 +7,7 @@
 
 遇到“不回复”？[按层排障](docs/gateway-status.md)：`doctor` 查配置，`agent:check` 查 Agent，
 `gateway:status` 只读检查运行状态与投递积压（需显式启用本地观测）。
-聊天正常但办公工具提示授权过期？见[可选 auth keeper](docs/auth-keeper.md)；
+聊天正常，但 `wecom-cli` 发消息或办公工具提示授权过期？见[可选授权维护](docs/auth-keeper.md)；
 准备更新已有部署？见[升级与回退](docs/upgrade-and-rollback.md)。
 
 [![CI](https://github.com/fyaic/wecom-agent-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/fyaic/wecom-agent-gateway/actions/workflows/ci.yml)
@@ -135,12 +135,23 @@ Gateway 负责收发、顺序、去重和失败恢复；Adapter 翻译 Agent 协
 只需要 OpenClaw 的用户也可以选择[企业微信官方 OpenClaw 插件](https://github.com/WecomTeam/wecom-openclaw-plugin)。
 本项目适合需要多种 Agent 接入选择、独立部署与可扩展 Adapter 的用户。所有收发使用单一 Bot 身份。
 
-### 可选：办公能力授权维护
+### 可选：按需自动恢复 CLI 能力授权
 
-维护插件通过独立子进程复用 [fyaic/wecom-auth-keeper](https://github.com/fyaic/wecom-auth-keeper)（MIT），
-需用户另行安装；未内置其源码，不进入 IM 核心，也不是企业微信官方 token 刷新机制。
-默认关闭，需要已登录的 macOS 企业微信桌面及正确权限页或可见的官方授权链接。
-跨真实授权周期的自动维护尚未认证，不承诺无人值守、开箱全自动。
+**聊天仍正常，CLI 定时通知或办公任务却因授权到期失败？** 可接入社区项目
+[fyaic/wecom-auth-keeper](https://github.com/fyaic/wecom-auth-keeper)（MIT）：为自己的同一 Bot 配置能力白名单，
+显式启用后定期检查、恢复到期授权，并保留检查和动作记录。无需更换 Agent，也不在聊天请求中等待 GUI 操作。
+
+| 组件                      | 职责与边界                                                          |
+| ------------------------- | ------------------------------------------------------------------- |
+| 官方 Bot SDK + Gateway    | 聊天收发、流式回复和 Gateway 主动通知；不要求安装 CLI 或 Keeper     |
+| 官方 wecom-cli            | 可选的 CLI 消息与办公业务能力；其能力授权与 SDK 连接健康分开判断    |
+| 可选 Auth Keeper 维护插件 | 只操作配置白名单中的同 Bot 能力，不自动申请全部权限、不重放失败业务 |
+
+当前维护者的真实部署**只维护「发送消息」**，不包含文档、邮件、通讯录等权限；这不是社区用户的隐式默认配置。
+插件默认关闭，Keeper 需另行安装；未内置其源码，也不是官方 CLI 自带的续期 API 或 token 刷新机制。
+需要已登录且可操作的 macOS 企业微信、后台执行主体的辅助功能权限，以及正确权限页或可见官方链接。
+提前续期须另行开启，包含短暂撤权再授权；常规到期恢复不承诺零中断。
+已验证单次预续、后台检查与重启、独立业务查询；**自然到期恢复与跨真实周期验收仍在观察中**，不宣称开箱全自动。
 [配置自己的 Bot](docs/auth-maintenance-setup.md) · [维护方式与证据边界](docs/auth-keeper.md)
 
 ## 当前证据边界

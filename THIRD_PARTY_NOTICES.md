@@ -27,6 +27,9 @@ This integration remains outside the IM core and is not an official WeCom
 token-refresh mechanism. It is disabled by default and requires a logged-in
 macOS WeCom desktop with the correct permissions page or a visible official
 authorization link. Cross-cycle automatic maintenance is not yet certified.
+It maintains only explicitly configured same-Bot CLI capability rows, including
+messaging when selected; it does not grant all capabilities or renew SDK transport
+authentication. This community integration does not modify the official CLI.
 See the [setup guide](docs/auth-maintenance-setup.md) and
 [operational boundaries](docs/auth-keeper.md).
 

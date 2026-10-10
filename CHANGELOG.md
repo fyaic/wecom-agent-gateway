@@ -6,6 +6,13 @@ tagged.
 
 ## [Unreleased]
 
+### Documentation
+
+- Clarify optional Auth Keeper attribution and setup: selected CLI capabilities
+  only, separate from SDK chat transport; the current live deployment maintains
+  only message permission, not other office capabilities. Record background acceptance
+  without claiming natural-expiry or cross-cycle certification.
+
 ### Added
 
 - Optional Bot-bound authorization-maintenance plugin and serial worker using
