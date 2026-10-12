@@ -9,7 +9,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@agentclientprotocol/sdk": "1.4.0",
+    "@agentclientprotocol/sdk": "1.7.0",
     "@fyaic/wecom-runtime-contract": "workspace:*"
   }
 }
