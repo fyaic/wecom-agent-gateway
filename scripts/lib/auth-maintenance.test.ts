@@ -64,6 +64,73 @@ function fake(initial = expired()) {
 }
 
 describe("optional authorization maintenance engine", () => {
+  it.each([false, true])(
+    "cleans after all work with renewal=%s, under the cycle lock",
+    async (renew) => {
+      const stateDirectory = await temporary();
+      const { plugin } = fake(renew ? expired() : healthy());
+      const events: string[] = [];
+      const inspect = plugin.inspect;
+      plugin.inspect = async () => {
+        events.push("inspect");
+        return inspect();
+      };
+      const action = plugin.renew;
+      plugin.renew = async (options) => {
+        events.push("renew");
+        return action(options);
+      };
+      plugin.cleanup = vi.fn(async () => {
+        events.push("cleanup");
+        expect(
+          (await readdir(stateDirectory)).some((name) =>
+            name.endsWith(".lock"),
+          ),
+        ).toBe(true);
+      });
+      const outcome = await runCycle(plugin, { stateDirectory, enabled: true });
+      expect(outcome.status).toBe(renew ? "renewed" : "healthy");
+      expect(events).toEqual(
+        renew
+          ? ["inspect", "renew", "inspect", "cleanup"]
+          : ["inspect", "cleanup"],
+      );
+      expect(plugin.cleanup).toHaveBeenCalledOnce();
+    },
+  );
+  it("reports cleanup failure while preserving successful renewal evidence", async () => {
+    const stateDirectory = await temporary();
+    const { plugin } = fake();
+    plugin.cleanup = vi.fn(async () => {
+      throw new Error("private-window");
+    });
+    const result = await runCycle(plugin, { stateDirectory, enabled: true });
+    expect(result).toMatchObject({
+      status: "needs-attention",
+      code: "window-cleanup-failed",
+      cycle: { action: "renew", after: { status: "healthy" } },
+    });
+    expect(JSON.stringify(result)).not.toContain("private-window");
+    expect(
+      (await readMaintenanceState(plugin, { stateDirectory })).lastCycle?.code,
+    ).toBe("window-cleanup-failed");
+    expect(plugin.cleanup).toHaveBeenCalledOnce();
+  });
+  it("cleans after an inspection exception, but not for disabled or backoff cycles", async () => {
+    const stateDirectory = await temporary();
+    const { plugin } = fake();
+    plugin.inspect = vi.fn(async () => {
+      throw new Error("unavailable");
+    });
+    plugin.cleanup = vi.fn(async () => {});
+    await runCycle(plugin, { stateDirectory, enabled: false, now: 1 });
+    expect(plugin.cleanup).not.toHaveBeenCalled();
+    await runCycle(plugin, { stateDirectory, enabled: true, now: 1 });
+    expect(plugin.cleanup).toHaveBeenCalledOnce();
+    await runCycle(plugin, { stateDirectory, enabled: true, now: 2 });
+    expect(plugin.cleanup).toHaveBeenCalledOnce();
+  });
+
   it.each([
     "accessibility-permission-unavailable",
     "wecom-not-running",

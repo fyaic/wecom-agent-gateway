@@ -16,6 +16,8 @@ export interface AuthMaintenancePlugin {
   /** Non-sensitive hex digest of the identity/configuration being maintained. */
   binding: string;
   inspect(): Promise<AuthMaintenanceObservation>;
+  /** Optional UI cleanup after all inspection/renewal work, while cycle lock is held. */
+  cleanup?(): Promise<void>;
   renew(options: {
     preRenew: boolean;
     withinHours: number;
@@ -37,6 +39,7 @@ export const AUTH_MAINTENANCE_CODES = [
   "renewal-not-verified",
   "expiry-not-extended",
   "backoff",
+  "window-cleanup-failed",
 ] as const;
 
 /** Fixed provider diagnostics only; never persist arbitrary upstream messages. */

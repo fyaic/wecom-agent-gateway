@@ -4,7 +4,8 @@ import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 
-export type KeeperMode = "doctor" | "inspect" | "renew" | "pre-renew";
+export type KeeperMode =
+  "doctor" | "inspect" | "renew" | "pre-renew" | "close-window";
 /** Aggregate page evidence only. Never includes capability names, IDs or URLs. */
 export interface KeeperObservation {
   observedAtMs: number;
@@ -203,7 +204,9 @@ export async function inspectAuthKeeper(
     transport: "not-checked",
   };
   const fail = (status: string) => ({ ...result, ok: false, status });
-  if (!["doctor", "inspect", "renew", "pre-renew"].includes(mode))
+  if (
+    !["doctor", "inspect", "renew", "pre-renew", "close-window"].includes(mode)
+  )
     return fail("invalid-mode");
   const withinHours =
     options.withinHours === undefined ? 24 : options.withinHours;
@@ -417,6 +420,10 @@ export async function inspectAuthKeeper(
       )
         return fail("invalid-response");
       return { ...result, ok: true, status: "local-prerequisites-ready" };
+    }
+    if (mode === "close-window") {
+      if (typeof payload.closed !== "boolean") return fail("invalid-response");
+      return { ...result, ok: true, status: "target-window-cleaned" };
     }
     const observation = pageObservation(payload, rows, Date.now());
     if (

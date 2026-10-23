@@ -85,6 +85,12 @@ export async function createKeeperMaintenancePlugin(options: {
   inspect?: typeof inspectAuthKeeper;
 }): Promise<AuthMaintenancePlugin> {
   const env = { ...options.env };
+  if (
+    ![undefined, "", "true", "false"].includes(
+      env.WECOM_AUTH_KEEPER_CLOSE_WINDOW,
+    )
+  )
+    throw new Error("invalid-configuration");
   const config = env.WECOM_AUTH_KEEPER_CONFIG;
   if (!config || !isAbsolute(config) || !env.WECOM_BOT_ID?.trim()) {
     throw new Error("invalid-configuration");
@@ -104,6 +110,9 @@ export async function createKeeperMaintenancePlugin(options: {
         env.WECOM_AUTH_KEEPER_DIR,
         env.WECOM_AUTH_KEEPER_PYTHON,
         env.WECOM_AUTH_KEEPER_EXISTING_WINDOW_ONLY,
+        ...(env.WECOM_AUTH_KEEPER_CLOSE_WINDOW === "true"
+          ? ["close-window"]
+          : []),
       ]),
     )
     .digest("hex");
@@ -135,6 +144,21 @@ export async function createKeeperMaintenancePlugin(options: {
   return {
     id: "wecom-auth-keeper",
     binding,
+    ...(env.WECOM_AUTH_KEEPER_CLOSE_WINDOW === "true"
+      ? {
+          cleanup: async () => {
+            const report = await inspect({
+              mode: "close-window",
+              env,
+              existingWindowOnly: true,
+              expectedConfigDigest: configHash,
+              expectedConfigPath: canonicalConfig,
+            });
+            if (!report.ok || report.status !== "target-window-cleaned")
+              throw new Error("window-cleanup-failed");
+          },
+        }
+      : {}),
     inspect: () => call("inspect"),
     renew: ({ preRenew, withinHours }) =>
       call(preRenew ? "pre-renew" : "renew", withinHours),
