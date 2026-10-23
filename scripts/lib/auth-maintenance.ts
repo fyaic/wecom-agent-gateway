@@ -76,6 +76,18 @@ export async function runCycle(
     );
   }
   let state: State = { version: 1, attempts: 0, failures: 0 };
+  let inspected = false;
+  let cleanupAttempted = false;
+  const cleanup = async () => {
+    if (!inspected || cleanupAttempted || !plugin.cleanup) return true;
+    cleanupAttempted = true;
+    try {
+      await plugin.cleanup();
+      return true;
+    } catch {
+      return false;
+    }
+  };
   try {
     state = await loadState(statePath);
     const clock = options.clock ?? Date.now;
@@ -93,6 +105,12 @@ export async function runCycle(
     const finish = async (
       outcome: AuthMaintenanceResult,
     ): Promise<AuthMaintenanceResult> => {
+      if (!(await cleanup()))
+        outcome = {
+          ...outcome,
+          status: "needs-attention",
+          code: "window-cleanup-failed",
+        };
       const finishedAtMs = clock();
       if (!validTime(finishedAtMs) || finishedAtMs < startedAtMs)
         throw new Error();
@@ -115,6 +133,7 @@ export async function runCycle(
     const inspect = async (phase: "before" | "after") => {
       let observation: AuthMaintenanceObservation;
       try {
+        inspected = true;
         observation = validateObservation(await plugin.inspect());
       } catch {
         lastInspection = {
@@ -274,10 +293,17 @@ export async function runCycle(
   } catch {
     return result("needs-attention", "state-unavailable", state.attempts);
   } finally {
+    const cleanupOk = await cleanup();
     // Only this cycle's acquired lock is removed. Existing/crashed locks require
     // operator investigation; no age/PID heuristic can delete another owner.
     try {
       await rm(lockPath, { recursive: true, force: true });
+      if (!cleanupOk)
+        return result(
+          "needs-attention",
+          "window-cleanup-failed",
+          state.attempts,
+        );
     } catch {
       return result("needs-attention", "state-unavailable", state.attempts);
     }

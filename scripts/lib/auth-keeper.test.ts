@@ -84,6 +84,47 @@ afterEach(async () => {
 });
 
 describe("optional auth keeper integration", () => {
+  it.each([true, false])(
+    "validates close-only response closed=%s without inventing permission evidence",
+    async (closed) => {
+      const f = await fixture();
+      const run = vi.fn(async (invocation: KeeperInvocation) => {
+        expect(invocation.args).toContain("--close-window");
+        return {
+          exitCode: 0,
+          stdout: JSON.stringify({ ok: true, mode: "close-window", closed }),
+        };
+      });
+      const report = await inspectAuthKeeper({
+        mode: "close-window",
+        env: f.env,
+        platform: "darwin",
+        run,
+      });
+      expect(report).toMatchObject({
+        ok: true,
+        status: "target-window-cleaned",
+        identity: "configuration-matched",
+        businessApi: "not-verified",
+      });
+      expect(report.observation).toBeUndefined();
+      run.mockResolvedValue({
+        exitCode: 0,
+        stdout: JSON.stringify({ ok: true, mode: "close-window" }),
+      });
+      expect(
+        (
+          await inspectAuthKeeper({
+            mode: "close-window",
+            env: f.env,
+            platform: "darwin",
+            run,
+          })
+        ).status,
+      ).toBe("invalid-response");
+    },
+  );
+
   it("defaults to local doctor, snapshots the matched identity and cleans its private snapshot", async () => {
     const f = await fixture();
     let snapshotPath = "";

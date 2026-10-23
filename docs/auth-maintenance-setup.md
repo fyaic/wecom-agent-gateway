@@ -225,3 +225,24 @@ worker 的私有 JSON stdout 在状态变化或每次动作后保留本轮固定
 
 生成器测试覆盖身份不符、非法官方链接、能力白名单、默认关闭、私有文件权限、敏感输出控制和已有/符号链接输出拒绝覆盖。
 这些是无账号本地配置测试，不是新用户真实授权认证，也不是跨周期自动续期或业务 API 恢复认证。
+
+## 企业微信 5.0.12 的导航与周期关页
+
+2026-10-23 在 macOS 企业微信 **5.0.12.95037 中文版**验证了 launchd → 本 worker → Keeper Python/PyObjC 的纯脚本聊天记录导航和消息权限预续期。Codex 只参与开发、准备测试和读取证据，正式周期不调用 Codex 或模型。旧客户端未回归，不能用 5.0.11 的历史成功证明新导航兼容；稳定旧部署应保留原提交和配置，逐机验收。
+
+使用支持 `chat_history_navigation` 和 `--close-window` 的新版 Keeper，配置已有官方授权链接的目标聊天，保持两个 Bot 标识一致，并设：
+
+```dotenv
+WECOM_AUTH_KEEPER_EXISTING_WINDOW_ONLY=false
+WECOM_AUTH_MAINTENANCE_PRE_RENEW=true
+WECOM_AUTH_KEEPER_WITHIN_HOURS=24
+WECOM_AUTH_KEEPER_CLOSE_WINDOW=true
+```
+
+Keeper 配置另需 `chat_history_navigation: true`。仅拉取代码不会启用这些选项。需要更新两端代码并重启服务；旧 Keeper 不支持 `--close-window`，不要单独启用新选项。
+
+`WECOM_AUTH_KEEPER_CLOSE_WINDOW` 默认关闭。启用后，在周期锁内完成检查、可选续期和最后复查，再关闭身份匹配的权限窗口；健康周期和检查失败后的清理也覆盖。禁用、退避或未取得周期锁时不关页，`status` 不操作 UI。关页失败返回 `window-cleanup-failed` 并保留周期操作及前后状态，不将其报告为完整成功，也不泄露原始窗口内容。
+
+Keeper 的清理只使用目标窗口的原生关闭按钮，不发送 Command-W、不关闭主聊天或退出企业微信，不清除 pending 恢复记录。运行期间仍占用前台；不会恢复原会话或关闭历史面板，不能替代多个 UI 服务的共享锁/错峰调度。客户端卡死、锁屏或强杀进程时无法保证清理完成。
+
+完整版本矩阵及测试边界见 [Keeper 兼容与升级](https://github.com/fyaic/wecom-auth-keeper/blob/main/docs/compatibility.md)。

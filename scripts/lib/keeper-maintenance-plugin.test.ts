@@ -48,6 +48,33 @@ async function fixture() {
   };
 }
 describe("keeper maintenance plugin", () => {
+  it("opts in to identity-bound cleanup without changing default deployments", async () => {
+    const { env } = await fixture();
+    const inspect = vi.fn<typeof inspectAuthKeeper>(async () => ({
+      ...report,
+      mode: "close-window",
+      status: "target-window-cleaned",
+      observation: undefined,
+    }));
+    const original = await createKeeperMaintenancePlugin({ env, inspect });
+    expect(original.cleanup).toBeUndefined();
+    const plugin = await createKeeperMaintenancePlugin({
+      env: { ...env, WECOM_AUTH_KEEPER_CLOSE_WINDOW: "true" },
+      inspect,
+    });
+    expect(plugin.binding).not.toBe(original.binding);
+    await plugin.cleanup!();
+    expect(inspect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "close-window",
+        existingWindowOnly: true,
+        expectedConfigDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+      }),
+    );
+    inspect.mockResolvedValue({ ...report, ok: false });
+    await expect(plugin.cleanup!()).rejects.toThrow("window-cleanup-failed");
+  });
+
   it("never promotes page evidence into business verification", () => {
     expect(keeperObservation(report)).toMatchObject({
       status: "healthy",
